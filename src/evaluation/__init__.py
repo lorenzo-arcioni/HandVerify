@@ -1,47 +1,50 @@
-# src/evaluation/__init__.py
 """
 Evaluation module
+Unified metrics and visualization for model evaluation.
 """
 
 from .metrics import (
-    compute_metrics,
+    # Classification metrics
+    compute_basic_metrics,
     compute_confusion_matrix,
+    
+    # Biometric metrics
     compute_eer,
-    evaluate_model_comprehensive
-)
-
-from .visualizzation import (
-    plot_training_history,
-    plot_multiple_models_comparison,
-    plot_confusion_matrix,
-    plot_results_summary,
-    create_training_report
-)
-
-from .biometric_metrics import (
     compute_biometric_metrics,
     compute_rank1_identification,
-    evaluate_comprehensive
+    
+    # Comprehensive evaluation
+    evaluate_comprehensive,
 )
 
-from .biometric_visualization import (
-    plot_comprehensive_results,
-    plot_training_history_triplet
+from .visualization import (
+    # Training visualizations
+    plot_training_history,
+    plot_triplet_training_history,
+    plot_multiple_models_comparison,
+    
+    # Biometric visualizations
+    plot_biometric_results,
+    plot_confusion_matrix,
+    
+    # Reports
+    create_training_report,
 )
 
 __all__ = [
-    'compute_metrics',
+    # Metrics
+    'compute_basic_metrics',
     'compute_confusion_matrix',
     'compute_eer',
-    'evaluate_model_comprehensive',
-    'plot_training_history',
-    'plot_multiple_models_comparison',
-    'plot_confusion_matrix',
-    'plot_results_summary',
-    'create_training_report',
     'compute_biometric_metrics',
     'compute_rank1_identification',
     'evaluate_comprehensive',
-    'plot_comprehensive_results',
-    'plot_training_history_triplet',
+    
+    # Visualizations
+    'plot_training_history',
+    'plot_triplet_training_history',
+    'plot_multiple_models_comparison',
+    'plot_biometric_results',
+    'plot_confusion_matrix',
+    'create_training_report',
 ]

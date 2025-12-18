@@ -1,0 +1,2655 @@
+
+
+
+=== src/data/transforms.py ===
+"""
+Data Transforms
+Custom transforms and augmentations for handwriting images.
+"""
+
+import torchvision.transforms as transforms
+
+
+def get_train_transforms(target_size: int = 448):
+    """
+    Get training transforms with data augmentation.
+    
+    Args:
+        target_size: Target image size
+        
+    Returns:
+        Composed transforms
+    """
+    return transforms.Compose([
+        transforms.RandomResizedCrop(target_size, scale=(0.9, 1.1)),
+        transforms.RandomRotation(15),
+        transforms.ToTensor()
+    ])
+
+
+def get_test_transforms(target_size: int = 448):
+    """
+    Get test/validation transforms (no augmentation).
+    
+    Args:
+        target_size: Target image size
+        
+    Returns:
+        Composed transforms
+    """
+    return transforms.Compose([
+        transforms.Resize((target_size, target_size)),
+        transforms.ToTensor()
+    ])
+
+
+=== src/data/siamese_dataset.py ===
+"""
+Siamese Dataset
+Dataset class for loading image pairs for Siamese networks.
+"""
+
+import os
+import random
+from pathlib import Path
+from typing import List, Tuple
+
+import torch
+from torch.utils.data import Dataset
+from PIL import Image
+from  .transforms import get_train_transforms, get_test_transforms
+
+
+class SiameseDataset(Dataset):
+    """
+    Dataset for Siamese network training.
+    Generates positive (same writer) and negative (different writer) pairs.
+    """
+    
+    def __init__(
+        self,
+        writer_dirs: List[str],
+        train: bool = True,
+        positive_ratio: float = 0.5,
+        pairs_per_writer: int = 50,
+        target_size: int = 448,
+    ):
+        """
+        Args:
+            writer_dirs: List of directories, each containing images from one writer
+            train: Whether this is training set (applies augmentation if True)
+            positive_ratio: Proportion of positive pairs to generate
+            pairs_per_writer: Number of pairs to generate per writer
+            target_size: Target image size for resizing
+        """
+        self.writer_dirs = writer_dirs
+        self.positive_ratio = positive_ratio
+        self.train = train
+        self.target_size = target_size
+        
+        # Define transforms
+        if self.train:
+            self.augment = get_train_transforms(self.target_size)
+        else:
+            self.augment = get_test_transforms(self.target_size)
+        
+        # Load image paths for each writer
+        self.writer_images = {}
+        for writer_dir in writer_dirs:
+            writer_id = Path(writer_dir).name
+            images = [
+                os.path.join(writer_dir, f) 
+                for f in os.listdir(writer_dir) 
+                if f.endswith(('.png', '.jpg', '.jpeg'))
+            ]
+            if len(images) >= 2:
+                self.writer_images[writer_id] = images
+        
+        self.writer_ids = list(self.writer_images.keys())
+        self.num_pairs = len(self.writer_ids) * pairs_per_writer
+    
+    def __len__(self) -> int:
+        return self.num_pairs
+    
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Returns:
+            Tuple of (image1, image2, label) where label=1 for same writer, 0 otherwise
+        """
+        is_positive = random.random() < self.positive_ratio
+        
+        if is_positive:
+            # Same writer - select two different images from same writer
+            writer_id = random.choice(self.writer_ids)
+            img1_path, img2_path = random.sample(self.writer_images[writer_id], 2)
+            label = 1.0
+        else:
+            # Different writers
+            writer1, writer2 = random.sample(self.writer_ids, 2)
+            img1_path = random.choice(self.writer_images[writer1])
+            img2_path = random.choice(self.writer_images[writer2])
+            label = 0.0
+        
+        # Load images as grayscale
+        img1 = Image.open(img1_path).convert("L")
+        img2 = Image.open(img2_path).convert("L")
+        
+        # Apply transforms
+        img1 = self.augment(img1)
+        img2 = self.augment(img2)
+        
+        return img1, img2, torch.tensor(label, dtype=torch.float32)
+
+
+def create_dataloaders(
+    data_root: str,
+    batch_size: int = 16,
+    num_workers: int = 4,
+    test_size: float = 0.2,
+    pairs_per_writer: int = 100,
+    target_size: int = 448,
+    random_state: int = 42,
+):
+    """
+    Create train and test dataloaders.
+    
+    Args:
+        data_root: Root directory containing writer subdirectories
+        batch_size: Batch size for dataloaders
+        num_workers: Number of workers for data loading
+        test_size: Proportion of writers to use for testing
+        pairs_per_writer: Number of pairs to generate per writer
+        target_size: Target image size
+        random_state: Random seed for reproducibility
+        
+    Returns:
+        Tuple of (train_loader, test_loader, train_dirs, test_dirs)
+    """
+    from sklearn.model_selection import train_test_split
+    from torch.utils.data import DataLoader
+    
+    # Get all writer directories
+    writer_dirs = [
+        os.path.join(data_root, d) 
+        for d in sorted(os.listdir(data_root)) 
+        if os.path.isdir(os.path.join(data_root, d))
+    ]
+    
+    # Split into train and test
+    train_dirs, test_dirs = train_test_split(
+        writer_dirs, 
+        test_size=test_size, 
+        random_state=random_state
+    )
+    
+    # Create datasets
+    train_dataset = SiameseDataset(
+        train_dirs, 
+        train=True, 
+        pairs_per_writer=pairs_per_writer,
+        target_size=target_size
+    )
+    
+    test_dataset = SiameseDataset(
+        test_dirs, 
+        train=False, 
+        pairs_per_writer=pairs_per_writer,
+        target_size=target_size
+    )
+    
+    # Create dataloaders
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True
+    )
+    
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True
+    )
+    
+    return train_loader, test_loader, train_dirs, test_dirs
+
+
+=== src/data/triplet_dataset.py ===
+"""
+Triplet Dataset
+Dataset class for loading image triplets for metric learning.
+"""
+
+import os
+import random
+from pathlib import Path
+from typing import List, Tuple
+
+import torch
+from torch.utils.data import Dataset
+from PIL import Image
+from .transforms import get_train_transforms, get_test_transforms
+
+
+class TripletDataset(Dataset):
+    """
+    Dataset for Triplet network training.
+    Generates triplets: (anchor, positive, negative)
+    - anchor and positive are from the same writer
+    - negative is from a different writer
+    """
+    
+    def __init__(
+        self,
+        writer_dirs: List[str],
+        train: bool = True,
+        triplets_per_writer: int = 100,
+        target_size: int = 448,
+    ):
+        """
+        Args:
+            writer_dirs: List of directories, each containing images from one writer
+            train: Whether this is training set (applies augmentation if True)
+            triplets_per_writer: Number of triplets to generate per writer
+            target_size: Target image size for resizing
+        """
+        self.writer_dirs = writer_dirs
+        self.train = train
+        self.target_size = target_size
+        self.triplets_per_writer = triplets_per_writer
+        
+        # Define transforms
+        if self.train:
+            self.transform = get_train_transforms(self.target_size)
+        else:
+            self.transform = get_test_transforms(self.target_size)
+        
+        # Load image paths for each writer
+        self.writer_images = {}
+        for writer_dir in writer_dirs:
+            writer_id = Path(writer_dir).name
+            images = [
+                os.path.join(writer_dir, f) 
+                for f in os.listdir(writer_dir) 
+                if f.endswith(('.png', '.jpg', '.jpeg'))
+            ]
+            if len(images) >= 2:  # Need at least 2 images for anchor/positive
+                self.writer_images[writer_id] = images
+        
+        self.writer_ids = list(self.writer_images.keys())
+        self.num_triplets = len(self.writer_ids) * triplets_per_writer
+        
+        print(f"{'TRAIN' if train else 'TEST'}: {len(self.writer_ids)} writers, "
+              f"{self.num_triplets} triplets")
+    
+    def __len__(self) -> int:
+        return self.num_triplets
+    
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Returns:
+            Tuple of (anchor, positive, negative) images
+        """
+        # Select anchor writer
+        anchor_writer = random.choice(self.writer_ids)
+        
+        # Get anchor and positive from same writer
+        anchor_path, positive_path = random.sample(self.writer_images[anchor_writer], 2)
+        
+        # Get negative from different writer
+        negative_writer = random.choice([w for w in self.writer_ids if w != anchor_writer])
+        negative_path = random.choice(self.writer_images[negative_writer])
+        
+        # Load images as grayscale
+        anchor = Image.open(anchor_path).convert("L")
+        positive = Image.open(positive_path).convert("L")
+        negative = Image.open(negative_path).convert("L")
+        
+        # Apply transforms
+        anchor = self.transform(anchor)
+        positive = self.transform(positive)
+        negative = self.transform(negative)
+        
+        return anchor, positive, negative
+
+
+def create_triplet_dataloaders(
+    data_root: str,
+    batch_size: int = 16,
+    num_workers: int = 4,
+    test_size: float = 0.2,
+    triplets_per_writer: int = 100,
+    target_size: int = 448,
+    random_state: int = 42,
+):
+    """
+    Create train and test dataloaders for triplet learning.
+    
+    Args:
+        data_root: Root directory containing writer subdirectories
+        batch_size: Batch size for dataloaders
+        num_workers: Number of workers for data loading
+        test_size: Proportion of writers to use for testing
+        triplets_per_writer: Number of triplets to generate per writer
+        target_size: Target image size
+        random_state: Random seed for reproducibility
+        
+    Returns:
+        Tuple of (train_loader, test_loader, train_dirs, test_dirs)
+    """
+    from sklearn.model_selection import train_test_split
+    from torch.utils.data import DataLoader
+    
+    # Get all writer directories
+    writer_dirs = [
+        os.path.join(data_root, d) 
+        for d in sorted(os.listdir(data_root)) 
+        if os.path.isdir(os.path.join(data_root, d))
+    ]
+    
+    # Split into train and test
+    train_dirs, test_dirs = train_test_split(
+        writer_dirs, 
+        test_size=test_size, 
+        random_state=random_state
+    )
+    
+    # Create datasets
+    train_dataset = TripletDataset(
+        train_dirs, 
+        train=True, 
+        triplets_per_writer=triplets_per_writer,
+        target_size=target_size
+    )
+    
+    test_dataset = TripletDataset(
+        test_dirs, 
+        train=False, 
+        triplets_per_writer=triplets_per_writer,
+        target_size=target_size
+    )
+    
+    # Create dataloaders
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True
+    )
+    
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True
+    )
+    
+    return train_loader, test_loader, train_dirs, test_dirs
+
+=== src/data/__init__.py ===
+# src/data/__init__.py
+"""
+Data module
+"""
+
+from .siamese_dataset import SiameseDataset, create_dataloaders
+from .triplet_dataset import TripletDataset, create_triplet_dataloaders
+from .transforms import get_train_transforms, get_test_transforms
+
+__all__ = [
+    'SiameseDataset',
+    'create_dataloaders',
+    'TripletDataset',
+    'create_triplet_dataloaders',
+    'get_train_transforms',
+    'get_test_transforms',
+]
+
+
+=== src/evaluation/metrics.py ===
+"""
+Evaluation Metrics
+Metrics for evaluating Siamese network performance.
+"""
+
+import numpy as np
+from sklearn.metrics import (
+    accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score,
+    roc_auc_score,
+    confusion_matrix
+)
+from typing import Dict, Tuple
+
+
+def compute_metrics(
+    predictions: np.ndarray,
+    labels: np.ndarray,
+    threshold: float = 0.5
+) -> Dict[str, float]:
+    """
+    Compute classification metrics.
+    
+    Args:
+        predictions: Predicted probabilities (0-1)
+        labels: Ground truth labels (0 or 1)
+        threshold: Classification threshold
+        
+    Returns:
+        Dictionary of metrics
+    """
+    binary_preds = (predictions > threshold).astype(int)
+    
+    return {
+        'accuracy': accuracy_score(labels, binary_preds),
+        'precision': precision_score(labels, binary_preds, zero_division=0),
+        'recall': recall_score(labels, binary_preds, zero_division=0),
+        'f1': f1_score(labels, binary_preds, zero_division=0),
+        'auc': roc_auc_score(labels, predictions) if len(np.unique(labels)) > 1 else 0.0,
+    }
+
+
+def compute_confusion_matrix(
+    predictions: np.ndarray,
+    labels: np.ndarray,
+    threshold: float = 0.5
+) -> np.ndarray:
+    """
+    Compute confusion matrix.
+    
+    Args:
+        predictions: Predicted probabilities
+        labels: Ground truth labels
+        threshold: Classification threshold
+        
+    Returns:
+        2x2 confusion matrix [[TN, FP], [FN, TP]]
+    """
+    binary_preds = (predictions > threshold).astype(int)
+    return confusion_matrix(labels, binary_preds)
+
+
+def compute_eer(
+    predictions: np.ndarray,
+    labels: np.ndarray
+) -> Tuple[float, float]:
+    """
+    Compute Equal Error Rate (EER).
+    
+    The EER is the point where False Accept Rate = False Reject Rate.
+    
+    Args:
+        predictions: Predicted probabilities
+        labels: Ground truth labels (1 for positive, 0 for negative)
+        
+    Returns:
+        Tuple of (EER value, threshold at EER)
+    """
+    # Sort by predictions
+    sorted_indices = np.argsort(predictions)
+    sorted_preds = predictions[sorted_indices]
+    sorted_labels = labels[sorted_indices]
+    
+    # Compute FAR and FRR at each threshold
+    n_impostor = np.sum(labels == 0)
+    n_genuine = np.sum(labels == 1)
+    
+    if n_impostor == 0 or n_genuine == 0:
+        return 0.0, 0.5
+    
+    far = []
+    frr = []
+    thresholds = []
+    
+    for threshold in np.linspace(0, 1, 100):
+        # False Accept: impostor pairs predicted as genuine
+        fa = np.sum((predictions >= threshold) & (labels == 0))
+        far_val = fa / n_impostor
+        
+        # False Reject: genuine pairs predicted as impostor
+        fr = np.sum((predictions < threshold) & (labels == 1))
+        frr_val = fr / n_genuine
+        
+        far.append(far_val)
+        frr.append(frr_val)
+        thresholds.append(threshold)
+    
+    # Find point where FAR ≈ FRR
+    far = np.array(far)
+    frr = np.array(frr)
+    diff = np.abs(far - frr)
+    eer_idx = np.argmin(diff)
+    
+    eer = (far[eer_idx] + frr[eer_idx]) / 2
+    eer_threshold = thresholds[eer_idx]
+    
+    return eer, eer_threshold
+
+
+def evaluate_model_comprehensive(
+    predictions: np.ndarray,
+    labels: np.ndarray,
+    threshold: float = 0.5
+) -> Dict:
+    """
+    Comprehensive evaluation with all metrics.
+    
+    Args:
+        predictions: Predicted probabilities
+        labels: Ground truth labels
+        threshold: Classification threshold
+        
+    Returns:
+        Dictionary with all metrics
+    """
+    basic_metrics = compute_metrics(predictions, labels, threshold)
+    cm = compute_confusion_matrix(predictions, labels, threshold)
+    eer, eer_threshold = compute_eer(predictions, labels)
+    
+    tn, fp, fn, tp = cm.ravel()
+    
+    return {
+        **basic_metrics,
+        'eer': eer,
+        'eer_threshold': eer_threshold,
+        'true_negatives': int(tn),
+        'false_positives': int(fp),
+        'false_negatives': int(fn),
+        'true_positives': int(tp),
+    }
+
+=== src/evaluation/biometric_visualization.py ===
+"""
+Biometric Visualization
+Visualization functions for biometric evaluation results.
+"""
+
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.stats import norm
+from typing import Dict, Optional
+
+
+def plot_comprehensive_results(
+    metrics: Dict,
+    save_path: Optional[str] = None
+):
+    """
+    Create comprehensive visualization of all biometric metrics.
+    
+    Args:
+        metrics: Dictionary with all metrics from evaluate_comprehensive
+        save_path: Optional path to save the figure
+    """
+    fig = plt.figure(figsize=(16, 12))
+    
+    # 1. ROC CURVE with operating points
+    ax1 = plt.subplot(2, 3, 1)
+    ax1.plot(metrics['fpr'], metrics['tpr'], 'darkorange', lw=2,
+             label=f'AUC={metrics["auc"]:.4f}')
+    ax1.plot([0, 1], [0, 1], 'navy', lw=2, linestyle='--', label='Random')
+    
+    # Mark EER point
+    eer_idx = np.argmin(np.abs(metrics['fpr'] - (1 - metrics['tpr'])))
+    ax1.scatter(metrics['fpr'][eer_idx], metrics['tpr'][eer_idx],
+                color='red', s=100, zorder=5, label=f'EER={metrics["eer"]:.4f}')
+    
+    # Mark FAR operating points
+    for far_target in [0.001, 0.01]:
+        idx = np.argmin(np.abs(metrics['fpr'] - far_target))
+        ax1.scatter(metrics['fpr'][idx], metrics['tpr'][idx], s=80, zorder=5,
+                   label=f'FAR={far_target*100:.1f}%')
+    
+    ax1.set_xlabel('False Accept Rate (FAR)')
+    ax1.set_ylabel('True Accept Rate (TAR)')
+    ax1.set_title('ROC Curve with Operating Points')
+    ax1.legend(loc='lower right', fontsize=9)
+    ax1.grid(alpha=0.3)
+    
+    # 2. Distance distributions
+    ax2 = plt.subplot(2, 3, 2)
+    ax2.hist(metrics['genuine_dists'], bins=50, alpha=0.6,
+             label='Genuine', color='green', density=True)
+    ax2.hist(metrics['impostor_dists'], bins=50, alpha=0.6,
+             label='Impostor', color='red', density=True)
+    ax2.axvline(metrics['eer_threshold'], color='black', linestyle='--',
+                label=f'EER Threshold', linewidth=2)
+    ax2.set_xlabel('Euclidean Distance')
+    ax2.set_ylabel('Density')
+    ax2.set_title('Distance Distributions')
+    ax2.legend()
+    ax2.grid(alpha=0.3)
+    
+    # 3. FAR vs FRR curves
+    ax3 = plt.subplot(2, 3, 3)
+    frr = 1 - metrics['tpr']
+    ax3.plot(metrics['thresholds'], metrics['fpr'], label='FAR', color='red', lw=2)
+    ax3.plot(metrics['thresholds'], frr, label='FRR', color='blue', lw=2)
+    ax3.axvline(metrics['eer_threshold'], color='black', linestyle='--',
+                label=f'EER Point', linewidth=2)
+    ax3.set_xlabel('Threshold (Distance)')
+    ax3.set_ylabel('Error Rate')
+    ax3.set_title('FAR vs FRR')
+    ax3.set_yscale('log')
+    ax3.legend()
+    ax3.grid(alpha=0.3)
+    
+    # 4. Gaussian fits
+    ax4 = plt.subplot(2, 3, 4)
+    x = np.linspace(
+        0,
+        max(max(metrics['genuine_dists']), max(metrics['impostor_dists'])),
+        200
+    )
+    
+    genuine_pdf = norm.pdf(x, metrics['mu_genuine'], metrics['sigma_genuine'])
+    impostor_pdf = norm.pdf(x, metrics['mu_impostor'], metrics['sigma_impostor'])
+    
+    ax4.plot(x, genuine_pdf, 'g-', lw=2, label='Genuine (fitted)')
+    ax4.plot(x, impostor_pdf, 'r-', lw=2, label='Impostor (fitted)')
+    ax4.fill_between(x, 0, genuine_pdf, alpha=0.3, color='green')
+    ax4.fill_between(x, 0, impostor_pdf, alpha=0.3, color='red')
+    ax4.set_xlabel('Distance')
+    ax4.set_ylabel('Probability Density')
+    ax4.set_title(f'Gaussian Fits (d\'={metrics["d_prime"]:.2f})')
+    ax4.legend()
+    ax4.grid(alpha=0.3)
+    
+    # 5. Detection Error Tradeoff (DET) curve
+    ax5 = plt.subplot(2, 3, 5)
+    ax5.plot(metrics['fpr'] * 100, frr * 100, 'b-', lw=2)
+    ax5.scatter(metrics['fpr'][eer_idx] * 100, frr[eer_idx] * 100,
+                color='red', s=100, zorder=5, label=f'EER={metrics["eer"]*100:.2f}%')
+    ax5.set_xlabel('False Accept Rate (%)')
+    ax5.set_ylabel('False Reject Rate (%)')
+    ax5.set_title('Detection Error Tradeoff (DET)')
+    ax5.set_xscale('log')
+    ax5.set_yscale('log')
+    ax5.legend()
+    ax5.grid(alpha=0.3, which='both')
+    
+    # 6. Metrics summary table
+    ax6 = plt.subplot(2, 3, 6)
+    ax6.axis('off')
+    
+    summary_data = [
+        ['Metric', 'Value'],
+        ['EER', f'{metrics["eer"]:.4f} ({metrics["eer"]*100:.2f}%)'],
+        ['AUC-ROC', f'{metrics["auc"]:.4f}'],
+        ['Acc @ FAR=0.1%', f'{metrics["acc_far_0.1%"]:.4f}'],
+        ['Acc @ FAR=1.0%', f'{metrics["acc_far_1.0%"]:.4f}'],
+        ['d-prime', f'{metrics["d_prime"]:.4f}'],
+        ['Decidability', f'{metrics["decidability"]:.4f}'],
+    ]
+    
+    if metrics.get('rank1_identification') is not None:
+        summary_data.append(['Rank-1 ID Rate', f'{metrics["rank1_identification"]:.4f}'])
+    
+    table = ax6.table(cellText=summary_data, cellLoc='left', loc='center',
+                     colWidths=[0.6, 0.4])
+    table.auto_set_font_size(False)
+    table.set_fontsize(10)
+    table.scale(1, 2)
+    
+    # Style header
+    for i in range(2):
+        table[(0, i)].set_facecolor('#4CAF50')
+        table[(0, i)].set_text_props(weight='bold', color='white')
+    
+    ax6.set_title('Metrics Summary', fontweight='bold', fontsize=12, pad=20)
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    
+    plt.show()
+
+
+def plot_training_history_triplet(
+    history: Dict,
+    model_name: str,
+    save_path: Optional[str] = None
+):
+    """
+    Plot training history for triplet networks.
+    
+    Args:
+        history: Dictionary with 'epoch', 'train_loss', 'val_eer', 'val_auc'
+        model_name: Name of the model
+        save_path: Optional path to save the figure
+    """
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(18, 5))
+    
+    epochs = history['epoch']
+    
+    # Loss plot
+    ax1.plot(epochs, history['train_loss'], 'b-o', label='Train Loss', markersize=4)
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('Loss')
+    ax1.set_title(f'{model_name} - Triplet Loss')
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
+    
+    # EER plot
+    ax2.plot(epochs, history['val_eer'], 'r-o', label='Validation EER', markersize=4)
+    ax2.set_xlabel('Epoch')
+    ax2.set_ylabel('EER')
+    ax2.set_title(f'{model_name} - Equal Error Rate')
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+    
+    # AUC plot
+    ax3.plot(epochs, history['val_auc'], 'g-o', label='Validation AUC', markersize=4)
+    ax3.set_xlabel('Epoch')
+    ax3.set_ylabel('AUC')
+    ax3.set_title(f'{model_name} - AUC-ROC')
+    ax3.legend()
+    ax3.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    
+    plt.show()
+
+=== src/evaluation/__init__.py ===
+# src/evaluation/__init__.py
+"""
+Evaluation module
+"""
+
+from .metrics import (
+    compute_metrics,
+    compute_confusion_matrix,
+    compute_eer,
+    evaluate_model_comprehensive
+)
+
+from .visualizzation import (
+    plot_training_history,
+    plot_multiple_models_comparison,
+    plot_confusion_matrix,
+    plot_results_summary,
+    create_training_report
+)
+
+from .biometric_metrics import (
+    compute_biometric_metrics,
+    compute_rank1_identification,
+    evaluate_comprehensive
+)
+
+from .biometric_visualization import (
+    plot_comprehensive_results,
+    plot_training_history_triplet
+)
+
+__all__ = [
+    'compute_metrics',
+    'compute_confusion_matrix',
+    'compute_eer',
+    'evaluate_model_comprehensive',
+    'plot_training_history',
+    'plot_multiple_models_comparison',
+    'plot_confusion_matrix',
+    'plot_results_summary',
+    'create_training_report',
+    'compute_biometric_metrics',
+    'compute_rank1_identification',
+    'evaluate_comprehensive',
+    'plot_comprehensive_results',
+    'plot_training_history_triplet',
+]
+
+=== src/evaluation/visualizzation.py ===
+"""
+Visualization utilities
+Functions for visualizing training progress and results.
+"""
+
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
+from typing import Dict, List, Optional
+
+
+def plot_training_history(
+    history: Dict[str, List],
+    model_name: str,
+    save_path: Optional[str] = None
+):
+    """
+    Plot training and validation metrics over epochs.
+    
+    Args:
+        history: Dictionary with 'epoch', 'train_loss', 'train_acc', 'test_loss', 'test_acc'
+        model_name: Name of the model for title
+        save_path: Optional path to save the figure
+    """
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
+    
+    epochs = history['epoch']
+    
+    # Loss plot
+    ax1.plot(epochs, history['train_loss'], 'b-o', label='Train Loss', markersize=4)
+    ax1.plot(epochs, history['test_loss'], 'r-o', label='Test Loss', markersize=4)
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('Loss')
+    ax1.set_title(f'{model_name} - Loss')
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
+    
+    # Accuracy plot
+    ax2.plot(epochs, history['train_acc'], 'b-o', label='Train Accuracy', markersize=4)
+    ax2.plot(epochs, history['test_acc'], 'r-o', label='Test Accuracy', markersize=4)
+    ax2.set_xlabel('Epoch')
+    ax2.set_ylabel('Accuracy')
+    ax2.set_title(f'{model_name} - Accuracy')
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    
+    plt.show()
+
+
+def plot_multiple_models_comparison(
+    results: Dict[str, Dict],
+    metric: str = 'test_loss',
+    save_path: Optional[str] = None
+):
+    """
+    Compare multiple models on a single metric.
+    
+    Args:
+        results: Dictionary mapping model names to their history dictionaries
+        metric: Metric to plot ('train_loss', 'test_loss', 'train_acc', 'test_acc')
+        save_path: Optional path to save the figure
+    """
+    plt.figure(figsize=(12, 6))
+    
+    for model_name, result in results.items():
+        history = result['history']
+        epochs = history['epoch']
+        values = history[metric]
+        plt.plot(epochs, values, '-o', label=model_name, markersize=3)
+    
+    plt.xlabel('Epoch')
+    plt.ylabel(metric.replace('_', ' ').title())
+    plt.title(f'Model Comparison - {metric.replace("_", " ").title()}')
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    
+    plt.show()
+
+
+def plot_confusion_matrix(
+    cm: np.ndarray,
+    model_name: str,
+    save_path: Optional[str] = None
+):
+    """
+    Plot confusion matrix.
+    
+    Args:
+        cm: 2x2 confusion matrix
+        model_name: Name of the model
+        save_path: Optional path to save the figure
+    """
+    fig, ax = plt.subplots(figsize=(8, 6))
+    
+    im = ax.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
+    ax.figure.colorbar(im, ax=ax)
+    
+    # Labels
+    ax.set(xticks=np.arange(cm.shape[1]),
+           yticks=np.arange(cm.shape[0]),
+           xticklabels=['Different', 'Same'],
+           yticklabels=['Different', 'Same'],
+           title=f'{model_name} - Confusion Matrix',
+           ylabel='True label',
+           xlabel='Predicted label')
+    
+    # Text annotations
+    thresh = cm.max() / 2.
+    for i in range(cm.shape[0]):
+        for j in range(cm.shape[1]):
+            ax.text(j, i, format(cm[i, j], 'd'),
+                   ha="center", va="center",
+                   color="white" if cm[i, j] > thresh else "black")
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    
+    plt.show()
+
+
+def plot_results_summary(
+    results: Dict[str, Dict],
+    save_path: Optional[str] = None
+):
+    """
+    Create summary bar chart of best losses for all models.
+    
+    Args:
+        results: Dictionary mapping model names to result dictionaries
+        save_path: Optional path to save the figure
+    """
+    model_names = list(results.keys())
+    best_losses = [results[name]['best_loss'] for name in model_names]
+    
+    plt.figure(figsize=(12, 6))
+    bars = plt.bar(range(len(model_names)), best_losses, color='steelblue')
+    
+    # Highlight best model
+    best_idx = np.argmin(best_losses)
+    bars[best_idx].set_color('green')
+    
+    plt.xlabel('Model')
+    plt.ylabel('Best Test Loss')
+    plt.title('Model Performance Comparison')
+    plt.xticks(range(len(model_names)), model_names, rotation=45, ha='right')
+    plt.grid(True, alpha=0.3, axis='y')
+    
+    # Add value labels on bars
+    for i, (name, loss) in enumerate(zip(model_names, best_losses)):
+        plt.text(i, loss, f'{loss:.4f}', ha='center', va='bottom')
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    
+    plt.show()
+
+
+def create_training_report(
+    results: Dict[str, Dict],
+    save_dir: str = "results"
+):
+    """
+    Create comprehensive training report with all visualizations.
+    
+    Args:
+        results: Dictionary mapping model names to result dictionaries
+        save_dir: Directory to save visualizations
+    """
+    import os
+    os.makedirs(save_dir, exist_ok=True)
+    
+    # Individual model plots
+    for model_name, result in results.items():
+        plot_training_history(
+            history=result['history'],
+            model_name=model_name,
+            save_path=os.path.join(save_dir, f"{model_name}_history.png")
+        )
+    
+    # Comparison plots
+    for metric in ['train_loss', 'test_loss', 'train_acc', 'test_acc']:
+        plot_multiple_models_comparison(
+            results=results,
+            metric=metric,
+            save_path=os.path.join(save_dir, f"comparison_{metric}.png")
+        )
+    
+    # Summary plot
+    plot_results_summary(
+        results=results,
+        save_path=os.path.join(save_dir, "summary.png")
+    )
+    
+    print(f"✓ Training report saved to {save_dir}")
+
+=== src/evaluation/biometric_metrics.py ===
+"""
+Biometric Evaluation Metrics
+Comprehensive metrics for biometric verification systems.
+"""
+
+import numpy as np
+import random
+import torch
+import torch.nn.functional as F
+from sklearn.metrics import roc_curve, auc
+from scipy.stats import norm
+from typing import Dict, Tuple
+from tqdm import tqdm
+from PIL import Image
+
+
+def compute_biometric_metrics(
+    genuine_dists: np.ndarray,
+    impostor_dists: np.ndarray
+) -> Dict:
+    """
+    Compute comprehensive biometric metrics.
+    
+    Args:
+        genuine_dists: Distances for genuine pairs (same writer)
+        impostor_dists: Distances for impostor pairs (different writers)
+        
+    Returns:
+        Dictionary with all biometric metrics
+    """
+    metrics = {}
+    
+    # Prepare data for ROC (convert distances to similarity scores)
+    y_true = [1] * len(genuine_dists) + [0] * len(impostor_dists)
+    y_scores = [-d for d in (list(genuine_dists) + list(impostor_dists))]  # Lower dist = higher similarity
+    
+    # 1. ROC CURVE & AUC
+    fpr, tpr, thresholds = roc_curve(y_true, y_scores)
+    thresholds = -thresholds  # Convert back to distances
+    metrics['auc'] = auc(fpr, tpr)
+    metrics['fpr'] = fpr
+    metrics['tpr'] = tpr
+    metrics['thresholds'] = thresholds
+    
+    # 2. EQUAL ERROR RATE (EER)
+    fnr = 1 - tpr
+    eer_idx = np.argmin(np.abs(fpr - fnr))
+    metrics['eer'] = (fpr[eer_idx] + fnr[eer_idx]) / 2
+    metrics['eer_threshold'] = thresholds[eer_idx]
+    
+    # 3. ACCURACY @ FAR = 0.1% and 1%
+    for target_far in [0.001, 0.01]:
+        idx = np.argmin(np.abs(fpr - target_far))
+        actual_far = fpr[idx]
+        frr = fnr[idx]
+        accuracy = 1 - ((actual_far + frr) / 2)
+        threshold = thresholds[idx]
+        
+        metrics[f'acc_far_{target_far*100:.1f}%'] = accuracy
+        metrics[f'frr_far_{target_far*100:.1f}%'] = frr
+        metrics[f'threshold_far_{target_far*100:.1f}%'] = threshold
+    
+    # 4. D-PRIME (d')
+    mu_genuine = np.mean(genuine_dists)
+    mu_impostor = np.mean(impostor_dists)
+    sigma_genuine = np.std(genuine_dists)
+    sigma_impostor = np.std(impostor_dists)
+    
+    pooled_std = np.sqrt((sigma_genuine**2 + sigma_impostor**2) / 2)
+    metrics['d_prime'] = (mu_impostor - mu_genuine) / pooled_std if pooled_std > 0 else 0
+    
+    # 5. DECIDABILITY INDEX
+    metrics['decidability'] = metrics['d_prime'] * np.sqrt(2)
+    
+    # Store distributions and statistics
+    metrics['genuine_dists'] = genuine_dists
+    metrics['impostor_dists'] = impostor_dists
+    metrics['mu_genuine'] = mu_genuine
+    metrics['mu_impostor'] = mu_impostor
+    metrics['sigma_genuine'] = sigma_genuine
+    metrics['sigma_impostor'] = sigma_impostor
+    
+    return metrics
+
+
+def compute_rank1_identification(
+    model: torch.nn.Module,
+    dataset,
+    device: torch.device,
+    num_queries: int = 100
+) -> float:
+    """
+    Compute Rank-1 Identification Rate.
+    For each query, find the most similar writer in the gallery.
+    
+    Args:
+        model: Trained model
+        dataset: Dataset with writer_ids and writer_images
+        device: Device to run on
+        num_queries: Number of queries to test
+        
+    Returns:
+        Rank-1 identification rate
+    """
+    model.eval()
+    writer_ids = dataset.writer_ids
+    writer_images = dataset.writer_images
+    
+    # Build gallery: one embedding per writer
+    gallery_embeddings = {}
+    with torch.no_grad():
+        for writer_id in writer_ids:
+            img_path = random.choice(writer_images[writer_id])
+            img = dataset.transform(Image.open(img_path).convert("L")).unsqueeze(0).to(device)
+            emb = model(img).cpu().numpy()[0]
+            gallery_embeddings[writer_id] = emb
+    
+    # Test queries
+    correct = 0
+    with torch.no_grad():
+        for _ in range(num_queries):
+            query_writer = random.choice(writer_ids)
+            query_img_path = random.choice(writer_images[query_writer])
+            query_img = dataset.transform(Image.open(query_img_path).convert("L")).unsqueeze(0).to(device)
+            query_emb = model(query_img).cpu().numpy()[0]
+            
+            # Find closest gallery writer
+            min_dist = float('inf')
+            predicted_writer = None
+            
+            for writer_id, gallery_emb in gallery_embeddings.items():
+                dist = np.linalg.norm(query_emb - gallery_emb)
+                if dist < min_dist:
+                    min_dist = dist
+                    predicted_writer = writer_id
+            
+            if predicted_writer == query_writer:
+                correct += 1
+    
+    return correct / num_queries
+
+
+def evaluate_comprehensive(
+    model: torch.nn.Module,
+    dataset,
+    device: torch.device,
+    num_pairs: int = 2000,
+    dataset_name: str = "Test"
+) -> Dict:
+    """
+    Comprehensive biometric evaluation.
+    
+    Args:
+        model: Trained model
+        dataset: Dataset to evaluate on
+        device: Device to run on
+        num_pairs: Number of pairs to evaluate
+        dataset_name: Name for logging
+        
+    Returns:
+        Dictionary with all metrics
+    """
+    print(f"\n{'='*70}")
+    print(f"COMPREHENSIVE EVALUATION: {dataset_name}")
+    print(f"{'='*70}\n")
+    
+    model.eval()
+    genuine_dists = []
+    impostor_dists = []
+    
+    writer_ids = dataset.writer_ids
+    writer_images = dataset.writer_images
+    
+    with torch.no_grad():
+        # Genuine pairs
+        for _ in tqdm(range(num_pairs // 2), desc="Genuine pairs"):
+            writer = random.choice(writer_ids)
+            if len(writer_images[writer]) < 2:
+                continue
+            
+            img1_path, img2_path = random.sample(writer_images[writer], 2)
+            img1 = dataset.transform(Image.open(img1_path).convert("L")).unsqueeze(0).to(device)
+            img2 = dataset.transform(Image.open(img2_path).convert("L")).unsqueeze(0).to(device)
+            
+            emb1 = model(img1)
+            emb2 = model(img2)
+            dist = F.pairwise_distance(emb1, emb2).item()
+            genuine_dists.append(dist)
+        
+        # Impostor pairs
+        for _ in tqdm(range(num_pairs // 2), desc="Impostor pairs"):
+            w1, w2 = random.sample(writer_ids, 2)
+            img1_path = random.choice(writer_images[w1])
+            img2_path = random.choice(writer_images[w2])
+            
+            img1 = dataset.transform(Image.open(img1_path).convert("L")).unsqueeze(0).to(device)
+            img2 = dataset.transform(Image.open(img2_path).convert("L")).unsqueeze(0).to(device)
+            
+            emb1 = model(img1)
+            emb2 = model(img2)
+            dist = F.pairwise_distance(emb1, emb2).item()
+            impostor_dists.append(dist)
+    
+    # Compute all metrics
+    metrics = compute_biometric_metrics(
+        np.array(genuine_dists),
+        np.array(impostor_dists)
+    )
+    
+    # Rank-1 identification (if enough writers)
+    if len(writer_ids) >= 10:
+        rank1 = compute_rank1_identification(
+            model, dataset, device,
+            num_queries=min(100, len(writer_ids) * 5)
+        )
+        metrics['rank1_identification'] = rank1
+    else:
+        metrics['rank1_identification'] = None
+    
+    # Print results
+    print(f"\n📊 PRIMARY METRICS:")
+    print(f"  EER (Equal Error Rate):     {metrics['eer']:.4f} ({metrics['eer']*100:.2f}%)")
+    print(f"  AUC-ROC:                     {metrics['auc']:.4f}")
+    print(f"  Accuracy @ FAR=0.1%:         {metrics['acc_far_0.1%']:.4f}")
+    print(f"  Accuracy @ FAR=1.0%:         {metrics['acc_far_1.0%']:.4f}")
+    
+    print(f"\n📈 SECONDARY METRICS:")
+    print(f"  d-prime (d'):                {metrics['d_prime']:.4f}")
+    print(f"  Decidability Index:          {metrics['decidability']:.4f}")
+    if metrics['rank1_identification'] is not None:
+        print(f"  Rank-1 Identification Rate:  {metrics['rank1_identification']:.4f} ({metrics['rank1_identification']*100:.2f}%)")
+    
+    print(f"\n📏 DISTANCE STATISTICS:")
+    print(f"  Genuine:  μ={metrics['mu_genuine']:.4f}, σ={metrics['sigma_genuine']:.4f}")
+    print(f"  Impostor: μ={metrics['mu_impostor']:.4f}, σ={metrics['sigma_impostor']:.4f}")
+    
+    print(f"\n🎯 OPERATING POINTS:")
+    print(f"  EER Threshold:          {metrics['eer_threshold']:.4f}")
+    print(f"  Threshold @ FAR=0.1%:   {metrics['threshold_far_0.1%']:.4f} (FRR={metrics['frr_far_0.1%']*100:.2f}%)")
+    print(f"  Threshold @ FAR=1.0%:   {metrics['threshold_far_1.0%']:.4f} (FRR={metrics['frr_far_1.0%']*100:.2f}%)")
+    
+    return metrics
+
+=== src/models/registry.py ===
+"""
+Model Registry
+Central registry for all available model architectures.
+"""
+
+from typing import Dict, Type
+from .base import BaseSiameseNetwork
+from .backbones import (
+    SiameseResNet18,
+    SiameseResNet34,
+    SiameseResNet50,
+    SiameseEfficientNetB0,
+    SiameseEfficientNetB1,
+    SiameseEfficientNetV2,
+    SiameseMobileNetV3Small,
+    SiameseMobileNetV3Large,
+    SiameseDenseNet121,
+    SiameseRegNetY400MF,
+)
+
+
+MODEL_REGISTRY: Dict[str, Type[BaseSiameseNetwork]] = {
+    # ResNet family
+    'resnet18': SiameseResNet18,
+    'resnet34': SiameseResNet34,
+    'resnet50': SiameseResNet50,
+    
+    # EfficientNet family
+    'efficientnet_b0': SiameseEfficientNetB0,
+    'efficientnet_b1': SiameseEfficientNetB1,
+    'efficientnet_v2': SiameseEfficientNetV2,
+    
+    # MobileNet family
+    'mobilenet_v3_small': SiameseMobileNetV3Small,
+    'mobilenet_v3_large': SiameseMobileNetV3Large,
+    
+    # DenseNet family
+    'densenet121': SiameseDenseNet121,
+    
+    # RegNet family
+    'regnet_y_400mf': SiameseRegNetY400MF,
+}
+
+
+def get_model(model_name: str, **kwargs) -> BaseSiameseNetwork:
+    """
+    Get a model instance by name.
+    
+    Args:
+        model_name: Name of the model (must be in MODEL_REGISTRY)
+        **kwargs: Additional arguments to pass to model constructor
+        
+    Returns:
+        Instantiated model
+        
+    Raises:
+        ValueError: If model_name not found in registry
+    """
+    if model_name not in MODEL_REGISTRY:
+        available = ', '.join(MODEL_REGISTRY.keys())
+        raise ValueError(f"Model '{model_name}' not found. Available models: {available}")
+    
+    model_class = MODEL_REGISTRY[model_name]
+    return model_class(**kwargs)
+
+
+def list_models() -> list:
+    """Get list of all available model names"""
+    return list(MODEL_REGISTRY.keys())
+
+=== src/models/backbones.py ===
+"""
+Siamese Network Backbones
+Implementation of various backbone architectures for handwriting verification.
+"""
+
+import torch.nn as nn
+from torchvision import models
+from .base import BaseSiameseNetwork
+
+
+class SiameseResNet18(BaseSiameseNetwork):
+    """Siamese network based on ResNet18"""
+    
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512):
+        resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        encoder = nn.Sequential(*list(resnet.children())[:-1])
+        
+        super().__init__(encoder=encoder, feature_dim=512, projection_dim=projection_dim)
+
+
+class SiameseResNet34(BaseSiameseNetwork):
+    """Siamese network based on ResNet34"""
+    
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512):
+        resnet = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
+        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        encoder = nn.Sequential(*list(resnet.children())[:-1])
+        
+        super().__init__(encoder=encoder, feature_dim=512, projection_dim=projection_dim)
+
+
+class SiameseResNet50(BaseSiameseNetwork):
+    """Siamese network based on ResNet50"""
+    
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512):
+        resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        encoder = nn.Sequential(*list(resnet.children())[:-1])
+        
+        super().__init__(encoder=encoder, feature_dim=2048, projection_dim=projection_dim)
+
+
+class SiameseEfficientNetB0(BaseSiameseNetwork):
+    """Siamese network based on EfficientNet-B0"""
+    
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512):
+        effnet = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.DEFAULT)
+        effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
+        encoder = nn.Sequential(effnet.features, nn.AdaptiveAvgPool2d(1))
+        
+        super().__init__(encoder=encoder, feature_dim=1280, projection_dim=projection_dim)
+
+
+class SiameseEfficientNetB1(BaseSiameseNetwork):
+    """Siamese network based on EfficientNet-B1"""
+    
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512):
+        effnet = models.efficientnet_b1(weights=models.EfficientNet_B1_Weights.DEFAULT)
+        effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
+        encoder = nn.Sequential(effnet.features, nn.AdaptiveAvgPool2d(1))
+        
+        super().__init__(encoder=encoder, feature_dim=1280, projection_dim=projection_dim)
+
+
+class SiameseEfficientNetV2(BaseSiameseNetwork):
+    """Siamese network based on EfficientNetV2-S"""
+    
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512):
+        backbone = models.efficientnet_v2_s(weights=models.EfficientNet_V2_S_Weights.DEFAULT)
+        backbone.features[0][0] = nn.Conv2d(in_channels, 24, kernel_size=3, stride=2, padding=1, bias=False)
+        encoder = nn.Sequential(backbone.features, nn.AdaptiveAvgPool2d(1))
+        
+        super().__init__(encoder=encoder, feature_dim=1280, projection_dim=projection_dim)
+
+
+class SiameseMobileNetV3Small(BaseSiameseNetwork):
+    """Siamese network based on MobileNetV3-Small"""
+    
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512):
+        mobilenet = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
+        mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
+        encoder = nn.Sequential(mobilenet.features, nn.AdaptiveAvgPool2d(1))
+        
+        super().__init__(encoder=encoder, feature_dim=576, projection_dim=projection_dim)
+
+
+class SiameseMobileNetV3Large(BaseSiameseNetwork):
+    """Siamese network based on MobileNetV3-Large"""
+    
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512):
+        mobilenet = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT)
+        mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
+        encoder = nn.Sequential(mobilenet.features, nn.AdaptiveAvgPool2d(1))
+        
+        super().__init__(encoder=encoder, feature_dim=960, projection_dim=projection_dim)
+
+
+class SiameseDenseNet121(BaseSiameseNetwork):
+    """Siamese network based on DenseNet121"""
+    
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512):
+        densenet = models.densenet121(weights=models.DenseNet121_Weights.DEFAULT)
+        densenet.features.conv0 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        encoder = nn.Sequential(densenet.features, nn.AdaptiveAvgPool2d(1))
+        
+        super().__init__(encoder=encoder, feature_dim=1024, projection_dim=projection_dim)
+
+
+class SiameseRegNetY400MF(BaseSiameseNetwork):
+    """Siamese network based on RegNet-Y-400MF"""
+    
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512):
+        regnet = models.regnet_y_400mf(weights=models.RegNet_Y_400MF_Weights.DEFAULT)
+        regnet.stem[0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
+        encoder = nn.Sequential(*list(regnet.children())[:-1], nn.AdaptiveAvgPool2d(1))
+        
+        super().__init__(encoder=encoder, feature_dim=440, projection_dim=projection_dim)
+
+
+=== src/models/triplet_backbones.py ===
+"""
+Triplet Network Backbones
+Implementation of various backbone architectures for triplet learning.
+"""
+
+import torch.nn as nn
+import torch.nn.functional as F
+from torchvision import models
+
+
+class BaseTripletNetwork(nn.Module):
+    """Base class for Triplet networks"""
+    
+    def __init__(self, encoder: nn.Module, feature_dim: int, embedding_dim: int = 128):
+        """
+        Args:
+            encoder: Backbone network for feature extraction
+            feature_dim: Dimension of features from encoder
+            embedding_dim: Dimension of final embedding
+        """
+        super().__init__()
+        self.encoder = encoder
+        self.feature_dim = feature_dim
+        self.embedding_dim = embedding_dim
+        
+        # Projection head
+        self.fc = nn.Sequential(
+            nn.Linear(feature_dim, 512),
+            nn.BatchNorm1d(512),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.3),
+            nn.Linear(512, embedding_dim)
+        )
+    
+    def forward(self, x):
+        """
+        Forward pass to get normalized embeddings.
+        
+        Args:
+            x: Input image
+            
+        Returns:
+            L2-normalized embedding
+        """
+        x = self.encoder(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+        return F.normalize(x, p=2, dim=1)
+    
+    def get_embedding(self, x):
+        """Alias for forward"""
+        return self.forward(x)
+
+
+class TripletMobileNetV3Small(BaseTripletNetwork):
+    """Triplet network based on MobileNetV3-Small"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128):
+        mobilenet = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
+        mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        encoder = nn.Sequential(
+            mobilenet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+        
+        super().__init__(encoder=encoder, feature_dim=576, embedding_dim=embedding_dim)
+
+
+class TripletMobileNetV3Large(BaseTripletNetwork):
+    """Triplet network based on MobileNetV3-Large"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128):
+        mobilenet = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT)
+        mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        encoder = nn.Sequential(
+            mobilenet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+        
+        super().__init__(encoder=encoder, feature_dim=960, embedding_dim=embedding_dim)
+
+
+class TripletResNet18(BaseTripletNetwork):
+    """Triplet network based on ResNet18"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128):
+        resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        
+        encoder = nn.Sequential(*list(resnet.children())[:-1], nn.Flatten())
+        
+        super().__init__(encoder=encoder, feature_dim=512, embedding_dim=embedding_dim)
+
+
+class TripletResNet34(BaseTripletNetwork):
+    """Triplet network based on ResNet34"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128):
+        resnet = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
+        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        
+        encoder = nn.Sequential(*list(resnet.children())[:-1], nn.Flatten())
+        
+        super().__init__(encoder=encoder, feature_dim=512, embedding_dim=embedding_dim)
+
+
+class TripletEfficientNetB0(BaseTripletNetwork):
+    """Triplet network based on EfficientNet-B0"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128):
+        effnet = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.DEFAULT)
+        effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        encoder = nn.Sequential(
+            effnet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+        
+        super().__init__(encoder=encoder, feature_dim=1280, embedding_dim=embedding_dim)
+
+=== src/models/base.py ===
+"""
+Base Siamese Network Module
+Defines the base architecture for Siamese networks with shared encoder.
+"""
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+
+class BaseSiameseNetwork(nn.Module):
+    """
+    Base class for Siamese networks.
+    All specific architectures should inherit from this class.
+    """
+    
+    def __init__(self, encoder: nn.Module, feature_dim: int, projection_dim: int = 512):
+        """
+        Args:
+            encoder: Backbone network for feature extraction
+            feature_dim: Dimension of features from encoder
+            projection_dim: Dimension of projection layer
+        """
+        super().__init__()
+        self.encoder = encoder
+        self.feature_dim = feature_dim
+        self.projection_dim = projection_dim
+        
+        # Classifier for similarity prediction
+        self.fc = self._build_fc_block(feature_dim * 2, projection_dim)
+    
+    def _build_fc_block(self, input_dim: int, projection_dim: int) -> nn.Sequential:
+        """
+        Builds the fully connected block for similarity classification.
+        
+        Args:
+            input_dim: Input dimension (concatenated features)
+            projection_dim: Intermediate projection dimension
+            
+        Returns:
+            Sequential module for classification
+        """
+        half = projection_dim // 2
+        quarter = half // 2
+        
+        return nn.Sequential(
+            nn.Linear(input_dim, projection_dim),
+            nn.BatchNorm1d(projection_dim),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.4),
+
+            nn.Linear(projection_dim, half),
+            nn.BatchNorm1d(half),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.4),
+
+            nn.Linear(half, quarter),
+            nn.BatchNorm1d(quarter),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.3),
+
+            nn.Linear(quarter, 1),
+            nn.Sigmoid()
+        )
+    
+    def forward_one(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass for a single image through the encoder.
+        
+        Args:
+            x: Input image tensor
+            
+        Returns:
+            Feature vector
+        """
+        x = self.encoder(x)
+        return x.view(x.size(0), -1)
+    
+    def forward(self, img1: torch.Tensor, img2: torch.Tensor, 
+                return_embeddings: bool = False):
+        """
+        Forward pass for image pair.
+        
+        Args:
+            img1: First image
+            img2: Second image
+            return_embeddings: If True, return normalized embeddings instead of similarity
+            
+        Returns:
+            Similarity score or embeddings tuple
+        """
+        feat1 = self.forward_one(img1)
+        feat2 = self.forward_one(img2)
+        
+        if return_embeddings:
+            # Normalize for metric learning
+            feat1 = F.normalize(feat1, p=2, dim=1)
+            feat2 = F.normalize(feat2, p=2, dim=1)
+            return feat1, feat2
+        
+        # Concatenate and classify
+        combined = torch.cat([feat1, feat2], dim=1)
+        return self.fc(combined)
+    
+    def get_embeddings(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Extract normalized embeddings for an image.
+        
+        Args:
+            x: Input image
+            
+        Returns:
+            Normalized feature vector
+        """
+        feat = self.forward_one(x)
+        return F.normalize(feat, p=2, dim=1)
+
+
+=== src/models/__init__.py ===
+# src/models/__init__.py
+"""
+Models module
+"""
+
+from .base import BaseSiameseNetwork
+from .registry import get_model, list_models, MODEL_REGISTRY
+from .triplet_backbones import (
+    BaseTripletNetwork,
+    TripletMobileNetV3Small,
+    TripletMobileNetV3Large,
+    TripletResNet18,
+    TripletResNet34,
+    TripletEfficientNetB0,
+)
+
+__all__ = [
+    'BaseSiameseNetwork',
+    'get_model',
+    'list_models',
+    'MODEL_REGISTRY',
+    'BaseTripletNetwork',
+    'TripletMobileNetV3Small',
+    'TripletMobileNetV3Large',
+    'TripletResNet18',
+    'TripletResNet34',
+    'TripletEfficientNetB0',
+]
+
+=== src/__init__.py ===
+# src/__init__.py
+"""
+Handwriting Verification Package
+"""
+
+__version__ = "0.1.0"
+
+=== src/training/trainer_triplet.py ===
+"""
+Triplet Loss Trainer
+Trainer class for triplet networks with comprehensive biometric evaluation.
+"""
+
+import os
+import gc
+from typing import Dict, Optional
+import random
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+import pandas as pd
+import numpy as np
+from PIL import Image
+
+
+class TripletLoss(nn.Module):
+    """Triplet Loss for metric learning"""
+    
+    def __init__(self, margin: float = 0.5):
+        """
+        Args:
+            margin: Margin for triplet loss
+        """
+        super().__init__()
+        self.margin = margin
+    
+    def forward(self, anchor, positive, negative):
+        """
+        Args:
+            anchor: Anchor embeddings
+            positive: Positive embeddings
+            negative: Negative embeddings
+            
+        Returns:
+            Triplet loss value
+        """
+        pos_dist = F.pairwise_distance(anchor, positive, p=2)
+        neg_dist = F.pairwise_distance(anchor, negative, p=2)
+        losses = F.relu(pos_dist - neg_dist + self.margin)
+        return losses.mean()
+
+
+class TripletTrainer:
+    """Trainer for triplet networks with biometric evaluation"""
+    
+    def __init__(
+        self,
+        model: nn.Module,
+        model_name: str,
+        device: torch.device,
+        margin: float = 0.5,
+        results_dir: str = "results",
+    ):
+        """
+        Args:
+            model: Triplet network model
+            model_name: Name for saving checkpoints
+            device: Device to train on
+            margin: Margin for triplet loss
+            results_dir: Directory to save results
+        """
+        self.model = model.to(device)
+        self.model_name = model_name
+        self.device = device
+        self.results_dir = results_dir
+        self.margin = margin
+        
+        os.makedirs(results_dir, exist_ok=True)
+        
+        # Loss function
+        self.criterion = TripletLoss(margin=margin)
+        
+        # Setup optimizer and scheduler
+        self._setup_optimizer()
+        
+        # Training history
+        self.history = {
+            'epoch': [],
+            'train_loss': [],
+            'val_eer': [],
+            'val_auc': []
+        }
+        
+        self.best_eer = float('inf')
+    
+    def _setup_optimizer(self):
+        """Setup optimizer and learning rate scheduler"""
+        # AdamW optimizer
+        self.optimizer = torch.optim.AdamW(
+            self.model.parameters(),
+            lr=1e-4,
+            weight_decay=1e-4,
+            betas=(0.9, 0.999)
+        )
+        
+        # ReduceLROnPlateau scheduler
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            self.optimizer,
+            mode='min',
+            factor=0.5,
+            patience=3
+        )
+    
+    def train_epoch(self, train_loader: DataLoader) -> float:
+        """
+        Train for one epoch.
+        
+        Returns:
+            Average training loss
+        """
+        self.model.train()
+        train_loss = 0.0
+        
+        for anchor, positive, negative in tqdm(train_loader, desc="Training", leave=False):
+            anchor = anchor.to(self.device)
+            positive = positive.to(self.device)
+            negative = negative.to(self.device)
+            
+            # Forward pass
+            self.optimizer.zero_grad()
+            anchor_emb = self.model(anchor)
+            positive_emb = self.model(positive)
+            negative_emb = self.model(negative)
+            
+            loss = self.criterion(anchor_emb, positive_emb, negative_emb)
+            
+            # Backward pass
+            loss.backward()
+            self.optimizer.step()
+            
+            train_loss += loss.item()
+        
+        return train_loss / len(train_loader)
+    
+    @torch.no_grad()
+    def validate_quick(self, val_dataset, num_pairs: int = 1000) -> Dict:
+        """
+        Quick validation to compute EER and AUC.
+        
+        Args:
+            val_dataset: Validation dataset
+            num_pairs: Number of pairs to evaluate
+            
+        Returns:
+            Dictionary with 'eer' and 'auc' metrics
+        """
+        from ..evaluation.metrics import compute_eer
+        from sklearn.metrics import roc_auc_score
+        
+        self.model.eval()
+        genuine_dists = []
+        impostor_dists = []
+        
+        writer_ids = val_dataset.writer_ids
+        writer_images = val_dataset.writer_images
+        
+        # Genuine pairs
+        for _ in range(num_pairs // 2):
+            writer = random.choice(writer_ids)
+            if len(writer_images[writer]) < 2:
+                continue
+            
+            img1_path, img2_path = random.sample(writer_images[writer], 2)
+            img1 = val_dataset.transform(Image.open(img1_path).convert("L")).unsqueeze(0).to(self.device)
+            img2 = val_dataset.transform(Image.open(img2_path).convert("L")).unsqueeze(0).to(self.device)
+            
+            emb1 = self.model(img1)
+            emb2 = self.model(img2)
+            dist = F.pairwise_distance(emb1, emb2).item()
+            genuine_dists.append(dist)
+        
+        # Impostor pairs
+        for _ in range(num_pairs // 2):
+            w1, w2 = random.sample(writer_ids, 2)
+            img1_path = random.choice(writer_images[w1])
+            img2_path = random.choice(writer_images[w2])
+            
+            img1 = val_dataset.transform(Image.open(img1_path).convert("L")).unsqueeze(0).to(self.device)
+            img2 = val_dataset.transform(Image.open(img2_path).convert("L")).unsqueeze(0).to(self.device)
+            
+            emb1 = self.model(img1)
+            emb2 = self.model(img2)
+            dist = F.pairwise_distance(emb1, emb2).item()
+            impostor_dists.append(dist)
+        
+        # Convert distances to similarity scores (lower distance = higher similarity)
+        labels = np.array([1] * len(genuine_dists) + [0] * len(impostor_dists))
+        distances = np.array(genuine_dists + impostor_dists)
+        
+        # Compute EER
+        eer, eer_threshold = compute_eer(1 - distances, labels)  # Convert dist to similarity
+        
+        # Compute AUC
+        auc = roc_auc_score(labels, -distances)  # Negative distance as score
+        
+        return {'eer': eer, 'auc': auc}
+    
+    def train(
+        self,
+        train_loader: DataLoader,
+        val_dataset,
+        epochs: int = 50,
+        patience: int = 7,
+    ) -> Dict:
+        """
+        Train the model.
+        
+        Args:
+            train_loader: Training dataloader
+            val_dataset: Validation dataset (TripletDataset)
+            epochs: Number of epochs to train
+            patience: Early stopping patience
+            
+        Returns:
+            Training history dictionary
+        """
+        print(f"\n{'='*60}")
+        print(f"Training {self.model_name}")
+        print(f"{'='*60}\n")
+        
+        patience_counter = 0
+        
+        for epoch in range(epochs):
+            # Train
+            train_loss = self.train_epoch(train_loader)
+            
+            # Validate
+            print(f"\nValidation Epoch {epoch+1}...")
+            val_metrics = self.validate_quick(val_dataset, num_pairs=1000)
+            
+            # Update scheduler
+            self.scheduler.step(val_metrics['eer'])
+            
+            # Save metrics
+            self.history['epoch'].append(epoch + 1)
+            self.history['train_loss'].append(train_loss)
+            self.history['val_eer'].append(val_metrics['eer'])
+            self.history['val_auc'].append(val_metrics['auc'])
+            
+            print(f"Epoch {epoch+1}/{epochs}: "
+                  f"Train Loss={train_loss:.4f} | "
+                  f"Val EER={val_metrics['eer']:.4f} AUC={val_metrics['auc']:.4f}")
+            
+            # Early stopping and model saving
+            if val_metrics['eer'] < self.best_eer:
+                self.best_eer = val_metrics['eer']
+                patience_counter = 0
+                self.save_checkpoint(is_best=True)
+                print(f"✓ Saved best model (EER: {val_metrics['eer']:.4f})")
+            else:
+                patience_counter += 1
+                print(f"Patience: {patience_counter}/{patience}")
+                
+                if patience_counter >= patience:
+                    print("⚠ Early stopping triggered")
+                    break
+        
+        # Save final model and history
+        self.save_checkpoint(is_best=False)
+        self.save_history()
+        
+        print(f"\n✓ {self.model_name} training completed! "
+              f"Best EER: {self.best_eer:.4f}\n")
+        
+        return self.history
+    
+    def save_checkpoint(self, is_best: bool = False):
+        """Save model checkpoint"""
+        suffix = "best" if is_best else "final"
+        path = os.path.join(self.results_dir, f"{self.model_name}_{suffix}.pth")
+        torch.save(self.model.state_dict(), path)
+    
+    def save_history(self):
+        """Save training history to CSV"""
+        path = os.path.join(self.results_dir, f"{self.model_name}_history.csv")
+        pd.DataFrame(self.history).to_csv(path, index=False)
+    
+    def cleanup(self):
+        """Clean up GPU memory"""
+        self.model.cpu()
+        del self.model
+        torch.cuda.empty_cache()
+        gc.collect()
+
+=== src/training/trainer_bce.py ===
+"""
+BCE Trainer
+Trainer class for Siamese networks with Binary Cross-Entropy loss.
+"""
+
+import os
+import gc
+from typing import Dict, Optional
+
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+import pandas as pd
+from sklearn.metrics import accuracy_score
+
+from ..models.base import BaseSiameseNetwork
+
+
+class BCETrainer:
+    """Trainer for Siamese networks using BCE loss"""
+    
+    def __init__(
+        self,
+        model: BaseSiameseNetwork,
+        model_name: str,
+        device: torch.device,
+        results_dir: str = "results",
+    ):
+        """
+        Args:
+            model: Siamese network model
+            model_name: Name for saving checkpoints
+            device: Device to train on
+            results_dir: Directory to save results
+        """
+        self.model = model.to(device)
+        self.model_name = model_name
+        self.device = device
+        self.results_dir = results_dir
+        
+        os.makedirs(results_dir, exist_ok=True)
+        
+        # Loss function
+        self.criterion = nn.BCELoss()
+        
+        # Setup optimizer and scheduler
+        self._setup_optimizer()
+        
+        # Training history
+        self.history = {
+            'epoch': [],
+            'train_loss': [],
+            'train_acc': [],
+            'test_loss': [],
+            'test_acc': []
+        }
+        
+        self.best_test_loss = float('inf')
+    
+    def _setup_optimizer(self):
+        """Setup optimizer and learning rate scheduler"""
+        # Adaptive learning rate based on model size
+        num_params = sum(p.numel() for p in self.model.parameters())
+        lr = 3e-5 if num_params > 15e6 else 5e-5
+        
+        # AdamW optimizer with weight decay
+        self.optimizer = torch.optim.AdamW(
+            self.model.parameters(),
+            lr=lr,
+            weight_decay=1e-4,
+            betas=(0.9, 0.999),
+            eps=1e-8
+        )
+        
+        # ReduceLROnPlateau scheduler
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            self.optimizer,
+            mode='min',
+            factor=0.5,
+            patience=2
+        )
+    
+    def train_epoch(self, train_loader: DataLoader) -> tuple:
+        """
+        Train for one epoch.
+        
+        Returns:
+            Tuple of (average_loss, accuracy)
+        """
+        self.model.train()
+        train_loss = 0
+        train_preds = []
+        train_labels = []
+        
+        for img1, img2, labels in tqdm(train_loader, desc="Training", leave=False):
+            img1 = img1.to(self.device)
+            img2 = img2.to(self.device)
+            labels = labels.to(self.device)
+            
+            # Forward pass
+            self.optimizer.zero_grad()
+            outputs = self.model(img1, img2).squeeze()
+            loss = self.criterion(outputs, labels)
+            
+            # Backward pass
+            loss.backward()
+            self.optimizer.step()
+            
+            # Record metrics
+            train_loss += loss.item()
+            train_preds.extend((outputs > 0.5).cpu().numpy())
+            train_labels.extend(labels.cpu().numpy())
+        
+        avg_loss = train_loss / len(train_loader)
+        accuracy = accuracy_score(train_labels, train_preds)
+        
+        return avg_loss, accuracy
+    
+    @torch.no_grad()
+    def validate(self, test_loader: DataLoader) -> tuple:
+        """
+        Validate on test set.
+        
+        Returns:
+            Tuple of (average_loss, accuracy)
+        """
+        self.model.eval()
+        test_loss = 0
+        test_preds = []
+        test_labels = []
+        
+        for img1, img2, labels in tqdm(test_loader, desc="Validating", leave=False):
+            img1 = img1.to(self.device)
+            img2 = img2.to(self.device)
+            labels = labels.to(self.device)
+            
+            outputs = self.model(img1, img2).squeeze()
+            loss = self.criterion(outputs, labels)
+            
+            test_loss += loss.item()
+            test_preds.extend((outputs > 0.5).cpu().numpy())
+            test_labels.extend(labels.cpu().numpy())
+        
+        avg_loss = test_loss / len(test_loader)
+        accuracy = accuracy_score(test_labels, test_preds)
+        
+        return avg_loss, accuracy
+    
+    def train(
+        self,
+        train_loader: DataLoader,
+        test_loader: DataLoader,
+        epochs: int = 50,
+        patience: int = 5,
+    ) -> Dict:
+        """
+        Train the model.
+        
+        Args:
+            train_loader: Training dataloader
+            test_loader: Test dataloader
+            epochs: Number of epochs to train
+            patience: Early stopping patience
+            
+        Returns:
+            Training history dictionary
+        """
+        print(f"\n{'='*60}")
+        print(f"Training {self.model_name}")
+        print(f"{'='*60}\n")
+        
+        patience_counter = 0
+        
+        for epoch in range(epochs):
+            # Train
+            train_loss, train_acc = self.train_epoch(train_loader)
+            
+            # Validate
+            test_loss, test_acc = self.validate(test_loader)
+            
+            # Update scheduler
+            self.scheduler.step(test_loss)
+            
+            # Save metrics
+            self.history['epoch'].append(epoch + 1)
+            self.history['train_loss'].append(train_loss)
+            self.history['train_acc'].append(train_acc)
+            self.history['test_loss'].append(test_loss)
+            self.history['test_acc'].append(test_acc)
+            
+            print(f"Epoch {epoch+1}/{epochs}: "
+                  f"Train Loss={train_loss:.4f} Acc={train_acc:.4f} | "
+                  f"Test Loss={test_loss:.4f} Acc={test_acc:.4f}")
+            
+            # Early stopping and model saving
+            if test_loss < self.best_test_loss:
+                self.best_test_loss = test_loss
+                patience_counter = 0
+                self.save_checkpoint(is_best=True)
+                print(f"✓ Saved best model (test_loss: {test_loss:.4f})")
+            else:
+                patience_counter += 1
+                print(f"Patience: {patience_counter}/{patience}")
+                
+                if patience_counter >= patience:
+                    print("Early stopping triggered")
+                    break
+        
+        # Save final model and history
+        self.save_checkpoint(is_best=False)
+        self.save_history()
+        
+        print(f"\n✓ {self.model_name} training completed! "
+              f"Best test loss: {self.best_test_loss:.4f}\n")
+        
+        return self.history
+    
+    def save_checkpoint(self, is_best: bool = False):
+        """Save model checkpoint"""
+        suffix = "best" if is_best else "final"
+        path = os.path.join(self.results_dir, f"{self.model_name}_{suffix}.pth")
+        torch.save(self.model.state_dict(), path)
+    
+    def save_history(self):
+        """Save training history to CSV"""
+        path = os.path.join(self.results_dir, f"{self.model_name}_history.csv")
+        pd.DataFrame(self.history).to_csv(path, index=False)
+    
+    def cleanup(self):
+        """Clean up GPU memory"""
+        self.model.cpu()
+        del self.model
+        torch.cuda.empty_cache()
+        gc.collect()
+
+
+def train_multiple_models(
+    models_dict: Dict[str, type],
+    train_loader: DataLoader,
+    test_loader: DataLoader,
+    device: torch.device,
+    epochs: int = 50,
+    patience: int = 5,
+    results_dir: str = "results",
+) -> Dict:
+    """
+    Train multiple models sequentially.
+    
+    Args:
+        models_dict: Dictionary mapping model names to model classes
+        train_loader: Training dataloader
+        test_loader: Test dataloader
+        device: Device to train on
+        epochs: Number of epochs per model
+        patience: Early stopping patience
+        results_dir: Directory to save results
+        
+    Returns:
+        Dictionary with results for each model
+    """
+    results = {}
+    
+    for model_name, ModelClass in models_dict.items():
+        print(f"\n{'='*60}")
+        print(f"Starting training: {model_name}")
+        print(f"{'='*60}\n")
+        
+        # Create model instance
+        model = ModelClass()
+        
+        # Create trainer
+        trainer = BCETrainer(
+            model=model,
+            model_name=model_name,
+            device=device,
+            results_dir=results_dir
+        )
+        
+        # Train
+        history = trainer.train(
+            train_loader=train_loader,
+            test_loader=test_loader,
+            epochs=epochs,
+            patience=patience
+        )
+        
+        # Store results
+        results[model_name] = {
+            'history': history,
+            'best_loss': trainer.best_test_loss
+        }
+        
+        # Cleanup
+        trainer.cleanup()
+        print(f"✓ GPU memory cleared after {model_name}\n")
+    
+    # Print summary
+    print(f"\n{'='*60}")
+    print("FINAL RESULTS")
+    print(f"{'='*60}")
+    for model_name, result in results.items():
+        print(f"{model_name:20s}: Best Test Loss = {result['best_loss']:.4f}")
+    
+    return results
+
+
+=== src/training/losses.py ===
+"""
+Loss Functions
+Various loss functions for Siamese and Triplet networks.
+"""
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+
+class BCELoss(nn.Module):
+    """Binary Cross-Entropy Loss for similarity classification"""
+    
+    def __init__(self):
+        super().__init__()
+        self.loss_fn = nn.BCELoss()
+    
+    def forward(self, predictions: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            predictions: Predicted similarities (0-1)
+            labels: Ground truth labels (0 or 1)
+            
+        Returns:
+            Loss value
+        """
+        return self.loss_fn(predictions, labels)
+
+
+class ContrastiveLoss(nn.Module):
+    """
+    Contrastive Loss for metric learning.
+    Forces similar pairs to be close and dissimilar pairs to be far apart.
+    """
+    
+    def __init__(self, margin: float = 1.0):
+        """
+        Args:
+            margin: Margin for negative pairs
+        """
+        super().__init__()
+        self.margin = margin
+    
+    def forward(self, feat1: torch.Tensor, feat2: torch.Tensor, 
+                labels: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            feat1: Features from first image
+            feat2: Features from second image
+            labels: 1 for similar, 0 for dissimilar
+            
+        Returns:
+            Loss value
+        """
+        # Euclidean distance
+        distances = F.pairwise_distance(feat1, feat2)
+        
+        # Contrastive loss
+        loss_positive = labels * torch.pow(distances, 2)
+        loss_negative = (1 - labels) * torch.pow(torch.clamp(self.margin - distances, min=0.0), 2)
+        
+        return torch.mean(loss_positive + loss_negative)
+
+
+class TripletLoss(nn.Module):
+    """
+    Triplet Loss for metric learning.
+    Ensures anchor-positive distance < anchor-negative distance by margin.
+    """
+    
+    def __init__(self, margin: float = 0.5):
+        """
+        Args:
+            margin: Margin between positive and negative pairs
+        """
+        super().__init__()
+        self.margin = margin
+    
+    def forward(self, anchor: torch.Tensor, positive: torch.Tensor,
+                negative: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            anchor: Anchor embeddings
+            positive: Positive embeddings (same class as anchor)
+            negative: Negative embeddings (different class)
+            
+        Returns:
+            Triplet loss value
+        """
+        pos_dist = F.pairwise_distance(anchor, positive, p=2)
+        neg_dist = F.pairwise_distance(anchor, negative, p=2)
+        losses = F.relu(pos_dist - neg_dist + self.margin)
+        return losses.mean()
+
+
+class CombinedLoss(nn.Module):
+    """
+    Combines BCE loss with contrastive loss for stronger training signal.
+    """
+    
+    def __init__(self, margin: float = 1.0, alpha: float = 0.5):
+        """
+        Args:
+            margin: Margin for contrastive loss
+            alpha: Weight for BCE loss (1-alpha for contrastive)
+        """
+        super().__init__()
+        self.bce_loss = BCELoss()
+        self.contrastive_loss = ContrastiveLoss(margin=margin)
+        self.alpha = alpha
+    
+    def forward(self, predictions: torch.Tensor, feat1: torch.Tensor, 
+                feat2: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            predictions: Predicted similarities from classifier
+            feat1: Normalized features from first image
+            feat2: Normalized features from second image
+            labels: Ground truth labels
+            
+        Returns:
+            Combined loss value
+        """
+        bce = self.bce_loss(predictions, labels)
+        contrastive = self.contrastive_loss(feat1, feat2, labels)
+        
+        return self.alpha * bce + (1 - self.alpha) * contrastive
+
+=== src/training/__init__.py ===
+# src/training/__init__.py
+"""
+Training module
+"""
+
+from .losses import BCELoss, ContrastiveLoss, TripletLoss, CombinedLoss
+from .trainer_bce import BCETrainer, train_multiple_models
+from .trainer_triplet import TripletTrainer
+
+__all__ = [
+    'BCELoss',
+    'ContrastiveLoss',
+    'TripletLoss',
+    'CombinedLoss',
+    'BCETrainer',
+    'train_multiple_models',
+    'TripletTrainer',
+]
+
+=== src/utils/helpers.py ===
+"""
+Utility Helper Functions
+General utility functions for the project.
+"""
+
+import os
+import random
+import numpy as np
+import torch
+
+
+def set_seed(seed: int = 42):
+    """
+    Set random seeds for reproducibility.
+    
+    Args:
+        seed: Random seed value
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
+def get_device() -> torch.device:
+    """
+    Get the appropriate device (CUDA if available, else CPU).
+    
+    Returns:
+        torch.device object
+    """
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"Using device: {device}")
+    if torch.cuda.is_available():
+        print(f"GPU: {torch.cuda.get_device_name(0)}")
+    return device
+
+
+def count_parameters(model: torch.nn.Module) -> int:
+    """
+    Count total number of trainable parameters in a model.
+    
+    Args:
+        model: PyTorch model
+        
+    Returns:
+        Number of trainable parameters
+    """
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
+def format_number(num: int) -> str:
+    """
+    Format large numbers with K/M/B suffixes.
+    
+    Args:
+        num: Number to format
+        
+    Returns:
+        Formatted string
+    """
+    if num >= 1e9:
+        return f"{num/1e9:.2f}B"
+    elif num >= 1e6:
+        return f"{num/1e6:.2f}M"
+    elif num >= 1e3:
+        return f"{num/1e3:.2f}K"
+    return str(num)
+
+
+def print_model_info(model: torch.nn.Module, model_name: str):
+    """
+    Print information about a model.
+    
+    Args:
+        model: PyTorch model
+        model_name: Name of the model
+    """
+    num_params = count_parameters(model)
+    print(f"\n{'='*60}")
+    print(f"Model: {model_name}")
+    print(f"Parameters: {format_number(num_params)} ({num_params:,})")
+    print(f"{'='*60}\n")
+
+
+def ensure_dir(directory: str):
+    """
+    Ensure a directory exists, create if it doesn't.
+    
+    Args:
+        directory: Path to directory
+    """
+    os.makedirs(directory, exist_ok=True)
+
+
+def load_checkpoint(
+    model: torch.nn.Module,
+    checkpoint_path: str,
+    device: torch.device
+) -> torch.nn.Module:
+    """
+    Load model weights from checkpoint.
+    
+    Args:
+        model: Model to load weights into
+        checkpoint_path: Path to checkpoint file
+        device: Device to load model on
+        
+    Returns:
+        Model with loaded weights
+    """
+    if not os.path.exists(checkpoint_path):
+        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
+    
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    model.load_state_dict(checkpoint)
+    model.to(device)
+    print(f"✓ Loaded checkpoint from {checkpoint_path}")
+    
+    return model
+
+
+def save_checkpoint(
+    model: torch.nn.Module,
+    save_path: str
+):
+    """
+    Save model checkpoint.
+    
+    Args:
+        model: Model to save
+        save_path: Path to save checkpoint
+    """
+    ensure_dir(os.path.dirname(save_path))
+    torch.save(model.state_dict(), save_path)
+    print(f"✓ Saved checkpoint to {save_path}")
+
+=== src/utils/__init__.py ===
+# src/utils/__init__.py
+"""
+Utilities module
+"""
+
+from .helpers import (
+    set_seed,
+    get_device,
+    count_parameters,
+    format_number,
+    print_model_info,
+    ensure_dir,
+    load_checkpoint,
+    save_checkpoint
+)
+
+__all__ = [
+    'set_seed',
+    'get_device',
+    'count_parameters',
+    'format_number',
+    'print_model_info',
+    'ensure_dir',
+    'load_checkpoint',
+    'save_checkpoint',
+]
