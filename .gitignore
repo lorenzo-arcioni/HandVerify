@@ -1,6 +1,3 @@
-datasets/IAM
-datasets/processed-handwritten
-datasets/RIMES
-dataset/
+datasets/
 .venv/
 __pycache__
