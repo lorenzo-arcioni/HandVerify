@@ -7,50 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import models
 
-
-class BaseTripletNetwork(nn.Module):
-    """Base class for Triplet networks"""
-    
-    def __init__(self, encoder: nn.Module, feature_dim: int, embedding_dim: int = 128):
-        """
-        Args:
-            encoder: Backbone network for feature extraction
-            feature_dim: Dimension of features from encoder
-            embedding_dim: Dimension of final embedding
-        """
-        super().__init__()
-        self.encoder = encoder
-        self.feature_dim = feature_dim
-        self.embedding_dim = embedding_dim
-        
-        # Projection head
-        self.fc = nn.Sequential(
-            nn.Linear(feature_dim, 512),
-            nn.BatchNorm1d(512),
-            nn.ReLU(inplace=True),
-            nn.Dropout(0.3),
-            nn.Linear(512, embedding_dim)
-        )
-    
-    def forward(self, x):
-        """
-        Forward pass to get normalized embeddings.
-        
-        Args:
-            x: Input image
-            
-        Returns:
-            L2-normalized embedding
-        """
-        x = self.encoder(x)
-        x = x.view(x.size(0), -1)
-        x = self.fc(x)
-        return F.normalize(x, p=2, dim=1)
-    
-    def get_embedding(self, x):
-        """Alias for forward"""
-        return self.forward(x)
-
+from .base import BaseTripletNetwork
 
 class TripletMobileNetV3Small(BaseTripletNetwork):
     """Triplet network based on MobileNetV3-Small"""

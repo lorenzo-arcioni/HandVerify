@@ -282,8 +282,8 @@ def evaluate_comprehensive(
             img1 = dataset.transform(Image.open(img1_path).convert("L")).unsqueeze(0).to(device)
             img2 = dataset.transform(Image.open(img2_path).convert("L")).unsqueeze(0).to(device)
             
-            emb1 = model(img1)
-            emb2 = model(img2)
+            emb1 = model.get_embeddings(img1)
+            emb2 = model.get_embeddings(img2)
             dist = F.pairwise_distance(emb1, emb2).item()
             genuine_dists.append(dist)
         
@@ -296,8 +296,8 @@ def evaluate_comprehensive(
             img1 = dataset.transform(Image.open(img1_path).convert("L")).unsqueeze(0).to(device)
             img2 = dataset.transform(Image.open(img2_path).convert("L")).unsqueeze(0).to(device)
             
-            emb1 = model(img1)
-            emb2 = model(img2)
+            emb1 = model.get_embeddings(img1)
+            emb2 = model.get_embeddings(img2)
             dist = F.pairwise_distance(emb1, emb2).item()
             impostor_dists.append(dist)
     
