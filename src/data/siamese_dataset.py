@@ -43,9 +43,9 @@ class SiameseDataset(Dataset):
         
         # Define transforms
         if self.train:
-            self.augment = get_train_transforms(self.target_size)
+            self.transform = get_train_transforms(self.target_size)
         else:
-            self.augment = get_test_transforms(self.target_size)
+            self.transform = get_test_transforms(self.target_size)
         
         # Load image paths for each writer
         self.writer_images = {}
@@ -89,8 +89,8 @@ class SiameseDataset(Dataset):
         img2 = Image.open(img2_path).convert("L")
         
         # Apply transforms
-        img1 = self.augment(img1)
-        img2 = self.augment(img2)
+        img1 = self.transform(img1)
+        img2 = self.transform(img2)
         
         return img1, img2, torch.tensor(label, dtype=torch.float32)
 
