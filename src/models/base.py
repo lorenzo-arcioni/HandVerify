@@ -1,57 +1,116 @@
+"""
+Base Siamese Network Module
+Defines the base architecture for Siamese networks with shared encoder.
+"""
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
 class BaseSiameseNetwork(nn.Module):
-    """Classe base per BCE e Triplet"""
+    """
+    Base class for Siamese networks.
+    All specific architectures should inherit from this class.
+    """
     
-    def __init__(self, encoder, feat_dim, mode='bce', projection_dim=1024):
+    def __init__(self, encoder: nn.Module, feature_dim: int, projection_dim: int = 512):
+        """
+        Args:
+            encoder: Backbone network for feature extraction
+            feature_dim: Dimension of features from encoder
+            projection_dim: Dimension of projection layer
+        """
         super().__init__()
         self.encoder = encoder
-        self.mode = mode
+        self.feature_dim = feature_dim
+        self.projection_dim = projection_dim
         
-        if mode == 'bce':
-            # Classificatore per BCE
-            self.fc = self._build_classifier(feat_dim * 2, projection_dim)
-        # Per triplet: nessun classifier, solo embeddings
+        # Classifier for similarity prediction
+        self.fc = self._build_fc_block(feature_dim * 2, projection_dim)
     
-    def _build_classifier(self, input_dim, projection_dim):
-        """Classificatore condiviso per BCE"""
+    def _build_fc_block(self, input_dim: int, projection_dim: int) -> nn.Sequential:
+        """
+        Builds the fully connected block for similarity classification.
+        
+        Args:
+            input_dim: Input dimension (concatenated features)
+            projection_dim: Intermediate projection dimension
+            
+        Returns:
+            Sequential module for classification
+        """
+        half = projection_dim // 2
+        quarter = half // 2
+        
         return nn.Sequential(
             nn.Linear(input_dim, projection_dim),
             nn.BatchNorm1d(projection_dim),
             nn.ReLU(inplace=True),
             nn.Dropout(0.4),
-            
-            nn.Linear(projection_dim, 512),
-            nn.BatchNorm1d(512),
+
+            nn.Linear(projection_dim, half),
+            nn.BatchNorm1d(half),
             nn.ReLU(inplace=True),
             nn.Dropout(0.4),
-            
-            nn.Linear(512, 256),
-            nn.BatchNorm1d(256),
+
+            nn.Linear(half, quarter),
+            nn.BatchNorm1d(quarter),
             nn.ReLU(inplace=True),
             nn.Dropout(0.3),
-            
-            nn.Linear(256, 1),
+
+            nn.Linear(quarter, 1),
             nn.Sigmoid()
         )
     
-    def forward_one(self, x):
+    def forward_one(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass for a single image through the encoder.
+        
+        Args:
+            x: Input image tensor
+            
+        Returns:
+            Feature vector
+        """
         x = self.encoder(x)
         return x.view(x.size(0), -1)
     
-    def forward(self, img1, img2=None, img3=None):
-        if self.mode == 'triplet':
-            # Triplet: restituisce embeddings normalizzati
-            if img3 is not None:  # anchor, pos, neg
-                return tuple(F.normalize(self.forward_one(x), p=2, dim=1) 
-                           for x in [img1, img2, img3])
-            else:  # inference
-                return F.normalize(self.forward_one(img1), p=2, dim=1)
-        else:
-            # BCE: restituisce probabilità
-            feat1 = self.forward_one(img1)
-            feat2 = self.forward_one(img2)
-            return self.fc(torch.cat([feat1, feat2], dim=1))
+    def forward(self, img1: torch.Tensor, img2: torch.Tensor, 
+                return_embeddings: bool = False):
+        """
+        Forward pass for image pair.
+        
+        Args:
+            img1: First image
+            img2: Second image
+            return_embeddings: If True, return normalized embeddings instead of similarity
+            
+        Returns:
+            Similarity score or embeddings tuple
+        """
+        feat1 = self.forward_one(img1)
+        feat2 = self.forward_one(img2)
+        
+        if return_embeddings:
+            # Normalize for metric learning
+            feat1 = F.normalize(feat1, p=2, dim=1)
+            feat2 = F.normalize(feat2, p=2, dim=1)
+            return feat1, feat2
+        
+        # Concatenate and classify
+        combined = torch.cat([feat1, feat2], dim=1)
+        return self.fc(combined)
+    
+    def get_embeddings(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Extract normalized embeddings for an image.
+        
+        Args:
+            x: Input image
+            
+        Returns:
+            Normalized feature vector
+        """
+        feat = self.forward_one(x)
+        return F.normalize(feat, p=2, dim=1)
