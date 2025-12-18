@@ -5,10 +5,24 @@ Models module
 
 from .base import BaseSiameseNetwork
 from .registry import get_model, list_models, MODEL_REGISTRY
+from .triplet_backbones import (
+    BaseTripletNetwork,
+    TripletMobileNetV3Small,
+    TripletMobileNetV3Large,
+    TripletResNet18,
+    TripletResNet34,
+    TripletEfficientNetB0,
+)
 
 __all__ = [
     'BaseSiameseNetwork',
     'get_model',
     'list_models',
     'MODEL_REGISTRY',
+    'BaseTripletNetwork',
+    'TripletMobileNetV3Small',
+    'TripletMobileNetV3Large',
+    'TripletResNet18',
+    'TripletResNet34',
+    'TripletEfficientNetB0',
 ]

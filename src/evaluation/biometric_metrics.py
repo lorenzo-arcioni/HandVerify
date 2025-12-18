@@ -1,0 +1,242 @@
+"""
+Biometric Evaluation Metrics
+Comprehensive metrics for biometric verification systems.
+"""
+
+import numpy as np
+import random
+import torch
+import torch.nn.functional as F
+from sklearn.metrics import roc_curve, auc
+from scipy.stats import norm
+from typing import Dict, Tuple
+from tqdm import tqdm
+from PIL import Image
+
+
+def compute_biometric_metrics(
+    genuine_dists: np.ndarray,
+    impostor_dists: np.ndarray
+) -> Dict:
+    """
+    Compute comprehensive biometric metrics.
+    
+    Args:
+        genuine_dists: Distances for genuine pairs (same writer)
+        impostor_dists: Distances for impostor pairs (different writers)
+        
+    Returns:
+        Dictionary with all biometric metrics
+    """
+    metrics = {}
+    
+    # Prepare data for ROC (convert distances to similarity scores)
+    y_true = [1] * len(genuine_dists) + [0] * len(impostor_dists)
+    y_scores = [-d for d in (list(genuine_dists) + list(impostor_dists))]  # Lower dist = higher similarity
+    
+    # 1. ROC CURVE & AUC
+    fpr, tpr, thresholds = roc_curve(y_true, y_scores)
+    thresholds = -thresholds  # Convert back to distances
+    metrics['auc'] = auc(fpr, tpr)
+    metrics['fpr'] = fpr
+    metrics['tpr'] = tpr
+    metrics['thresholds'] = thresholds
+    
+    # 2. EQUAL ERROR RATE (EER)
+    fnr = 1 - tpr
+    eer_idx = np.argmin(np.abs(fpr - fnr))
+    metrics['eer'] = (fpr[eer_idx] + fnr[eer_idx]) / 2
+    metrics['eer_threshold'] = thresholds[eer_idx]
+    
+    # 3. ACCURACY @ FAR = 0.1% and 1%
+    for target_far in [0.001, 0.01]:
+        idx = np.argmin(np.abs(fpr - target_far))
+        actual_far = fpr[idx]
+        frr = fnr[idx]
+        accuracy = 1 - ((actual_far + frr) / 2)
+        threshold = thresholds[idx]
+        
+        metrics[f'acc_far_{target_far*100:.1f}%'] = accuracy
+        metrics[f'frr_far_{target_far*100:.1f}%'] = frr
+        metrics[f'threshold_far_{target_far*100:.1f}%'] = threshold
+    
+    # 4. D-PRIME (d')
+    mu_genuine = np.mean(genuine_dists)
+    mu_impostor = np.mean(impostor_dists)
+    sigma_genuine = np.std(genuine_dists)
+    sigma_impostor = np.std(impostor_dists)
+    
+    pooled_std = np.sqrt((sigma_genuine**2 + sigma_impostor**2) / 2)
+    metrics['d_prime'] = (mu_impostor - mu_genuine) / pooled_std if pooled_std > 0 else 0
+    
+    # 5. DECIDABILITY INDEX
+    metrics['decidability'] = metrics['d_prime'] * np.sqrt(2)
+    
+    # Store distributions and statistics
+    metrics['genuine_dists'] = genuine_dists
+    metrics['impostor_dists'] = impostor_dists
+    metrics['mu_genuine'] = mu_genuine
+    metrics['mu_impostor'] = mu_impostor
+    metrics['sigma_genuine'] = sigma_genuine
+    metrics['sigma_impostor'] = sigma_impostor
+    
+    return metrics
+
+
+def compute_rank1_identification(
+    model: torch.nn.Module,
+    dataset,
+    device: torch.device,
+    num_queries: int = 100
+) -> float:
+    """
+    Compute Rank-1 Identification Rate.
+    For each query, find the most similar writer in the gallery.
+    
+    Args:
+        model: Trained model
+        dataset: Dataset with writer_ids and writer_images
+        device: Device to run on
+        num_queries: Number of queries to test
+        
+    Returns:
+        Rank-1 identification rate
+    """
+    model.eval()
+    writer_ids = dataset.writer_ids
+    writer_images = dataset.writer_images
+    
+    # Build gallery: one embedding per writer
+    gallery_embeddings = {}
+    with torch.no_grad():
+        for writer_id in writer_ids:
+            img_path = random.choice(writer_images[writer_id])
+            img = dataset.transform(Image.open(img_path).convert("L")).unsqueeze(0).to(device)
+            emb = model(img).cpu().numpy()[0]
+            gallery_embeddings[writer_id] = emb
+    
+    # Test queries
+    correct = 0
+    with torch.no_grad():
+        for _ in range(num_queries):
+            query_writer = random.choice(writer_ids)
+            query_img_path = random.choice(writer_images[query_writer])
+            query_img = dataset.transform(Image.open(query_img_path).convert("L")).unsqueeze(0).to(device)
+            query_emb = model(query_img).cpu().numpy()[0]
+            
+            # Find closest gallery writer
+            min_dist = float('inf')
+            predicted_writer = None
+            
+            for writer_id, gallery_emb in gallery_embeddings.items():
+                dist = np.linalg.norm(query_emb - gallery_emb)
+                if dist < min_dist:
+                    min_dist = dist
+                    predicted_writer = writer_id
+            
+            if predicted_writer == query_writer:
+                correct += 1
+    
+    return correct / num_queries
+
+
+def evaluate_comprehensive(
+    model: torch.nn.Module,
+    dataset,
+    device: torch.device,
+    num_pairs: int = 2000,
+    dataset_name: str = "Test"
+) -> Dict:
+    """
+    Comprehensive biometric evaluation.
+    
+    Args:
+        model: Trained model
+        dataset: Dataset to evaluate on
+        device: Device to run on
+        num_pairs: Number of pairs to evaluate
+        dataset_name: Name for logging
+        
+    Returns:
+        Dictionary with all metrics
+    """
+    print(f"\n{'='*70}")
+    print(f"COMPREHENSIVE EVALUATION: {dataset_name}")
+    print(f"{'='*70}\n")
+    
+    model.eval()
+    genuine_dists = []
+    impostor_dists = []
+    
+    writer_ids = dataset.writer_ids
+    writer_images = dataset.writer_images
+    
+    with torch.no_grad():
+        # Genuine pairs
+        for _ in tqdm(range(num_pairs // 2), desc="Genuine pairs"):
+            writer = random.choice(writer_ids)
+            if len(writer_images[writer]) < 2:
+                continue
+            
+            img1_path, img2_path = random.sample(writer_images[writer], 2)
+            img1 = dataset.transform(Image.open(img1_path).convert("L")).unsqueeze(0).to(device)
+            img2 = dataset.transform(Image.open(img2_path).convert("L")).unsqueeze(0).to(device)
+            
+            emb1 = model(img1)
+            emb2 = model(img2)
+            dist = F.pairwise_distance(emb1, emb2).item()
+            genuine_dists.append(dist)
+        
+        # Impostor pairs
+        for _ in tqdm(range(num_pairs // 2), desc="Impostor pairs"):
+            w1, w2 = random.sample(writer_ids, 2)
+            img1_path = random.choice(writer_images[w1])
+            img2_path = random.choice(writer_images[w2])
+            
+            img1 = dataset.transform(Image.open(img1_path).convert("L")).unsqueeze(0).to(device)
+            img2 = dataset.transform(Image.open(img2_path).convert("L")).unsqueeze(0).to(device)
+            
+            emb1 = model(img1)
+            emb2 = model(img2)
+            dist = F.pairwise_distance(emb1, emb2).item()
+            impostor_dists.append(dist)
+    
+    # Compute all metrics
+    metrics = compute_biometric_metrics(
+        np.array(genuine_dists),
+        np.array(impostor_dists)
+    )
+    
+    # Rank-1 identification (if enough writers)
+    if len(writer_ids) >= 10:
+        rank1 = compute_rank1_identification(
+            model, dataset, device,
+            num_queries=min(100, len(writer_ids) * 5)
+        )
+        metrics['rank1_identification'] = rank1
+    else:
+        metrics['rank1_identification'] = None
+    
+    # Print results
+    print(f"\n📊 PRIMARY METRICS:")
+    print(f"  EER (Equal Error Rate):     {metrics['eer']:.4f} ({metrics['eer']*100:.2f}%)")
+    print(f"  AUC-ROC:                     {metrics['auc']:.4f}")
+    print(f"  Accuracy @ FAR=0.1%:         {metrics['acc_far_0.1%']:.4f}")
+    print(f"  Accuracy @ FAR=1.0%:         {metrics['acc_far_1.0%']:.4f}")
+    
+    print(f"\n📈 SECONDARY METRICS:")
+    print(f"  d-prime (d'):                {metrics['d_prime']:.4f}")
+    print(f"  Decidability Index:          {metrics['decidability']:.4f}")
+    if metrics['rank1_identification'] is not None:
+        print(f"  Rank-1 Identification Rate:  {metrics['rank1_identification']:.4f} ({metrics['rank1_identification']*100:.2f}%)")
+    
+    print(f"\n📏 DISTANCE STATISTICS:")
+    print(f"  Genuine:  μ={metrics['mu_genuine']:.4f}, σ={metrics['sigma_genuine']:.4f}")
+    print(f"  Impostor: μ={metrics['mu_impostor']:.4f}, σ={metrics['sigma_impostor']:.4f}")
+    
+    print(f"\n🎯 OPERATING POINTS:")
+    print(f"  EER Threshold:          {metrics['eer_threshold']:.4f}")
+    print(f"  Threshold @ FAR=0.1%:   {metrics['threshold_far_0.1%']:.4f} (FRR={metrics['frr_far_0.1%']*100:.2f}%)")
+    print(f"  Threshold @ FAR=1.0%:   {metrics['threshold_far_1.0%']:.4f} (FRR={metrics['frr_far_1.0%']*100:.2f}%)")
+    
+    return metrics

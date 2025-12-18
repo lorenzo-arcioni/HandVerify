@@ -18,6 +18,17 @@ from .visualizzation import (
     create_training_report
 )
 
+from .biometric_metrics import (
+    compute_biometric_metrics,
+    compute_rank1_identification,
+    evaluate_comprehensive
+)
+
+from .biometric_visualization import (
+    plot_comprehensive_results,
+    plot_training_history_triplet
+)
+
 __all__ = [
     'compute_metrics',
     'compute_confusion_matrix',
@@ -28,4 +39,9 @@ __all__ = [
     'plot_confusion_matrix',
     'plot_results_summary',
     'create_training_report',
+    'compute_biometric_metrics',
+    'compute_rank1_identification',
+    'evaluate_comprehensive',
+    'plot_comprehensive_results',
+    'plot_training_history_triplet',
 ]

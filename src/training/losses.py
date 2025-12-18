@@ -1,6 +1,6 @@
 """
 Loss Functions
-Various loss functions for Siamese networks.
+Various loss functions for Siamese and Triplet networks.
 """
 
 import torch
@@ -60,6 +60,37 @@ class ContrastiveLoss(nn.Module):
         loss_negative = (1 - labels) * torch.pow(torch.clamp(self.margin - distances, min=0.0), 2)
         
         return torch.mean(loss_positive + loss_negative)
+
+
+class TripletLoss(nn.Module):
+    """
+    Triplet Loss for metric learning.
+    Ensures anchor-positive distance < anchor-negative distance by margin.
+    """
+    
+    def __init__(self, margin: float = 0.5):
+        """
+        Args:
+            margin: Margin between positive and negative pairs
+        """
+        super().__init__()
+        self.margin = margin
+    
+    def forward(self, anchor: torch.Tensor, positive: torch.Tensor,
+                negative: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            anchor: Anchor embeddings
+            positive: Positive embeddings (same class as anchor)
+            negative: Negative embeddings (different class)
+            
+        Returns:
+            Triplet loss value
+        """
+        pos_dist = F.pairwise_distance(anchor, positive, p=2)
+        neg_dist = F.pairwise_distance(anchor, negative, p=2)
+        losses = F.relu(pos_dist - neg_dist + self.margin)
+        return losses.mean()
 
 
 class CombinedLoss(nn.Module):
