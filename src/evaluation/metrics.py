@@ -208,7 +208,7 @@ def compute_rank1_identification(
         for writer_id in writer_ids:
             img_path = random.choice(writer_images[writer_id])
             img = dataset.transform(Image.open(img_path).convert("L")).unsqueeze(0).to(device)
-            emb = model(img).cpu().numpy()[0]
+            emb = model.get_embedding(img).cpu().numpy()[0]
             gallery_embeddings[writer_id] = emb
     
     # Test queries
@@ -218,7 +218,7 @@ def compute_rank1_identification(
             query_writer = random.choice(writer_ids)
             query_img_path = random.choice(writer_images[query_writer])
             query_img = dataset.transform(Image.open(query_img_path).convert("L")).unsqueeze(0).to(device)
-            query_emb = model(query_img).cpu().numpy()[0]
+            query_emb = model.get_embedding(query_img).cpu().numpy()[0]
             
             # Find closest gallery writer
             min_dist = float('inf')
@@ -282,8 +282,8 @@ def evaluate_comprehensive(
             img1 = dataset.transform(Image.open(img1_path).convert("L")).unsqueeze(0).to(device)
             img2 = dataset.transform(Image.open(img2_path).convert("L")).unsqueeze(0).to(device)
             
-            emb1 = model.get_embeddings(img1)
-            emb2 = model.get_embeddings(img2)
+            emb1 = model.get_embedding(img1)
+            emb2 = model.get_embedding(img2)
             dist = F.pairwise_distance(emb1, emb2).item()
             genuine_dists.append(dist)
         
@@ -296,8 +296,8 @@ def evaluate_comprehensive(
             img1 = dataset.transform(Image.open(img1_path).convert("L")).unsqueeze(0).to(device)
             img2 = dataset.transform(Image.open(img2_path).convert("L")).unsqueeze(0).to(device)
             
-            emb1 = model.get_embeddings(img1)
-            emb2 = model.get_embeddings(img2)
+            emb1 = model.get_embedding(img1)
+            emb2 = model.get_embedding(img2)
             dist = F.pairwise_distance(emb1, emb2).item()
             impostor_dists.append(dist)
     

@@ -102,7 +102,7 @@ class BaseSiameseNetwork(nn.Module):
         combined = torch.cat([feat1, feat2], dim=1)
         return self.fc(combined)
     
-    def get_embeddings(self, x: torch.Tensor) -> torch.Tensor:
+    def get_embedding(self, x: torch.Tensor) -> torch.Tensor:
         """
         Extract normalized embeddings for an image.
         
