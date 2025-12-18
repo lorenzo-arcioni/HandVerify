@@ -169,4 +169,4 @@ def create_triplet_dataloaders(
         pin_memory=True
     )
     
-    return train_loader, test_loader, train_dirs, test_dirs
+    return train_loader, test_loader, train_dataset, test_dataset
