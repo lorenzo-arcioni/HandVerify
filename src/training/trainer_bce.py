@@ -93,7 +93,7 @@ class BCETrainer:
         train_preds = []
         train_labels = []
         
-        for img1, img2, labels in tqdm(train_loader, desc="Training", leave=False):
+        for img1, img2, labels in tqdm(train_loader, desc="Training"):
             img1 = img1.to(self.device)
             img2 = img2.to(self.device)
             labels = labels.to(self.device)
@@ -130,7 +130,7 @@ class BCETrainer:
         test_preds = []
         test_labels = []
         
-        for img1, img2, labels in tqdm(test_loader, desc="Validating", leave=False):
+        for img1, img2, labels in tqdm(test_loader, desc="Validating"):
             img1 = img1.to(self.device)
             img2 = img2.to(self.device)
             labels = labels.to(self.device)

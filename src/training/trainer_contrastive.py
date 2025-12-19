@@ -145,7 +145,8 @@ class ContrastiveTrainer:
         self.model.train()
         train_loss = 0.0
         
-        for img1, img2, labels in tqdm(train_loader, desc="Training", leave=False):
+        # Progress bar for training
+        for img1, img2, labels in tqdm(train_loader, desc="Training"):
             img1 = img1.to(self.device)
             img2 = img2.to(self.device)
             labels = labels.to(self.device)
@@ -194,8 +195,8 @@ class ContrastiveTrainer:
         writer_ids = val_dataset.writer_ids
         writer_images = val_dataset.writer_images
         
-        # Genuine pairs
-        for _ in range(num_pairs // 2):
+        # Progress bar for genuine pairs
+        for _ in tqdm(range(num_pairs // 2), desc="Genuine pairs"):
             writer = random.choice(writer_ids)
             if len(writer_images[writer]) < 2:
                 continue
@@ -209,8 +210,8 @@ class ContrastiveTrainer:
             dist = F.pairwise_distance(emb1, emb2).item()
             genuine_dists.append(dist)
         
-        # Impostor pairs
-        for _ in range(num_pairs // 2):
+        # Progress bar for impostor pairs
+        for _ in tqdm(range(num_pairs // 2), desc="Impostor pairs"):
             w1, w2 = random.sample(writer_ids, 2)
             img1_path = random.choice(writer_images[w1])
             img2_path = random.choice(writer_images[w2])

@@ -17,7 +17,6 @@ import pandas as pd
 import numpy as np
 from PIL import Image
 
-
 class TripletLoss(nn.Module):
     """Triplet Loss for metric learning"""
     
@@ -116,7 +115,8 @@ class TripletTrainer:
         self.model.train()
         train_loss = 0.0
         
-        for anchor, positive, negative in tqdm(train_loader, desc="Training", leave=False):
+        # Progress bar for training
+        for anchor, positive, negative in tqdm(train_loader, desc="Training"):
             anchor = anchor.to(self.device)
             positive = positive.to(self.device)
             negative = negative.to(self.device)
@@ -159,8 +159,8 @@ class TripletTrainer:
         writer_ids = val_dataset.writer_ids
         writer_images = val_dataset.writer_images
         
-        # Genuine pairs
-        for _ in range(num_pairs // 2):
+        # Progress bar for genuine pairs
+        for _ in tqdm(range(num_pairs // 2), desc="Genuine pairs"):
             writer = random.choice(writer_ids)
             if len(writer_images[writer]) < 2:
                 continue
@@ -174,8 +174,8 @@ class TripletTrainer:
             dist = F.pairwise_distance(emb1, emb2).item()
             genuine_dists.append(dist)
         
-        # Impostor pairs
-        for _ in range(num_pairs // 2):
+        # Progress bar for impostor pairs
+        for _ in tqdm(range(num_pairs // 2), desc="Impostor pairs"):
             w1, w2 = random.sample(writer_ids, 2)
             img1_path = random.choice(writer_images[w1])
             img2_path = random.choice(writer_images[w2])
