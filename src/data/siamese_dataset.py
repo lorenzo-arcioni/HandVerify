@@ -169,3 +169,81 @@ def create_dataloaders(
     )
     
     return train_loader, test_loader, train_dataset, test_dataset
+
+def create_dataloaders_kfold(
+    data_root: str,
+    n_splits: int = 5,
+    current_fold: int = 0,
+    batch_size: int = 16,
+    num_workers: int = 4,
+    pairs_per_writer: int = 100,
+    target_size: int = 448,
+    random_state: int = 42,
+):
+    """
+    Create train and test dataloaders for a specific K-Fold split.
+    
+    Args:
+        data_root: Root directory containing writer subdirectories
+        n_splits: Number of folds for K-Fold
+        current_fold: Current fold index (0 to n_splits-1)
+        batch_size: Batch size for dataloaders
+        num_workers: Number of workers for data loading
+        pairs_per_writer: Number of pairs to generate per writer
+        target_size: Target image size
+        random_state: Random seed for reproducibility
+        
+    Returns:
+        Tuple of (train_loader, val_loader, train_dataset, val_dataset)
+    """
+    from sklearn.model_selection import KFold
+    from torch.utils.data import DataLoader
+    
+    # Get all writer directories
+    writer_dirs = [
+        os.path.join(data_root, d) 
+        for d in sorted(os.listdir(data_root)) 
+        if os.path.isdir(os.path.join(data_root, d))
+    ]
+    
+    # K-Fold split
+    kfold = KFold(n_splits=n_splits, shuffle=True, random_state=random_state)
+    splits = list(kfold.split(writer_dirs))
+    train_idx, val_idx = splits[current_fold]
+    
+    train_dirs = [writer_dirs[i] for i in train_idx]
+    val_dirs = [writer_dirs[i] for i in val_idx]
+    
+    # Create datasets
+    train_dataset = SiameseDataset(
+        train_dirs, 
+        train=True, 
+        pairs_per_writer=pairs_per_writer,
+        target_size=target_size
+    )
+    
+    val_dataset = SiameseDataset(
+        val_dirs, 
+        train=False, 
+        pairs_per_writer=pairs_per_writer,
+        target_size=target_size
+    )
+    
+    # Create dataloaders
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True
+    )
+    
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True
+    )
+    
+    return train_loader, val_loader, train_dataset, val_dataset

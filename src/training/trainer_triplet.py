@@ -269,6 +269,112 @@ class TripletTrainer:
         
         return self.history
     
+    def train_kfold(
+        self,
+        data_root: str,
+        n_splits: int = 5,
+        batch_size: int = 16,
+        num_workers: int = 4,
+        triplets_per_writer: int = 100,
+        target_size: int = 448,
+        epochs: int = 50,
+        patience: int = 7,
+        random_state: int = 42,
+    ) -> Dict:
+        """
+        Train with K-Fold Cross-Validation.
+        
+        Args:
+            data_root: Root directory with writer subdirectories
+            n_splits: Number of folds
+            batch_size: Batch size
+            num_workers: Number of data loading workers
+            triplets_per_writer: Triplets per writer
+            target_size: Image size
+            epochs: Epochs per fold
+            patience: Early stopping patience
+            random_state: Random seed
+            
+        Returns:
+            Dictionary with aggregated results across all folds
+        """
+        from ..data import create_triplet_dataloaders_kfold
+        
+        print(f"\n{'='*70}")
+        print(f"K-FOLD TRAINING: {self.model_name} ({n_splits} folds)")
+        print(f"{'='*70}\n")
+        
+        fold_results = []
+        
+        for fold in range(n_splits):
+            print(f"\n{'#'*70}")
+            print(f"# FOLD {fold+1}/{n_splits}")
+            print(f"{'#'*70}\n")
+            
+            # Create dataloaders for this fold
+            train_loader, val_loader, train_dataset, val_dataset = create_triplet_dataloaders_kfold(
+                data_root=data_root,
+                n_splits=n_splits,
+                current_fold=fold,
+                batch_size=batch_size,
+                num_workers=num_workers,
+                triplets_per_writer=triplets_per_writer,
+                target_size=target_size,
+                random_state=random_state
+            )
+            
+            # Reset model for this fold
+            self.model.apply(self._reset_weights)
+            self._setup_optimizer()
+            
+            # Train this fold
+            fold_history = self.train(
+                train_loader=train_loader,
+                val_dataset=val_dataset,
+                epochs=epochs,
+                patience=patience
+            )
+            
+            fold_results.append({
+                'fold': fold + 1,
+                'best_eer': self.best_eer,
+                'history': fold_history
+            })
+            
+            print(f"\n✓ Fold {fold+1} completed - Best EER: {self.best_eer:.4f}\n")
+        
+        # Aggregate results
+        all_eers = [f['best_eer'] for f in fold_results]
+        aggregated = {
+            'fold_results': fold_results,
+            'mean_eer': np.mean(all_eers),
+            'std_eer': np.std(all_eers),
+            'min_eer': np.min(all_eers),
+            'max_eer': np.max(all_eers)
+        }
+        
+        print(f"\n{'='*70}")
+        print(f"K-FOLD RESULTS SUMMARY")
+        print(f"{'='*70}")
+        print(f"Mean EER: {aggregated['mean_eer']:.4f} ± {aggregated['std_eer']:.4f}")
+        print(f"Min EER:  {aggregated['min_eer']:.4f}")
+        print(f"Max EER:  {aggregated['max_eer']:.4f}")
+        print(f"{'='*70}\n")
+        
+        # Save aggregated results
+        import pandas as pd
+        pd.DataFrame({
+            'fold': [f['fold'] for f in fold_results],
+            'best_eer': [f['best_eer'] for f in fold_results]
+        }).to_csv(os.path.join(self.results_dir, f"{self.model_name}_kfold_summary.csv"), index=False)
+        
+        return aggregated
+    
+    def _reset_weights(self, m):
+        """Reset model weights for new fold"""
+        if hasattr(m, 'reset_parameters'):
+            m.reset_parameters()
+    
     def save_checkpoint(self, is_best: bool = False):
         """Save model checkpoint"""
         suffix = "best" if is_best else "final"
