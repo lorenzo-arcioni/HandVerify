@@ -5,7 +5,7 @@ Central registry for all available model architectures.
 
 from typing import Dict, Type
 from .base import BaseSiameseNetwork
-from .backbones import (
+from .bce_backbones import (
     SiameseResNet18,
     SiameseResNet34,
     SiameseResNet50,

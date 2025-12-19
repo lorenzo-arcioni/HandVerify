@@ -114,7 +114,58 @@ class BaseSiameseNetwork(nn.Module):
         """
         feat = self.forward_one(x)
         return F.normalize(feat, p=2, dim=1)
+
+class BaseContrastiveNetwork(nn.Module):
+    """
+    Base class for Contrastive Learning networks.
+    Projects features to a lower-dimensional embedding space.
+    """
     
+    def __init__(self, encoder: nn.Module, feature_dim: int, projection_dim: int = 128):
+        """
+        Args:
+            encoder: Backbone network for feature extraction
+            feature_dim: Dimension of features from encoder
+            projection_dim: Dimension of projection head output
+        """
+        super().__init__()
+        self.encoder = encoder
+        self.feature_dim = feature_dim
+        self.projection_dim = projection_dim
+        
+        # Projection head (MLP)
+        self.projection = nn.Sequential(
+            nn.Linear(feature_dim, 512),
+            nn.BatchNorm1d(512),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.3),
+            nn.Linear(512, projection_dim)
+        )
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass to get normalized embeddings.
+        
+        Args:
+            x: Input image
+            
+        Returns:
+            L2-normalized projection
+        """
+        # Extract features
+        features = self.encoder(x)
+        features = features.view(features.size(0), -1)
+        
+        # Project to embedding space
+        embeddings = self.projection(features)
+        
+        # Normalize
+        return F.normalize(embeddings, p=2, dim=1)
+    
+    def get_embedding(self, x: torch.Tensor) -> torch.Tensor:
+        """Alias for forward"""
+        return self.forward(x)
+
 class BaseTripletNetwork(nn.Module):
     """Base class for Triplet networks"""
     

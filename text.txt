@@ -89,9 +89,9 @@ class SiameseDataset(Dataset):
         
         # Define transforms
         if self.train:
-            self.augment = get_train_transforms(self.target_size)
+            self.transform = get_train_transforms(self.target_size)
         else:
-            self.augment = get_test_transforms(self.target_size)
+            self.transform = get_test_transforms(self.target_size)
         
         # Load image paths for each writer
         self.writer_images = {}
@@ -135,8 +135,8 @@ class SiameseDataset(Dataset):
         img2 = Image.open(img2_path).convert("L")
         
         # Apply transforms
-        img1 = self.augment(img1)
-        img2 = self.augment(img2)
+        img1 = self.transform(img1)
+        img2 = self.transform(img2)
         
         return img1, img2, torch.tensor(label, dtype=torch.float32)
 
@@ -214,7 +214,7 @@ def create_dataloaders(
         pin_memory=True
     )
     
-    return train_loader, test_loader, train_dirs, test_dirs
+    return train_loader, test_loader, train_dataset, test_dataset
 
 
 === src/data/triplet_dataset.py ===
@@ -389,7 +389,7 @@ def create_triplet_dataloaders(
         pin_memory=True
     )
     
-    return train_loader, test_loader, train_dirs, test_dirs
+    return train_loader, test_loader, train_dataset, test_dataset
 
 === src/data/__init__.py ===
 # src/data/__init__.py
@@ -399,6 +399,7 @@ Data module
 
 from .siamese_dataset import SiameseDataset, create_dataloaders
 from .triplet_dataset import TripletDataset, create_triplet_dataloaders
+from .contrastive_dataset import ContrastiveDataset, create_contrastive_dataloaders
 from .transforms import get_train_transforms, get_test_transforms
 
 __all__ = [
@@ -406,191 +407,345 @@ __all__ = [
     'create_dataloaders',
     'TripletDataset',
     'create_triplet_dataloaders',
+    'ContrastiveDataset',
+    'create_contrastive_dataloaders',
     'get_train_transforms',
     'get_test_transforms',
 ]
 
 
-=== src/evaluation/metrics.py ===
+=== src/data/contrastive_dataset.py ===
 """
-Evaluation Metrics
-Metrics for evaluating Siamese network performance.
+Contrastive Dataset
+Dataset class for contrastive learning with positive and negative pairs.
 """
 
-import numpy as np
-from sklearn.metrics import (
-    accuracy_score,
-    precision_score,
-    recall_score,
-    f1_score,
-    roc_auc_score,
-    confusion_matrix
-)
-from typing import Dict, Tuple
+import os
+import random
+from pathlib import Path
+from typing import List, Tuple
+
+import torch
+from torch.utils.data import Dataset
+from PIL import Image
+from .transforms import get_train_transforms, get_test_transforms
 
 
-def compute_metrics(
-    predictions: np.ndarray,
-    labels: np.ndarray,
-    threshold: float = 0.5
-) -> Dict[str, float]:
+class ContrastiveDataset(Dataset):
     """
-    Compute classification metrics.
+    Dataset for Contrastive Learning.
+    Generates positive pairs (same writer) and negative pairs (different writers).
+    Uses strong augmentation to create two views of each image.
+    """
+    
+    def __init__(
+        self,
+        writer_dirs: List[str],
+        train: bool = True,
+        pairs_per_writer: int = 100,
+        target_size: int = 448,
+    ):
+        """
+        Args:
+            writer_dirs: List of directories, each containing images from one writer
+            train: Whether this is training set (applies augmentation if True)
+            pairs_per_writer: Number of pairs to generate per writer
+            target_size: Target image size for resizing
+        """
+        self.writer_dirs = writer_dirs
+        self.train = train
+        self.target_size = target_size
+        self.pairs_per_writer = pairs_per_writer
+        
+        # Define transforms
+        if self.train:
+            self.transform = get_train_transforms(self.target_size)
+        else:
+            self.transform = get_test_transforms(self.target_size)
+        
+        # Load image paths for each writer
+        self.writer_images = {}
+        for writer_dir in writer_dirs:
+            writer_id = Path(writer_dir).name
+            images = [
+                os.path.join(writer_dir, f) 
+                for f in os.listdir(writer_dir) 
+                if f.endswith(('.png', '.jpg', '.jpeg'))
+            ]
+            if len(images) >= 2:  # Need at least 2 images for positive pairs
+                self.writer_images[writer_id] = images
+        
+        self.writer_ids = list(self.writer_images.keys())
+        self.num_pairs = len(self.writer_ids) * pairs_per_writer
+        
+        print(f"{'TRAIN' if train else 'TEST'}: {len(self.writer_ids)} writers, "
+              f"{self.num_pairs} pairs")
+    
+    def __len__(self) -> int:
+        return self.num_pairs
+    
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Returns:
+            Tuple of (img1, img2, label) where label=1 for positive, 0 for negative
+        """
+        # Randomly decide if this is a positive or negative pair
+        is_positive = random.random() < 0.5
+        
+        if is_positive:
+            # Positive pair: two images from same writer
+            writer_id = random.choice(self.writer_ids)
+            img1_path, img2_path = random.sample(self.writer_images[writer_id], 2)
+            label = 1.0
+        else:
+            # Negative pair: images from different writers
+            writer1, writer2 = random.sample(self.writer_ids, 2)
+            img1_path = random.choice(self.writer_images[writer1])
+            img2_path = random.choice(self.writer_images[writer2])
+            label = 0.0
+        
+        # Load images as grayscale
+        img1 = Image.open(img1_path).convert("L")
+        img2 = Image.open(img2_path).convert("L")
+        
+        # Apply transforms
+        img1 = self.transform(img1)
+        img2 = self.transform(img2)
+        
+        return img1, img2, torch.tensor(label, dtype=torch.float32)
+
+
+def create_contrastive_dataloaders(
+    data_root: str,
+    batch_size: int = 16,
+    num_workers: int = 4,
+    test_size: float = 0.2,
+    pairs_per_writer: int = 100,
+    target_size: int = 448,
+    random_state: int = 42,
+):
+    """
+    Create train and test dataloaders for contrastive learning.
     
     Args:
-        predictions: Predicted probabilities (0-1)
-        labels: Ground truth labels (0 or 1)
-        threshold: Classification threshold
+        data_root: Root directory containing writer subdirectories
+        batch_size: Batch size for dataloaders
+        num_workers: Number of workers for data loading
+        test_size: Proportion of writers to use for testing
+        pairs_per_writer: Number of pairs to generate per writer
+        target_size: Target image size
+        random_state: Random seed for reproducibility
         
     Returns:
-        Dictionary of metrics
+        Tuple of (train_loader, test_loader, train_dataset, test_dataset)
     """
-    binary_preds = (predictions > threshold).astype(int)
+    from sklearn.model_selection import train_test_split
+    from torch.utils.data import DataLoader
     
-    return {
-        'accuracy': accuracy_score(labels, binary_preds),
-        'precision': precision_score(labels, binary_preds, zero_division=0),
-        'recall': recall_score(labels, binary_preds, zero_division=0),
-        'f1': f1_score(labels, binary_preds, zero_division=0),
-        'auc': roc_auc_score(labels, predictions) if len(np.unique(labels)) > 1 else 0.0,
-    }
+    # Get all writer directories
+    writer_dirs = [
+        os.path.join(data_root, d) 
+        for d in sorted(os.listdir(data_root)) 
+        if os.path.isdir(os.path.join(data_root, d))
+    ]
+    
+    # Split into train and test
+    train_dirs, test_dirs = train_test_split(
+        writer_dirs, 
+        test_size=test_size, 
+        random_state=random_state
+    )
+    
+    # Create datasets
+    train_dataset = ContrastiveDataset(
+        train_dirs, 
+        train=True, 
+        pairs_per_writer=pairs_per_writer,
+        target_size=target_size
+    )
+    
+    test_dataset = ContrastiveDataset(
+        test_dirs, 
+        train=False, 
+        pairs_per_writer=pairs_per_writer,
+        target_size=target_size
+    )
+    
+    # Create dataloaders
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True
+    )
+    
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True
+    )
+    
+    return train_loader, test_loader, train_dataset, test_dataset
 
-
-def compute_confusion_matrix(
-    predictions: np.ndarray,
-    labels: np.ndarray,
-    threshold: float = 0.5
-) -> np.ndarray:
-    """
-    Compute confusion matrix.
-    
-    Args:
-        predictions: Predicted probabilities
-        labels: Ground truth labels
-        threshold: Classification threshold
-        
-    Returns:
-        2x2 confusion matrix [[TN, FP], [FN, TP]]
-    """
-    binary_preds = (predictions > threshold).astype(int)
-    return confusion_matrix(labels, binary_preds)
-
-
-def compute_eer(
-    predictions: np.ndarray,
-    labels: np.ndarray
-) -> Tuple[float, float]:
-    """
-    Compute Equal Error Rate (EER).
-    
-    The EER is the point where False Accept Rate = False Reject Rate.
-    
-    Args:
-        predictions: Predicted probabilities
-        labels: Ground truth labels (1 for positive, 0 for negative)
-        
-    Returns:
-        Tuple of (EER value, threshold at EER)
-    """
-    # Sort by predictions
-    sorted_indices = np.argsort(predictions)
-    sorted_preds = predictions[sorted_indices]
-    sorted_labels = labels[sorted_indices]
-    
-    # Compute FAR and FRR at each threshold
-    n_impostor = np.sum(labels == 0)
-    n_genuine = np.sum(labels == 1)
-    
-    if n_impostor == 0 or n_genuine == 0:
-        return 0.0, 0.5
-    
-    far = []
-    frr = []
-    thresholds = []
-    
-    for threshold in np.linspace(0, 1, 100):
-        # False Accept: impostor pairs predicted as genuine
-        fa = np.sum((predictions >= threshold) & (labels == 0))
-        far_val = fa / n_impostor
-        
-        # False Reject: genuine pairs predicted as impostor
-        fr = np.sum((predictions < threshold) & (labels == 1))
-        frr_val = fr / n_genuine
-        
-        far.append(far_val)
-        frr.append(frr_val)
-        thresholds.append(threshold)
-    
-    # Find point where FAR ≈ FRR
-    far = np.array(far)
-    frr = np.array(frr)
-    diff = np.abs(far - frr)
-    eer_idx = np.argmin(diff)
-    
-    eer = (far[eer_idx] + frr[eer_idx]) / 2
-    eer_threshold = thresholds[eer_idx]
-    
-    return eer, eer_threshold
-
-
-def evaluate_model_comprehensive(
-    predictions: np.ndarray,
-    labels: np.ndarray,
-    threshold: float = 0.5
-) -> Dict:
-    """
-    Comprehensive evaluation with all metrics.
-    
-    Args:
-        predictions: Predicted probabilities
-        labels: Ground truth labels
-        threshold: Classification threshold
-        
-    Returns:
-        Dictionary with all metrics
-    """
-    basic_metrics = compute_metrics(predictions, labels, threshold)
-    cm = compute_confusion_matrix(predictions, labels, threshold)
-    eer, eer_threshold = compute_eer(predictions, labels)
-    
-    tn, fp, fn, tp = cm.ravel()
-    
-    return {
-        **basic_metrics,
-        'eer': eer,
-        'eer_threshold': eer_threshold,
-        'true_negatives': int(tn),
-        'false_positives': int(fp),
-        'false_negatives': int(fn),
-        'true_positives': int(tp),
-    }
-
-=== src/evaluation/biometric_visualization.py ===
+=== src/evaluation/visualization.py ===
 """
-Biometric Visualization
-Visualization functions for biometric evaluation results.
+Visualization Functions
+Unified visualization for training history and biometric evaluation.
 """
 
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import norm
-from typing import Dict, Optional
+from typing import Dict, List, Optional
+import os
 
 
-def plot_comprehensive_results(
+# ============================================================================
+# TRAINING VISUALIZATIONS
+# ============================================================================
+
+def plot_training_history(
+    history: Dict[str, List],
+    model_name: str,
+    save_path: Optional[str] = None
+):
+    """
+    Plot training and validation metrics (for BCE/Contrastive training).
+    
+    Args:
+        history: Dict with 'epoch', 'train_loss', 'train_acc', 'test_loss', 'test_acc'
+        model_name: Name of the model
+        save_path: Optional path to save figure
+    """
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
+    epochs = history['epoch']
+    
+    # Loss plot
+    ax1.plot(epochs, history['train_loss'], 'b-o', label='Train Loss', markersize=4)
+    ax1.plot(epochs, history['test_loss'], 'r-o', label='Test Loss', markersize=4)
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('Loss')
+    ax1.set_title(f'{model_name} - Loss')
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
+    
+    # Accuracy plot
+    ax2.plot(epochs, history['train_acc'], 'b-o', label='Train Accuracy', markersize=4)
+    ax2.plot(epochs, history['test_acc'], 'r-o', label='Test Accuracy', markersize=4)
+    ax2.set_xlabel('Epoch')
+    ax2.set_ylabel('Accuracy')
+    ax2.set_title(f'{model_name} - Accuracy')
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.show()
+
+
+def plot_triplet_training_history(
+    history: Dict,
+    model_name: str,
+    save_path: Optional[str] = None
+):
+    """
+    Plot training history for triplet networks.
+    
+    Args:
+        history: Dict with 'epoch', 'train_loss', 'val_eer', 'val_auc'
+        model_name: Name of the model
+        save_path: Optional path to save figure
+    """
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(18, 5))
+    epochs = history['epoch']
+    
+    # Loss
+    ax1.plot(epochs, history['train_loss'], 'b-o', label='Train Loss', markersize=4)
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('Loss')
+    ax1.set_title(f'{model_name} - Triplet Loss')
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
+    
+    # EER
+    ax2.plot(epochs, history['val_eer'], 'r-o', label='Validation EER', markersize=4)
+    ax2.set_xlabel('Epoch')
+    ax2.set_ylabel('EER')
+    ax2.set_title(f'{model_name} - Equal Error Rate')
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+    
+    # AUC
+    ax3.plot(epochs, history['val_auc'], 'g-o', label='Validation AUC', markersize=4)
+    ax3.set_xlabel('Epoch')
+    ax3.set_ylabel('AUC')
+    ax3.set_title(f'{model_name} - AUC-ROC')
+    ax3.legend()
+    ax3.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.show()
+
+
+def plot_multiple_models_comparison(
+    results: Dict[str, Dict],
+    metric: str = 'test_loss',
+    save_path: Optional[str] = None
+):
+    """
+    Compare multiple models on a single metric.
+    
+    Args:
+        results: Dict mapping model names to their history dicts
+        metric: Metric to plot
+        save_path: Optional path to save figure
+    """
+    plt.figure(figsize=(12, 6))
+    
+    for model_name, result in results.items():
+        history = result['history']
+        epochs = history['epoch']
+        values = history[metric]
+        plt.plot(epochs, values, '-o', label=model_name, markersize=3)
+    
+    plt.xlabel('Epoch')
+    plt.ylabel(metric.replace('_', ' ').title())
+    plt.title(f'Model Comparison - {metric.replace("_", " ").title()}')
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.show()
+
+
+# ============================================================================
+# BIOMETRIC VISUALIZATIONS
+# ============================================================================
+
+def plot_biometric_results(
     metrics: Dict,
     save_path: Optional[str] = None
 ):
     """
-    Create comprehensive visualization of all biometric metrics.
+    Comprehensive biometric evaluation visualization.
     
     Args:
         metrics: Dictionary with all metrics from evaluate_comprehensive
-        save_path: Optional path to save the figure
+        save_path: Optional path to save figure
     """
     fig = plt.figure(figsize=(16, 12))
     
-    # 1. ROC CURVE with operating points
+    # 1. ROC Curve with operating points
     ax1 = plt.subplot(2, 3, 1)
     ax1.plot(metrics['fpr'], metrics['tpr'], 'darkorange', lw=2,
              label=f'AUC={metrics["auc"]:.4f}')
@@ -709,193 +864,6 @@ def plot_comprehensive_results(
     
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    
-    plt.show()
-
-
-def plot_training_history_triplet(
-    history: Dict,
-    model_name: str,
-    save_path: Optional[str] = None
-):
-    """
-    Plot training history for triplet networks.
-    
-    Args:
-        history: Dictionary with 'epoch', 'train_loss', 'val_eer', 'val_auc'
-        model_name: Name of the model
-        save_path: Optional path to save the figure
-    """
-    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(18, 5))
-    
-    epochs = history['epoch']
-    
-    # Loss plot
-    ax1.plot(epochs, history['train_loss'], 'b-o', label='Train Loss', markersize=4)
-    ax1.set_xlabel('Epoch')
-    ax1.set_ylabel('Loss')
-    ax1.set_title(f'{model_name} - Triplet Loss')
-    ax1.legend()
-    ax1.grid(True, alpha=0.3)
-    
-    # EER plot
-    ax2.plot(epochs, history['val_eer'], 'r-o', label='Validation EER', markersize=4)
-    ax2.set_xlabel('Epoch')
-    ax2.set_ylabel('EER')
-    ax2.set_title(f'{model_name} - Equal Error Rate')
-    ax2.legend()
-    ax2.grid(True, alpha=0.3)
-    
-    # AUC plot
-    ax3.plot(epochs, history['val_auc'], 'g-o', label='Validation AUC', markersize=4)
-    ax3.set_xlabel('Epoch')
-    ax3.set_ylabel('AUC')
-    ax3.set_title(f'{model_name} - AUC-ROC')
-    ax3.legend()
-    ax3.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    
-    if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    
-    plt.show()
-
-=== src/evaluation/__init__.py ===
-# src/evaluation/__init__.py
-"""
-Evaluation module
-"""
-
-from .metrics import (
-    compute_metrics,
-    compute_confusion_matrix,
-    compute_eer,
-    evaluate_model_comprehensive
-)
-
-from .visualizzation import (
-    plot_training_history,
-    plot_multiple_models_comparison,
-    plot_confusion_matrix,
-    plot_results_summary,
-    create_training_report
-)
-
-from .biometric_metrics import (
-    compute_biometric_metrics,
-    compute_rank1_identification,
-    evaluate_comprehensive
-)
-
-from .biometric_visualization import (
-    plot_comprehensive_results,
-    plot_training_history_triplet
-)
-
-__all__ = [
-    'compute_metrics',
-    'compute_confusion_matrix',
-    'compute_eer',
-    'evaluate_model_comprehensive',
-    'plot_training_history',
-    'plot_multiple_models_comparison',
-    'plot_confusion_matrix',
-    'plot_results_summary',
-    'create_training_report',
-    'compute_biometric_metrics',
-    'compute_rank1_identification',
-    'evaluate_comprehensive',
-    'plot_comprehensive_results',
-    'plot_training_history_triplet',
-]
-
-=== src/evaluation/visualizzation.py ===
-"""
-Visualization utilities
-Functions for visualizing training progress and results.
-"""
-
-import matplotlib.pyplot as plt
-import pandas as pd
-import numpy as np
-from typing import Dict, List, Optional
-
-
-def plot_training_history(
-    history: Dict[str, List],
-    model_name: str,
-    save_path: Optional[str] = None
-):
-    """
-    Plot training and validation metrics over epochs.
-    
-    Args:
-        history: Dictionary with 'epoch', 'train_loss', 'train_acc', 'test_loss', 'test_acc'
-        model_name: Name of the model for title
-        save_path: Optional path to save the figure
-    """
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
-    
-    epochs = history['epoch']
-    
-    # Loss plot
-    ax1.plot(epochs, history['train_loss'], 'b-o', label='Train Loss', markersize=4)
-    ax1.plot(epochs, history['test_loss'], 'r-o', label='Test Loss', markersize=4)
-    ax1.set_xlabel('Epoch')
-    ax1.set_ylabel('Loss')
-    ax1.set_title(f'{model_name} - Loss')
-    ax1.legend()
-    ax1.grid(True, alpha=0.3)
-    
-    # Accuracy plot
-    ax2.plot(epochs, history['train_acc'], 'b-o', label='Train Accuracy', markersize=4)
-    ax2.plot(epochs, history['test_acc'], 'r-o', label='Test Accuracy', markersize=4)
-    ax2.set_xlabel('Epoch')
-    ax2.set_ylabel('Accuracy')
-    ax2.set_title(f'{model_name} - Accuracy')
-    ax2.legend()
-    ax2.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    
-    if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    
-    plt.show()
-
-
-def plot_multiple_models_comparison(
-    results: Dict[str, Dict],
-    metric: str = 'test_loss',
-    save_path: Optional[str] = None
-):
-    """
-    Compare multiple models on a single metric.
-    
-    Args:
-        results: Dictionary mapping model names to their history dictionaries
-        metric: Metric to plot ('train_loss', 'test_loss', 'train_acc', 'test_acc')
-        save_path: Optional path to save the figure
-    """
-    plt.figure(figsize=(12, 6))
-    
-    for model_name, result in results.items():
-        history = result['history']
-        epochs = history['epoch']
-        values = history[metric]
-        plt.plot(epochs, values, '-o', label=model_name, markersize=3)
-    
-    plt.xlabel('Epoch')
-    plt.ylabel(metric.replace('_', ' ').title())
-    plt.title(f'Model Comparison - {metric.replace("_", " ").title()}')
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.grid(True, alpha=0.3)
-    plt.tight_layout()
-    
-    if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    
     plt.show()
 
 
@@ -910,14 +878,13 @@ def plot_confusion_matrix(
     Args:
         cm: 2x2 confusion matrix
         model_name: Name of the model
-        save_path: Optional path to save the figure
+        save_path: Optional path to save figure
     """
     fig, ax = plt.subplots(figsize=(8, 6))
     
     im = ax.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
     ax.figure.colorbar(im, ax=ax)
     
-    # Labels
     ax.set(xticks=np.arange(cm.shape[1]),
            yticks=np.arange(cm.shape[0]),
            xticklabels=['Different', 'Same'],
@@ -938,48 +905,12 @@ def plot_confusion_matrix(
     
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    
     plt.show()
 
 
-def plot_results_summary(
-    results: Dict[str, Dict],
-    save_path: Optional[str] = None
-):
-    """
-    Create summary bar chart of best losses for all models.
-    
-    Args:
-        results: Dictionary mapping model names to result dictionaries
-        save_path: Optional path to save the figure
-    """
-    model_names = list(results.keys())
-    best_losses = [results[name]['best_loss'] for name in model_names]
-    
-    plt.figure(figsize=(12, 6))
-    bars = plt.bar(range(len(model_names)), best_losses, color='steelblue')
-    
-    # Highlight best model
-    best_idx = np.argmin(best_losses)
-    bars[best_idx].set_color('green')
-    
-    plt.xlabel('Model')
-    plt.ylabel('Best Test Loss')
-    plt.title('Model Performance Comparison')
-    plt.xticks(range(len(model_names)), model_names, rotation=45, ha='right')
-    plt.grid(True, alpha=0.3, axis='y')
-    
-    # Add value labels on bars
-    for i, (name, loss) in enumerate(zip(model_names, best_losses)):
-        plt.text(i, loss, f'{loss:.4f}', ha='center', va='bottom')
-    
-    plt.tight_layout()
-    
-    if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    
-    plt.show()
-
+# ============================================================================
+# COMPREHENSIVE REPORTS
+# ============================================================================
 
 def create_training_report(
     results: Dict[str, Dict],
@@ -992,7 +923,6 @@ def create_training_report(
         results: Dictionary mapping model names to result dictionaries
         save_dir: Directory to save visualizations
     """
-    import os
     os.makedirs(save_dir, exist_ok=True)
     
     # Individual model plots
@@ -1005,35 +935,139 @@ def create_training_report(
     
     # Comparison plots
     for metric in ['train_loss', 'test_loss', 'train_acc', 'test_acc']:
-        plot_multiple_models_comparison(
-            results=results,
-            metric=metric,
-            save_path=os.path.join(save_dir, f"comparison_{metric}.png")
-        )
+        if all(metric in res['history'] for res in results.values()):
+            plot_multiple_models_comparison(
+                results=results,
+                metric=metric,
+                save_path=os.path.join(save_dir, f"comparison_{metric}.png")
+            )
     
-    # Summary plot
-    plot_results_summary(
-        results=results,
-        save_path=os.path.join(save_dir, "summary.png")
-    )
+    # Summary
+    print(f"\n{'='*60}")
+    print("FINAL RESULTS")
+    print(f"{'='*60}")
+    for model_name, result in results.items():
+        best = result.get('best_loss') or result.get('best_eer', 'N/A')
+        print(f"{model_name:20s}: {best:.4f}" if isinstance(best, float) else f"{model_name:20s}: {best}")
     
-    print(f"✓ Training report saved to {save_dir}")
+    print(f"\n✓ Training report saved to {save_dir}")
 
-=== src/evaluation/biometric_metrics.py ===
+
+=== src/evaluation/metrics.py ===
 """
-Biometric Evaluation Metrics
-Comprehensive metrics for biometric verification systems.
+Evaluation Metrics
+Unified metrics for classification and biometric evaluation.
 """
 
 import numpy as np
 import random
 import torch
 import torch.nn.functional as F
-from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import (
+    accuracy_score, precision_score, recall_score, f1_score,
+    roc_auc_score, roc_curve, auc, confusion_matrix
+)
 from scipy.stats import norm
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Optional
 from tqdm import tqdm
 from PIL import Image
+
+
+# ============================================================================
+# CLASSIFICATION METRICS
+# ============================================================================
+
+def compute_basic_metrics(
+    predictions: np.ndarray,
+    labels: np.ndarray,
+    threshold: float = 0.5
+) -> Dict[str, float]:
+    """
+    Compute basic classification metrics.
+    
+    Args:
+        predictions: Predicted probabilities (0-1)
+        labels: Ground truth labels (0 or 1)
+        threshold: Classification threshold
+        
+    Returns:
+        Dictionary of metrics
+    """
+    binary_preds = (predictions > threshold).astype(int)
+    
+    return {
+        'accuracy': accuracy_score(labels, binary_preds),
+        'precision': precision_score(labels, binary_preds, zero_division=0),
+        'recall': recall_score(labels, binary_preds, zero_division=0),
+        'f1': f1_score(labels, binary_preds, zero_division=0),
+        'auc': roc_auc_score(labels, predictions) if len(np.unique(labels)) > 1 else 0.0,
+    }
+
+
+def compute_confusion_matrix(
+    predictions: np.ndarray,
+    labels: np.ndarray,
+    threshold: float = 0.5
+) -> np.ndarray:
+    """
+    Compute confusion matrix.
+    
+    Args:
+        predictions: Predicted probabilities
+        labels: Ground truth labels
+        threshold: Classification threshold
+        
+    Returns:
+        2x2 confusion matrix [[TN, FP], [FN, TP]]
+    """
+    binary_preds = (predictions > threshold).astype(int)
+    return confusion_matrix(labels, binary_preds)
+
+
+# ============================================================================
+# BIOMETRIC METRICS
+# ============================================================================
+
+def compute_eer(
+    predictions: np.ndarray,
+    labels: np.ndarray
+) -> Tuple[float, float]:
+    """
+    Compute Equal Error Rate (EER).
+    
+    The EER is the point where False Accept Rate = False Reject Rate.
+    
+    Args:
+        predictions: Predicted probabilities/similarities
+        labels: Ground truth labels (1 for positive, 0 for negative)
+        
+    Returns:
+        Tuple of (EER value, threshold at EER)
+    """
+    sorted_indices = np.argsort(predictions)
+    sorted_labels = labels[sorted_indices]
+    
+    n_impostor = np.sum(labels == 0)
+    n_genuine = np.sum(labels == 1)
+    
+    if n_impostor == 0 or n_genuine == 0:
+        return 0.0, 0.5
+    
+    far, frr, thresholds = [], [], []
+    
+    for threshold in np.linspace(0, 1, 100):
+        fa = np.sum((predictions >= threshold) & (labels == 0))
+        fr = np.sum((predictions < threshold) & (labels == 1))
+        
+        far.append(fa / n_impostor)
+        frr.append(fr / n_genuine)
+        thresholds.append(threshold)
+    
+    far = np.array(far)
+    frr = np.array(frr)
+    eer_idx = np.argmin(np.abs(far - frr))
+    
+    return (far[eer_idx] + frr[eer_idx]) / 2, thresholds[eer_idx]
 
 
 def compute_biometric_metrics(
@@ -1041,48 +1075,47 @@ def compute_biometric_metrics(
     impostor_dists: np.ndarray
 ) -> Dict:
     """
-    Compute comprehensive biometric metrics.
+    Compute comprehensive biometric metrics from distance distributions.
     
     Args:
         genuine_dists: Distances for genuine pairs (same writer)
         impostor_dists: Distances for impostor pairs (different writers)
         
     Returns:
-        Dictionary with all biometric metrics
+        Dictionary with all biometric metrics including ROC, EER, d-prime, etc.
     """
-    metrics = {}
-    
-    # Prepare data for ROC (convert distances to similarity scores)
+    # Convert distances to similarity scores (lower dist = higher similarity)
     y_true = [1] * len(genuine_dists) + [0] * len(impostor_dists)
-    y_scores = [-d for d in (list(genuine_dists) + list(impostor_dists))]  # Lower dist = higher similarity
+    y_scores = [-d for d in (list(genuine_dists) + list(impostor_dists))]
     
-    # 1. ROC CURVE & AUC
+    # ROC Curve & AUC
     fpr, tpr, thresholds = roc_curve(y_true, y_scores)
     thresholds = -thresholds  # Convert back to distances
-    metrics['auc'] = auc(fpr, tpr)
-    metrics['fpr'] = fpr
-    metrics['tpr'] = tpr
-    metrics['thresholds'] = thresholds
     
-    # 2. EQUAL ERROR RATE (EER)
+    metrics = {
+        'auc': auc(fpr, tpr),
+        'fpr': fpr,
+        'tpr': tpr,
+        'thresholds': thresholds,
+    }
+    
+    # Equal Error Rate
     fnr = 1 - tpr
     eer_idx = np.argmin(np.abs(fpr - fnr))
     metrics['eer'] = (fpr[eer_idx] + fnr[eer_idx]) / 2
     metrics['eer_threshold'] = thresholds[eer_idx]
     
-    # 3. ACCURACY @ FAR = 0.1% and 1%
+    # Accuracy at specific FAR operating points
     for target_far in [0.001, 0.01]:
         idx = np.argmin(np.abs(fpr - target_far))
-        actual_far = fpr[idx]
-        frr = fnr[idx]
-        accuracy = 1 - ((actual_far + frr) / 2)
-        threshold = thresholds[idx]
+        frr_at_far = fnr[idx]
+        accuracy = 1 - ((fpr[idx] + frr_at_far) / 2)
         
         metrics[f'acc_far_{target_far*100:.1f}%'] = accuracy
-        metrics[f'frr_far_{target_far*100:.1f}%'] = frr
-        metrics[f'threshold_far_{target_far*100:.1f}%'] = threshold
+        metrics[f'frr_far_{target_far*100:.1f}%'] = frr_at_far
+        metrics[f'threshold_far_{target_far*100:.1f}%'] = thresholds[idx]
     
-    # 4. D-PRIME (d')
+    # D-prime (discriminability index)
     mu_genuine = np.mean(genuine_dists)
     mu_impostor = np.mean(impostor_dists)
     sigma_genuine = np.std(genuine_dists)
@@ -1090,8 +1123,6 @@ def compute_biometric_metrics(
     
     pooled_std = np.sqrt((sigma_genuine**2 + sigma_impostor**2) / 2)
     metrics['d_prime'] = (mu_impostor - mu_genuine) / pooled_std if pooled_std > 0 else 0
-    
-    # 5. DECIDABILITY INDEX
     metrics['decidability'] = metrics['d_prime'] * np.sqrt(2)
     
     # Store distributions and statistics
@@ -1113,7 +1144,6 @@ def compute_rank1_identification(
 ) -> float:
     """
     Compute Rank-1 Identification Rate.
-    For each query, find the most similar writer in the gallery.
     
     Args:
         model: Trained model
@@ -1134,7 +1164,7 @@ def compute_rank1_identification(
         for writer_id in writer_ids:
             img_path = random.choice(writer_images[writer_id])
             img = dataset.transform(Image.open(img_path).convert("L")).unsqueeze(0).to(device)
-            emb = model(img).cpu().numpy()[0]
+            emb = model.get_embedding(img).cpu().numpy()[0]
             gallery_embeddings[writer_id] = emb
     
     # Test queries
@@ -1144,7 +1174,7 @@ def compute_rank1_identification(
             query_writer = random.choice(writer_ids)
             query_img_path = random.choice(writer_images[query_writer])
             query_img = dataset.transform(Image.open(query_img_path).convert("L")).unsqueeze(0).to(device)
-            query_emb = model(query_img).cpu().numpy()[0]
+            query_emb = model.get_embedding(query_img).cpu().numpy()[0]
             
             # Find closest gallery writer
             min_dist = float('inf')
@@ -1162,6 +1192,10 @@ def compute_rank1_identification(
     return correct / num_queries
 
 
+# ============================================================================
+# COMPREHENSIVE EVALUATION
+# ============================================================================
+
 def evaluate_comprehensive(
     model: torch.nn.Module,
     dataset,
@@ -1170,7 +1204,7 @@ def evaluate_comprehensive(
     dataset_name: str = "Test"
 ) -> Dict:
     """
-    Comprehensive biometric evaluation.
+    Comprehensive biometric evaluation on a dataset.
     
     Args:
         model: Trained model
@@ -1204,8 +1238,8 @@ def evaluate_comprehensive(
             img1 = dataset.transform(Image.open(img1_path).convert("L")).unsqueeze(0).to(device)
             img2 = dataset.transform(Image.open(img2_path).convert("L")).unsqueeze(0).to(device)
             
-            emb1 = model(img1)
-            emb2 = model(img2)
+            emb1 = model.get_embedding(img1)
+            emb2 = model.get_embedding(img2)
             dist = F.pairwise_distance(emb1, emb2).item()
             genuine_dists.append(dist)
         
@@ -1218,8 +1252,8 @@ def evaluate_comprehensive(
             img1 = dataset.transform(Image.open(img1_path).convert("L")).unsqueeze(0).to(device)
             img2 = dataset.transform(Image.open(img2_path).convert("L")).unsqueeze(0).to(device)
             
-            emb1 = model(img1)
-            emb2 = model(img2)
+            emb1 = model.get_embedding(img1)
+            emb2 = model.get_embedding(img2)
             dist = F.pairwise_distance(emb1, emb2).item()
             impostor_dists.append(dist)
     
@@ -1250,7 +1284,7 @@ def evaluate_comprehensive(
     print(f"  d-prime (d'):                {metrics['d_prime']:.4f}")
     print(f"  Decidability Index:          {metrics['decidability']:.4f}")
     if metrics['rank1_identification'] is not None:
-        print(f"  Rank-1 Identification Rate:  {metrics['rank1_identification']:.4f} ({metrics['rank1_identification']*100:.2f}%)")
+        print(f"  Rank-1 Identification Rate:  {metrics['rank1_identification']:.4f}")
     
     print(f"\n📏 DISTANCE STATISTICS:")
     print(f"  Genuine:  μ={metrics['mu_genuine']:.4f}, σ={metrics['sigma_genuine']:.4f}")
@@ -1258,10 +1292,179 @@ def evaluate_comprehensive(
     
     print(f"\n🎯 OPERATING POINTS:")
     print(f"  EER Threshold:          {metrics['eer_threshold']:.4f}")
-    print(f"  Threshold @ FAR=0.1%:   {metrics['threshold_far_0.1%']:.4f} (FRR={metrics['frr_far_0.1%']*100:.2f}%)")
-    print(f"  Threshold @ FAR=1.0%:   {metrics['threshold_far_1.0%']:.4f} (FRR={metrics['frr_far_1.0%']*100:.2f}%)")
+    print(f"  Threshold @ FAR=0.1%:   {metrics['threshold_far_0.1%']:.4f}")
+    print(f"  Threshold @ FAR=1.0%:   {metrics['threshold_far_1.0%']:.4f}")
     
     return metrics
+
+
+=== src/evaluation/__init__.py ===
+"""
+Evaluation module
+Unified metrics and visualization for model evaluation.
+"""
+
+from .metrics import (
+    # Classification metrics
+    compute_basic_metrics,
+    compute_confusion_matrix,
+    
+    # Biometric metrics
+    compute_eer,
+    compute_biometric_metrics,
+    compute_rank1_identification,
+    
+    # Comprehensive evaluation
+    evaluate_comprehensive,
+)
+
+from .visualization import (
+    # Training visualizations
+    plot_training_history,
+    plot_triplet_training_history,
+    plot_multiple_models_comparison,
+    
+    # Biometric visualizations
+    plot_biometric_results,
+    plot_confusion_matrix,
+    
+    # Reports
+    create_training_report,
+)
+
+__all__ = [
+    # Metrics
+    'compute_basic_metrics',
+    'compute_confusion_matrix',
+    'compute_eer',
+    'compute_biometric_metrics',
+    'compute_rank1_identification',
+    'evaluate_comprehensive',
+    
+    # Visualizations
+    'plot_training_history',
+    'plot_triplet_training_history',
+    'plot_multiple_models_comparison',
+    'plot_biometric_results',
+    'plot_confusion_matrix',
+    'create_training_report',
+]
+
+
+=== src/models/contrastive_backbones.py ===
+"""
+Contrastive Network Backbones
+Implementation of various backbone architectures for contrastive learning.
+"""
+
+import torch.nn as nn
+import torch.nn.functional as F
+from torchvision import models
+
+import torch.nn as nn
+from torchvision import models
+
+from .base import BaseContrastiveNetwork
+
+
+class ContrastiveMobileNetV3Small(BaseContrastiveNetwork):
+    """Contrastive network based on MobileNetV3-Small"""
+    
+    def __init__(self, in_channels: int = 1, projection_dim: int = 128):
+        mobilenet = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
+        mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        encoder = nn.Sequential(
+            mobilenet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+        
+        super().__init__(encoder=encoder, feature_dim=576, projection_dim=projection_dim)
+
+
+class ContrastiveMobileNetV3Large(BaseContrastiveNetwork):
+    """Contrastive network based on MobileNetV3-Large"""
+    
+    def __init__(self, in_channels: int = 1, projection_dim: int = 128):
+        mobilenet = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT)
+        mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        encoder = nn.Sequential(
+            mobilenet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+        
+        super().__init__(encoder=encoder, feature_dim=960, projection_dim=projection_dim)
+
+
+class ContrastiveResNet18(BaseContrastiveNetwork):
+    """Contrastive network based on ResNet18"""
+    
+    def __init__(self, in_channels: int = 1, projection_dim: int = 128):
+        resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        
+        encoder = nn.Sequential(*list(resnet.children())[:-1], nn.Flatten())
+        
+        super().__init__(encoder=encoder, feature_dim=512, projection_dim=projection_dim)
+
+
+class ContrastiveResNet34(BaseContrastiveNetwork):
+    """Contrastive network based on ResNet34"""
+    
+    def __init__(self, in_channels: int = 1, projection_dim: int = 128):
+        resnet = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
+        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        
+        encoder = nn.Sequential(*list(resnet.children())[:-1], nn.Flatten())
+        
+        super().__init__(encoder=encoder, feature_dim=512, projection_dim=projection_dim)
+
+
+class ContrastiveResNet50(BaseContrastiveNetwork):
+    """Contrastive network based on ResNet50"""
+    
+    def __init__(self, in_channels: int = 1, projection_dim: int = 128):
+        resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        
+        encoder = nn.Sequential(*list(resnet.children())[:-1], nn.Flatten())
+        
+        super().__init__(encoder=encoder, feature_dim=2048, projection_dim=projection_dim)
+
+
+class ContrastiveEfficientNetB0(BaseContrastiveNetwork):
+    """Contrastive network based on EfficientNet-B0"""
+    
+    def __init__(self, in_channels: int = 1, projection_dim: int = 128):
+        effnet = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.DEFAULT)
+        effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        encoder = nn.Sequential(
+            effnet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+        
+        super().__init__(encoder=encoder, feature_dim=1280, projection_dim=projection_dim)
+
+
+class ContrastiveDenseNet121(BaseContrastiveNetwork):
+    """Contrastive network based on DenseNet121"""
+    
+    def __init__(self, in_channels: int = 1, projection_dim: int = 128):
+        densenet = models.densenet121(weights=models.DenseNet121_Weights.DEFAULT)
+        densenet.features.conv0 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        
+        encoder = nn.Sequential(
+            densenet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+        
+        super().__init__(encoder=encoder, feature_dim=1024, projection_dim=projection_dim)
 
 === src/models/registry.py ===
 """
@@ -1271,7 +1474,7 @@ Central registry for all available model architectures.
 
 from typing import Dict, Type
 from .base import BaseSiameseNetwork
-from .backbones import (
+from .bce_backbones import (
     SiameseResNet18,
     SiameseResNet34,
     SiameseResNet50,
@@ -1334,7 +1537,7 @@ def list_models() -> list:
     """Get list of all available model names"""
     return list(MODEL_REGISTRY.keys())
 
-=== src/models/backbones.py ===
+=== src/models/bce_backbones.py ===
 """
 Siamese Network Backbones
 Implementation of various backbone architectures for handwriting verification.
@@ -1465,50 +1668,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import models
 
-
-class BaseTripletNetwork(nn.Module):
-    """Base class for Triplet networks"""
-    
-    def __init__(self, encoder: nn.Module, feature_dim: int, embedding_dim: int = 128):
-        """
-        Args:
-            encoder: Backbone network for feature extraction
-            feature_dim: Dimension of features from encoder
-            embedding_dim: Dimension of final embedding
-        """
-        super().__init__()
-        self.encoder = encoder
-        self.feature_dim = feature_dim
-        self.embedding_dim = embedding_dim
-        
-        # Projection head
-        self.fc = nn.Sequential(
-            nn.Linear(feature_dim, 512),
-            nn.BatchNorm1d(512),
-            nn.ReLU(inplace=True),
-            nn.Dropout(0.3),
-            nn.Linear(512, embedding_dim)
-        )
-    
-    def forward(self, x):
-        """
-        Forward pass to get normalized embeddings.
-        
-        Args:
-            x: Input image
-            
-        Returns:
-            L2-normalized embedding
-        """
-        x = self.encoder(x)
-        x = x.view(x.size(0), -1)
-        x = self.fc(x)
-        return F.normalize(x, p=2, dim=1)
-    
-    def get_embedding(self, x):
-        """Alias for forward"""
-        return self.forward(x)
-
+from .base import BaseTripletNetwork
 
 class TripletMobileNetV3Small(BaseTripletNetwork):
     """Triplet network based on MobileNetV3-Small"""
@@ -1686,7 +1846,7 @@ class BaseSiameseNetwork(nn.Module):
         combined = torch.cat([feat1, feat2], dim=1)
         return self.fc(combined)
     
-    def get_embeddings(self, x: torch.Tensor) -> torch.Tensor:
+    def get_embedding(self, x: torch.Tensor) -> torch.Tensor:
         """
         Extract normalized embeddings for an image.
         
@@ -1699,6 +1859,100 @@ class BaseSiameseNetwork(nn.Module):
         feat = self.forward_one(x)
         return F.normalize(feat, p=2, dim=1)
 
+class BaseContrastiveNetwork(nn.Module):
+    """
+    Base class for Contrastive Learning networks.
+    Projects features to a lower-dimensional embedding space.
+    """
+    
+    def __init__(self, encoder: nn.Module, feature_dim: int, projection_dim: int = 128):
+        """
+        Args:
+            encoder: Backbone network for feature extraction
+            feature_dim: Dimension of features from encoder
+            projection_dim: Dimension of projection head output
+        """
+        super().__init__()
+        self.encoder = encoder
+        self.feature_dim = feature_dim
+        self.projection_dim = projection_dim
+        
+        # Projection head (MLP)
+        self.projection = nn.Sequential(
+            nn.Linear(feature_dim, 512),
+            nn.BatchNorm1d(512),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.3),
+            nn.Linear(512, projection_dim)
+        )
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass to get normalized embeddings.
+        
+        Args:
+            x: Input image
+            
+        Returns:
+            L2-normalized projection
+        """
+        # Extract features
+        features = self.encoder(x)
+        features = features.view(features.size(0), -1)
+        
+        # Project to embedding space
+        embeddings = self.projection(features)
+        
+        # Normalize
+        return F.normalize(embeddings, p=2, dim=1)
+    
+    def get_embedding(self, x: torch.Tensor) -> torch.Tensor:
+        """Alias for forward"""
+        return self.forward(x)
+
+class BaseTripletNetwork(nn.Module):
+    """Base class for Triplet networks"""
+    
+    def __init__(self, encoder: nn.Module, feature_dim: int, embedding_dim: int = 128):
+        """
+        Args:
+            encoder: Backbone network for feature extraction
+            feature_dim: Dimension of features from encoder
+            embedding_dim: Dimension of final embedding
+        """
+        super().__init__()
+        self.encoder = encoder
+        self.feature_dim = feature_dim
+        self.embedding_dim = embedding_dim
+        
+        # Projection head
+        self.fc = nn.Sequential(
+            nn.Linear(feature_dim, 512),
+            nn.BatchNorm1d(512),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.3),
+            nn.Linear(512, embedding_dim)
+        )
+    
+    def forward(self, x):
+        """
+        Forward pass to get normalized embeddings.
+        
+        Args:
+            x: Input image
+            
+        Returns:
+            L2-normalized embedding
+        """
+        x = self.encoder(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+        return F.normalize(x, p=2, dim=1)
+    
+    def get_embedding(self, x):
+        """Alias for forward"""
+        return self.forward(x)
+
 
 === src/models/__init__.py ===
 # src/models/__init__.py
@@ -1706,28 +1960,44 @@ class BaseSiameseNetwork(nn.Module):
 Models module
 """
 
-from .base import BaseSiameseNetwork
+from .base import BaseSiameseNetwork, BaseTripletNetwork, BaseContrastiveNetwork
 from .registry import get_model, list_models, MODEL_REGISTRY
 from .triplet_backbones import (
-    BaseTripletNetwork,
     TripletMobileNetV3Small,
     TripletMobileNetV3Large,
     TripletResNet18,
     TripletResNet34,
     TripletEfficientNetB0,
 )
+from .contrastive_backbones import (
+    ContrastiveMobileNetV3Small,
+    ContrastiveMobileNetV3Large,
+    ContrastiveResNet18,
+    ContrastiveResNet34,
+    ContrastiveResNet50,
+    ContrastiveEfficientNetB0,
+    ContrastiveDenseNet121,
+)
 
 __all__ = [
     'BaseSiameseNetwork',
+    'BaseTripletNetwork',
+    'BaseContrastiveNetwork',
     'get_model',
     'list_models',
     'MODEL_REGISTRY',
-    'BaseTripletNetwork',
     'TripletMobileNetV3Small',
     'TripletMobileNetV3Large',
     'TripletResNet18',
     'TripletResNet34',
     'TripletEfficientNetB0',
+    'ContrastiveMobileNetV3Small',
+    'ContrastiveMobileNetV3Large',
+    'ContrastiveResNet18',
+    'ContrastiveResNet34',
+    'ContrastiveResNet50',
+    'ContrastiveEfficientNetB0',
+    'ContrastiveDenseNet121',
 ]
 
 === src/__init__.py ===
@@ -2336,6 +2606,331 @@ def train_multiple_models(
     return results
 
 
+=== src/training/trainer_contrastive.py ===
+"""
+Supervised Contrastive Loss Trainer
+Trainer class for supervised contrastive learning with comprehensive biometric evaluation.
+"""
+
+import os
+import gc
+from typing import Dict
+import random
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+import pandas as pd
+import numpy as np
+from PIL import Image
+
+
+class SupConLoss(nn.Module):
+    """
+    Supervised Contrastive Loss
+    Extends contrastive learning to use label information.
+    """
+    
+    def __init__(self, temperature: float = 0.5):
+        """
+        Args:
+            temperature: Temperature parameter for scaling
+        """
+        super().__init__()
+        self.temperature = temperature
+    
+    def forward(self, features: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            features: Normalized embeddings [batch_size, embedding_dim]
+            labels: Ground truth labels [batch_size]
+            
+        Returns:
+            Supervised contrastive loss value
+        """
+        batch_size = features.shape[0]
+        
+        # Normalize features
+        features = F.normalize(features, p=2, dim=1)
+        
+        # Compute similarity matrix
+        sim_matrix = torch.mm(features, features.t()) / self.temperature
+        
+        # Create mask for positive pairs (same label)
+        labels = labels.contiguous().view(-1, 1)
+        mask = torch.eq(labels, labels.T).float().to(features.device)
+        
+        # Mask out self-contrast
+        logits_mask = torch.scatter(
+            torch.ones_like(mask),
+            1,
+            torch.arange(batch_size).view(-1, 1).to(features.device),
+            0
+        )
+        mask = mask * logits_mask
+        
+        # Compute log probabilities
+        exp_logits = torch.exp(sim_matrix) * logits_mask
+        log_prob = sim_matrix - torch.log(exp_logits.sum(1, keepdim=True))
+        
+        # Compute mean of log-likelihood over positive pairs
+        mean_log_prob_pos = (mask * log_prob).sum(1) / mask.sum(1)
+        
+        # Loss is negative log-likelihood
+        loss = -mean_log_prob_pos.mean()
+        
+        return loss
+
+
+class ContrastiveTrainer:
+    """Trainer for supervised contrastive learning"""
+    
+    def __init__(
+        self,
+        model: nn.Module,
+        model_name: str,
+        device: torch.device,
+        temperature: float = 0.5,
+        results_dir: str = "results",
+    ):
+        """
+        Args:
+            model: Contrastive network model
+            model_name: Name for saving checkpoints
+            device: Device to train on
+            temperature: Temperature parameter for contrastive loss
+            results_dir: Directory to save results
+        """
+        self.model = model.to(device)
+        self.model_name = model_name
+        self.device = device
+        self.temperature = temperature
+        self.results_dir = results_dir
+        
+        os.makedirs(results_dir, exist_ok=True)
+        
+        # Loss function
+        self.criterion = SupConLoss(temperature=temperature)
+        
+        # Setup optimizer and scheduler
+        self._setup_optimizer()
+        
+        # Training history
+        self.history = {
+            'epoch': [],
+            'train_loss': [],
+            'val_eer': [],
+            'val_auc': []
+        }
+        
+        self.best_eer = float('inf')
+    
+    def _setup_optimizer(self):
+        """Setup optimizer and learning rate scheduler"""
+        # AdamW optimizer
+        self.optimizer = torch.optim.AdamW(
+            self.model.parameters(),
+            lr=1e-4,
+            weight_decay=1e-4,
+            betas=(0.9, 0.999)
+        )
+        
+        # Cosine annealing scheduler
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            self.optimizer,
+            T_max=50,
+            eta_min=1e-6
+        )
+    
+    def train_epoch(self, train_loader: DataLoader) -> float:
+        """
+        Train for one epoch.
+        
+        Returns:
+            Average training loss
+        """
+        self.model.train()
+        train_loss = 0.0
+        
+        for img1, img2, labels in tqdm(train_loader, desc="Training", leave=False):
+            img1 = img1.to(self.device)
+            img2 = img2.to(self.device)
+            labels = labels.to(self.device)
+            
+            # Forward pass
+            self.optimizer.zero_grad()
+            
+            # Get embeddings for both views
+            emb1 = self.model(img1)
+            emb2 = self.model(img2)
+            
+            # Stack embeddings and duplicate labels
+            embeddings = torch.cat([emb1, emb2], dim=0)
+            labels_repeated = torch.cat([labels, labels], dim=0)
+            
+            # Compute loss
+            loss = self.criterion(embeddings, labels_repeated)
+            
+            # Backward pass
+            loss.backward()
+            self.optimizer.step()
+            
+            train_loss += loss.item()
+        
+        return train_loss / len(train_loader)
+    
+    @torch.no_grad()
+    def validate_quick(self, val_dataset, num_pairs: int = 1000) -> Dict:
+        """
+        Quick validation to compute EER and AUC.
+        
+        Args:
+            val_dataset: Validation dataset
+            num_pairs: Number of pairs to evaluate
+            
+        Returns:
+            Dictionary with 'eer' and 'auc' metrics
+        """
+        from ..evaluation.metrics import compute_eer
+        from sklearn.metrics import roc_auc_score
+        
+        self.model.eval()
+        genuine_dists = []
+        impostor_dists = []
+        
+        writer_ids = val_dataset.writer_ids
+        writer_images = val_dataset.writer_images
+        
+        # Genuine pairs
+        for _ in range(num_pairs // 2):
+            writer = random.choice(writer_ids)
+            if len(writer_images[writer]) < 2:
+                continue
+            
+            img1_path, img2_path = random.sample(writer_images[writer], 2)
+            img1 = val_dataset.transform(Image.open(img1_path).convert("L")).unsqueeze(0).to(self.device)
+            img2 = val_dataset.transform(Image.open(img2_path).convert("L")).unsqueeze(0).to(self.device)
+            
+            emb1 = self.model(img1)
+            emb2 = self.model(img2)
+            dist = F.pairwise_distance(emb1, emb2).item()
+            genuine_dists.append(dist)
+        
+        # Impostor pairs
+        for _ in range(num_pairs // 2):
+            w1, w2 = random.sample(writer_ids, 2)
+            img1_path = random.choice(writer_images[w1])
+            img2_path = random.choice(writer_images[w2])
+            
+            img1 = val_dataset.transform(Image.open(img1_path).convert("L")).unsqueeze(0).to(self.device)
+            img2 = val_dataset.transform(Image.open(img2_path).convert("L")).unsqueeze(0).to(self.device)
+            
+            emb1 = self.model(img1)
+            emb2 = self.model(img2)
+            dist = F.pairwise_distance(emb1, emb2).item()
+            impostor_dists.append(dist)
+        
+        # Convert distances to similarity scores
+        labels = np.array([1] * len(genuine_dists) + [0] * len(impostor_dists))
+        distances = np.array(genuine_dists + impostor_dists)
+        
+        # Compute EER
+        eer, eer_threshold = compute_eer(1 - distances, labels)
+        
+        # Compute AUC
+        auc = roc_auc_score(labels, -distances)
+        
+        return {'eer': eer, 'auc': auc}
+    
+    def train(
+        self,
+        train_loader: DataLoader,
+        val_dataset,
+        epochs: int = 50,
+        patience: int = 7,
+    ) -> Dict:
+        """
+        Train the model.
+        
+        Args:
+            train_loader: Training dataloader
+            val_dataset: Validation dataset
+            epochs: Number of epochs to train
+            patience: Early stopping patience
+            
+        Returns:
+            Training history dictionary
+        """
+        print(f"\n{'='*60}")
+        print(f"Training {self.model_name} with Supervised Contrastive Loss")
+        print(f"{'='*60}\n")
+        
+        patience_counter = 0
+        
+        for epoch in range(epochs):
+            # Train
+            train_loss = self.train_epoch(train_loader)
+            
+            # Validate
+            print(f"\nValidation Epoch {epoch+1}...")
+            val_metrics = self.validate_quick(val_dataset, num_pairs=1000)
+            
+            # Update scheduler
+            self.scheduler.step()
+            
+            # Save metrics
+            self.history['epoch'].append(epoch + 1)
+            self.history['train_loss'].append(train_loss)
+            self.history['val_eer'].append(val_metrics['eer'])
+            self.history['val_auc'].append(val_metrics['auc'])
+            
+            print(f"Epoch {epoch+1}/{epochs}: "
+                  f"Train Loss={train_loss:.4f} | "
+                  f"Val EER={val_metrics['eer']:.4f} AUC={val_metrics['auc']:.4f}")
+            
+            # Early stopping and model saving
+            if val_metrics['eer'] < self.best_eer:
+                self.best_eer = val_metrics['eer']
+                patience_counter = 0
+                self.save_checkpoint(is_best=True)
+                print(f"✓ Saved best model (EER: {val_metrics['eer']:.4f})")
+            else:
+                patience_counter += 1
+                print(f"Patience: {patience_counter}/{patience}")
+                
+                if patience_counter >= patience:
+                    print("⚠ Early stopping triggered")
+                    break
+        
+        # Save final model and history
+        self.save_checkpoint(is_best=False)
+        self.save_history()
+        
+        print(f"\n✓ {self.model_name} training completed! "
+              f"Best EER: {self.best_eer:.4f}\n")
+        
+        return self.history
+    
+    def save_checkpoint(self, is_best: bool = False):
+        """Save model checkpoint"""
+        suffix = "best" if is_best else "final"
+        path = os.path.join(self.results_dir, f"{self.model_name}_{suffix}.pth")
+        torch.save(self.model.state_dict(), path)
+    
+    def save_history(self):
+        """Save training history to CSV"""
+        path = os.path.join(self.results_dir, f"{self.model_name}_history.csv")
+        pd.DataFrame(self.history).to_csv(path, index=False)
+    
+    def cleanup(self):
+        """Clean up GPU memory"""
+        self.model.cpu()
+        del self.model
+        torch.cuda.empty_cache()
+        gc.collect()
+
 === src/training/losses.py ===
 """
 Loss Functions
@@ -2474,6 +3069,7 @@ Training module
 from .losses import BCELoss, ContrastiveLoss, TripletLoss, CombinedLoss
 from .trainer_bce import BCETrainer, train_multiple_models
 from .trainer_triplet import TripletTrainer
+from .trainer_contrastive import ContrastiveTrainer, SupConLoss
 
 __all__ = [
     'BCELoss',
@@ -2483,6 +3079,8 @@ __all__ = [
     'BCETrainer',
     'train_multiple_models',
     'TripletTrainer',
+    'ContrastiveTrainer',
+    'SupConLoss',
 ]
 
 === src/utils/helpers.py ===

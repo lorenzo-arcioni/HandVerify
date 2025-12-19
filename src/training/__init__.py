@@ -6,6 +6,7 @@ Training module
 from .losses import BCELoss, ContrastiveLoss, TripletLoss, CombinedLoss
 from .trainer_bce import BCETrainer, train_multiple_models
 from .trainer_triplet import TripletTrainer
+from .trainer_contrastive import ContrastiveTrainer, SupConLoss
 
 __all__ = [
     'BCELoss',
@@ -15,4 +16,6 @@ __all__ = [
     'BCETrainer',
     'train_multiple_models',
     'TripletTrainer',
+    'ContrastiveTrainer',
+    'SupConLoss',
 ]
