@@ -11,19 +11,19 @@ import torch
 from .base_dataset import BaseWriterDataset
 
 class ContrastiveDataset(BaseWriterDataset):
-    """Dataset for Contrastive Learning (balanced positive/negative pairs)."""
+    """Dataset for Contrastive Learning (balanced positive/negative samples)."""
     
     def __init__(
         self,
         writer_dirs: List[str],
         train: bool = True,
-        pairs_per_writer: int = 100,
+        samples_per_writer: int = 100,
         target_size: int = 448,
     ):
         super().__init__(
             writer_dirs=writer_dirs,
             train=train,
-            samples_per_writer=pairs_per_writer,
+            samples_per_writer=samples_per_writer,
             target_size=target_size,
             min_images_per_writer=2
         )

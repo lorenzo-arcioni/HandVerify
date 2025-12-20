@@ -18,13 +18,13 @@ class TripletDataset(BaseWriterDataset):
         self,
         writer_dirs: List[str],
         train: bool = True,
-        triplets_per_writer: int = 100,
+        samples_per_writer: int = 100,
         target_size: int = 448,
     ):
         super().__init__(
             writer_dirs=writer_dirs,
             train=train,
-            samples_per_writer=triplets_per_writer,
+            samples_per_writer=samples_per_writer,
             target_size=target_size,
             min_images_per_writer=2
         )
