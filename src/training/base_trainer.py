@@ -158,7 +158,7 @@ class BaseTrainer(ABC):
         # Simula predictions @ EER threshold
         all_dists = np.concatenate([genuine_dists, impostor_dists])
         all_labels = np.concatenate([np.ones(len(genuine_dists)), np.zeros(len(impostor_dists))])
-        predictions = (all_dists < metrics['eer_threshold']).astype(int)  # dist < thresh = same writer
+        predictions = (all_dists <= metrics['eer_threshold']).astype(int)  # dist < thresh = same writer
         
         print(f"\nPredictions @ EER threshold:")
         print(f"  Total samples: {len(predictions)}")

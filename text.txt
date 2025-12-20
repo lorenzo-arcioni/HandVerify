@@ -158,12 +158,15 @@ def create_dataloaders(
         batch_size: Batch size for dataloaders
         num_workers: Number of workers for data loading
         test_size: Proportion of writers to use for testing
+                   - 0.0: Use all data for training (test will be empty)
+                   - 1.0: Use all data for testing (train will be empty)
+                   - 0.0 < test_size < 1.0: Normal train/test split
         pairs_per_writer: Number of pairs to generate per writer
         target_size: Target image size
         random_state: Random seed for reproducibility
         
     Returns:
-        Tuple of (train_loader, test_loader, train_dirs, test_dirs)
+        Tuple of (train_loader, test_loader, train_dataset, test_dataset)
     """
     from sklearn.model_selection import train_test_split
     from torch.utils.data import DataLoader
@@ -175,44 +178,61 @@ def create_dataloaders(
         if os.path.isdir(os.path.join(data_root, d))
     ]
     
-    # Split into train and test
-    train_dirs, test_dirs = train_test_split(
-        writer_dirs, 
-        test_size=test_size, 
-        random_state=random_state
-    )
+    # Handle edge cases
+    if test_size == 0.0:
+        # All data for training
+        train_dirs = writer_dirs
+        test_dirs = []
+    elif test_size == 1.0:
+        # All data for testing
+        train_dirs = []
+        test_dirs = writer_dirs
+    else:
+        # Normal split
+        train_dirs, test_dirs = train_test_split(
+            writer_dirs, 
+            test_size=test_size, 
+            random_state=random_state
+        )
     
-    # Create datasets
-    train_dataset = SiameseDataset(
-        train_dirs, 
-        train=True, 
-        pairs_per_writer=pairs_per_writer,
-        target_size=target_size
-    )
+    # Create datasets (handle empty cases)
+    if train_dirs:
+        train_dataset = SiameseDataset(
+            train_dirs, 
+            train=True, 
+            pairs_per_writer=pairs_per_writer,
+            target_size=target_size
+        )
+        
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            num_workers=num_workers,
+            pin_memory=True
+        )
+    else:
+        train_dataset = None
+        train_loader = None
     
-    test_dataset = SiameseDataset(
-        test_dirs, 
-        train=False, 
-        pairs_per_writer=pairs_per_writer,
-        target_size=target_size
-    )
-    
-    # Create dataloaders
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=num_workers,
-        pin_memory=True
-    )
-    
-    test_loader = DataLoader(
-        test_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        pin_memory=True
-    )
+    if test_dirs:
+        test_dataset = SiameseDataset(
+            test_dirs, 
+            train=False, 
+            pairs_per_writer=pairs_per_writer,
+            target_size=target_size
+        )
+        
+        test_loader = DataLoader(
+            test_dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=num_workers,
+            pin_memory=True
+        )
+    else:
+        test_dataset = None
+        test_loader = None
     
     return train_loader, test_loader, train_dataset, test_dataset
 
@@ -404,19 +424,22 @@ def create_triplet_dataloaders(
     random_state: int = 42,
 ):
     """
-    Create train and test dataloaders for triplet learning.
+    Create train and test dataloaders.
     
     Args:
         data_root: Root directory containing writer subdirectories
         batch_size: Batch size for dataloaders
         num_workers: Number of workers for data loading
         test_size: Proportion of writers to use for testing
-        triplets_per_writer: Number of triplets to generate per writer
+                   - 0.0: Use all data for training (test will be empty)
+                   - 1.0: Use all data for testing (train will be empty)
+                   - 0.0 < test_size < 1.0: Normal train/test split
+        triplets_per_writer: Number of pairs to generate per writer
         target_size: Target image size
         random_state: Random seed for reproducibility
         
     Returns:
-        Tuple of (train_loader, test_loader, train_dirs, test_dirs)
+        Tuple of (train_loader, test_loader, train_dataset, test_dataset)
     """
     from sklearn.model_selection import train_test_split
     from torch.utils.data import DataLoader
@@ -428,44 +451,61 @@ def create_triplet_dataloaders(
         if os.path.isdir(os.path.join(data_root, d))
     ]
     
-    # Split into train and test
-    train_dirs, test_dirs = train_test_split(
-        writer_dirs, 
-        test_size=test_size, 
-        random_state=random_state
-    )
+    # Handle edge cases
+    if test_size == 0.0:
+        # All data for training
+        train_dirs = writer_dirs
+        test_dirs = []
+    elif test_size == 1.0:
+        # All data for testing
+        train_dirs = []
+        test_dirs = writer_dirs
+    else:
+        # Normal split
+        train_dirs, test_dirs = train_test_split(
+            writer_dirs, 
+            test_size=test_size, 
+            random_state=random_state
+        )
     
-    # Create datasets
-    train_dataset = TripletDataset(
-        train_dirs, 
-        train=True, 
-        triplets_per_writer=triplets_per_writer,
-        target_size=target_size
-    )
+    # Create datasets (handle empty cases)
+    if train_dirs:
+        train_dataset = TripletDataset(
+            train_dirs, 
+            train=True, 
+            triplets_per_writer=triplets_per_writer,
+            target_size=target_size
+        )
+        
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            num_workers=num_workers,
+            pin_memory=True
+        )
+    else:
+        train_dataset = None
+        train_loader = None
     
-    test_dataset = TripletDataset(
-        test_dirs, 
-        train=False, 
-        triplets_per_writer=triplets_per_writer,
-        target_size=target_size
-    )
-    
-    # Create dataloaders
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=num_workers,
-        pin_memory=True
-    )
-    
-    test_loader = DataLoader(
-        test_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        pin_memory=True
-    )
+    if test_dirs:
+        test_dataset = TripletDataset(
+            test_dirs, 
+            train=False, 
+            triplets_per_writer=triplets_per_writer,
+            target_size=target_size
+        )
+        
+        test_loader = DataLoader(
+            test_dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=num_workers,
+            pin_memory=True
+        )
+    else:
+        test_dataset = None
+        test_loader = None
     
     return train_loader, test_loader, train_dataset, test_dataset
 
@@ -685,13 +725,16 @@ def create_contrastive_dataloaders(
     random_state: int = 42,
 ):
     """
-    Create train and test dataloaders for contrastive learning.
+    Create train and test dataloaders.
     
     Args:
         data_root: Root directory containing writer subdirectories
         batch_size: Batch size for dataloaders
         num_workers: Number of workers for data loading
         test_size: Proportion of writers to use for testing
+                   - 0.0: Use all data for training (test will be empty)
+                   - 1.0: Use all data for testing (train will be empty)
+                   - 0.0 < test_size < 1.0: Normal train/test split
         pairs_per_writer: Number of pairs to generate per writer
         target_size: Target image size
         random_state: Random seed for reproducibility
@@ -709,44 +752,61 @@ def create_contrastive_dataloaders(
         if os.path.isdir(os.path.join(data_root, d))
     ]
     
-    # Split into train and test
-    train_dirs, test_dirs = train_test_split(
-        writer_dirs, 
-        test_size=test_size, 
-        random_state=random_state
-    )
+    # Handle edge cases
+    if test_size == 0.0:
+        # All data for training
+        train_dirs = writer_dirs
+        test_dirs = []
+    elif test_size == 1.0:
+        # All data for testing
+        train_dirs = []
+        test_dirs = writer_dirs
+    else:
+        # Normal split
+        train_dirs, test_dirs = train_test_split(
+            writer_dirs, 
+            test_size=test_size, 
+            random_state=random_state
+        )
     
-    # Create datasets
-    train_dataset = ContrastiveDataset(
-        train_dirs, 
-        train=True, 
-        pairs_per_writer=pairs_per_writer,
-        target_size=target_size
-    )
+    # Create datasets (handle empty cases)
+    if train_dirs:
+        train_dataset = ContrastiveDataset(
+            train_dirs, 
+            train=True, 
+            pairs_per_writer=pairs_per_writer,
+            target_size=target_size
+        )
+        
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            num_workers=num_workers,
+            pin_memory=True
+        )
+    else:
+        train_dataset = None
+        train_loader = None
     
-    test_dataset = ContrastiveDataset(
-        test_dirs, 
-        train=False, 
-        pairs_per_writer=pairs_per_writer,
-        target_size=target_size
-    )
-    
-    # Create dataloaders
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=num_workers,
-        pin_memory=True
-    )
-    
-    test_loader = DataLoader(
-        test_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        pin_memory=True
-    )
+    if test_dirs:
+        test_dataset = ContrastiveDataset(
+            test_dirs, 
+            train=False, 
+            pairs_per_writer=pairs_per_writer,
+            target_size=target_size
+        )
+        
+        test_loader = DataLoader(
+            test_dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=num_workers,
+            pin_memory=True
+        )
+    else:
+        test_dataset = None
+        test_loader = None
     
     return train_loader, test_loader, train_dataset, test_dataset
 
@@ -1008,19 +1068,19 @@ from .metrics import (
     print_verification_results,
 )
 
-from .visualization import (
-    # Training visualizations
-    plot_training_history,
-    plot_triplet_training_history,
-    plot_multiple_models_comparison,
-    
-    # Biometric visualizations
-    plot_biometric_results,
-    plot_confusion_matrix,
-    
-    # Reports
-    create_training_report,
-)
+#from .visualization import (
+#    # Training visualizations
+#    plot_training_history,
+#    plot_triplet_training_history,
+#    plot_multiple_models_comparison,
+#    
+#    # Biometric visualizations
+#    plot_biometric_results,
+#    plot_confusion_matrix,
+#    
+#    # Reports
+#    create_training_report,
+#)
 
 __all__ = [
     # Metrics
@@ -1713,6 +1773,7 @@ import torch.nn.functional as F
 import pandas as pd
 import numpy as np
 from PIL import Image
+from tqdm import tqdm
 
 from ..evaluation.metrics import compute_verification_metrics
 
@@ -1734,38 +1795,14 @@ class BaseTrainer(ABC):
         
         os.makedirs(results_dir, exist_ok=True)
         
-        # All trainers track the same comprehensive metrics
+        # Training history (only loss per epoch)
         self.history = {
             'epoch': [],
             'train_loss': [],
-            'val_loss': [],  # ✅ AGGIUNTO
-            # Primary biometric metrics
-            'val_eer': [],
-            'val_auc': [],
-            'val_eer_threshold': [],
-            # Classification metrics (at EER threshold)
-            'val_accuracy': [],
-            'val_precision': [],
-            'val_recall': [],
-            'val_f1': [],
-            # Secondary metrics
-            'val_d_prime': [],
-            'val_decidability': [],
-            # Accuracy at fixed FARs
-            'val_acc_far_0.001': [],
-            'val_acc_far_0.01': [],
-            'val_frr_far_0.001': [],
-            'val_frr_far_0.01': [],
-            'val_threshold_far_0.001': [],
-            'val_threshold_far_0.01': [],
-            # Distribution statistics
-            'val_mu_genuine': [],
-            'val_mu_impostor': [],
-            'val_sigma_genuine': [],
-            'val_sigma_impostor': [],
+            'val_loss': [],
         }
         
-        self.best_eer = float('inf')
+        self.best_loss = float('inf')
     
     @abstractmethod
     def _setup_optimizer(self):
@@ -1794,13 +1831,7 @@ class BaseTrainer(ABC):
     def validate_comprehensive(self, val_dataset, num_pairs: int = 1000) -> Dict[str, float]:
         """
         Comprehensive validation computing all verification metrics.
-        
-        Args:
-            val_dataset: Validation dataset
-            num_pairs: Number of pairs to evaluate
-            
-        Returns:
-            Dictionary with all metrics
+        WITH DEBUG PRINTS
         """
         self.model.eval()
         genuine_dists = []
@@ -1809,8 +1840,10 @@ class BaseTrainer(ABC):
         writer_ids = val_dataset.writer_ids
         writer_images = val_dataset.writer_images
         
-        print("  Computing genuine pairs...", end=" ", flush=True)
-        for _ in range(num_pairs // 2):
+        print("\n🔍 Computing verification metrics...")
+        
+        # Genuine pairs
+        for _ in tqdm(range(num_pairs // 2), desc="  Genuine pairs"):
             writer = random.choice(writer_ids)
             if len(writer_images[writer]) < 2:
                 continue
@@ -1823,10 +1856,8 @@ class BaseTrainer(ABC):
             dist = F.pairwise_distance(emb1, emb2).item()
             genuine_dists.append(dist)
         
-        print("Done.", end=" ", flush=True)
-        print("Computing impostor pairs...", end=" ", flush=True)
-        
-        for _ in range(num_pairs // 2):
+        # Impostor pairs
+        for _ in tqdm(range(num_pairs // 2), desc="  Impostor pairs"):
             w1, w2 = random.sample(writer_ids, 2)
             img1_path = random.choice(writer_images[w1])
             img2_path = random.choice(writer_images[w2])
@@ -1838,13 +1869,93 @@ class BaseTrainer(ABC):
             dist = F.pairwise_distance(emb1, emb2).item()
             impostor_dists.append(dist)
         
-        print("Done.")
+        # ========================================================================
+        # DEBUG PRINTS
+        # ========================================================================
+        genuine_dists = np.array(genuine_dists)
+        impostor_dists = np.array(impostor_dists)
         
-        # Compute all metrics at once
-        metrics = compute_verification_metrics(
-            np.array(genuine_dists),
-            np.array(impostor_dists)
-        )
+        print("\n" + "="*70)
+        print("🐛 DEBUG: Distance Distributions")
+        print("="*70)
+        print(f"\nGenuine distances:")
+        print(f"  Count:  {len(genuine_dists)}")
+        print(f"  Min:    {genuine_dists.min():.4f}")
+        print(f"  Max:    {genuine_dists.max():.4f}")
+        print(f"  Mean:   {genuine_dists.mean():.4f}")
+        print(f"  Std:    {genuine_dists.std():.4f}")
+        print(f"  Median: {np.median(genuine_dists):.4f}")
+        
+        print(f"\nImpostor distances:")
+        print(f"  Count:  {len(impostor_dists)}")
+        print(f"  Min:    {impostor_dists.min():.4f}")
+        print(f"  Max:    {impostor_dists.max():.4f}")
+        print(f"  Mean:   {impostor_dists.mean():.4f}")
+        print(f"  Std:    {impostor_dists.std():.4f}")
+        print(f"  Median: {np.median(impostor_dists):.4f}")
+        
+        print(f"\nDistribution overlap:")
+        overlap_min = max(genuine_dists.min(), impostor_dists.min())
+        overlap_max = min(genuine_dists.max(), impostor_dists.max())
+        print(f"  Overlap range: [{overlap_min:.4f}, {overlap_max:.4f}]")
+        print(f"  Genuine in overlap: {((genuine_dists >= overlap_min) & (genuine_dists <= overlap_max)).sum()}/{len(genuine_dists)}")
+        print(f"  Impostor in overlap: {((impostor_dists >= overlap_min) & (impostor_dists <= overlap_max)).sum()}/{len(impostor_dists)}")
+        print("="*70 + "\n")
+        
+        # Compute metrics
+        metrics = compute_verification_metrics(genuine_dists, impostor_dists)
+        
+        # ========================================================================
+        # DEBUG: Verifica threshold e predictions
+        # ========================================================================
+        print("\n" + "="*70)
+        print("🐛 DEBUG: Threshold & Predictions")
+        print("="*70)
+        print(f"\nEER Threshold: {metrics['eer_threshold']:.4f}")
+        
+        # Simula predictions @ EER threshold
+        all_dists = np.concatenate([genuine_dists, impostor_dists])
+        all_labels = np.concatenate([np.ones(len(genuine_dists)), np.zeros(len(impostor_dists))])
+        predictions = (all_dists < metrics['eer_threshold']).astype(int)  # dist < thresh = same writer
+        
+        print(f"\nPredictions @ EER threshold:")
+        print(f"  Total samples: {len(predictions)}")
+        print(f"  Predicted SAME (1): {predictions.sum()} ({predictions.sum()/len(predictions)*100:.1f}%)")
+        print(f"  Predicted DIFF (0): {(1-predictions).sum()} ({(1-predictions).sum()/len(predictions)*100:.1f}%)")
+        
+        print(f"\nActual labels:")
+        print(f"  Genuine (1): {all_labels.sum()} ({all_labels.sum()/len(all_labels)*100:.1f}%)")
+        print(f"  Impostor (0): {(1-all_labels).sum()} ({(1-all_labels).sum()/len(all_labels)*100:.1f}%)")
+        
+        # Confusion matrix manual
+        tp = ((predictions == 1) & (all_labels == 1)).sum()
+        tn = ((predictions == 0) & (all_labels == 0)).sum()
+        fp = ((predictions == 1) & (all_labels == 0)).sum()
+        fn = ((predictions == 0) & (all_labels == 1)).sum()
+        
+        print(f"\nManual Confusion Matrix:")
+        print(f"  TP (genuine correctly as SAME):  {tp}")
+        print(f"  TN (impostor correctly as DIFF): {tn}")
+        print(f"  FP (impostor wrongly as SAME):   {fp}")
+        print(f"  FN (genuine wrongly as DIFF):    {fn}")
+        
+        manual_acc = (tp + tn) / len(predictions)
+        manual_prec = tp / (tp + fp) if (tp + fp) > 0 else 0
+        manual_rec = tp / (tp + fn) if (tp + fn) > 0 else 0
+        manual_f1 = 2 * manual_prec * manual_rec / (manual_prec + manual_rec) if (manual_prec + manual_rec) > 0 else 0
+        
+        print(f"\nManual metrics:")
+        print(f"  Accuracy:  {manual_acc:.4f}")
+        print(f"  Precision: {manual_prec:.4f}")
+        print(f"  Recall:    {manual_rec:.4f}")
+        print(f"  F1:        {manual_f1:.4f}")
+        
+        print(f"\nMetrics from compute_verification_metrics:")
+        print(f"  Accuracy:  {metrics['accuracy']:.4f}")
+        print(f"  Precision: {metrics['precision']:.4f}")
+        print(f"  Recall:    {metrics['recall']:.4f}")
+        print(f"  F1:        {metrics['f1']:.4f}")
+        print("="*70 + "\n")
         
         return metrics
     
@@ -1853,81 +1964,51 @@ class BaseTrainer(ABC):
         """Get embeddings from images (implemented by subclasses)."""
         pass
     
-    def _update_history(self, epoch: int, train_loss: float, val_loss: float, val_metrics: Dict):
-        """Update history with all metrics."""
+    def _update_history(self, epoch: int, train_loss: float, val_loss: float):
+        """Update history with losses only."""
         self.history['epoch'].append(epoch)
         self.history['train_loss'].append(train_loss)
-        self.history['val_loss'].append(val_loss)  # ✅ AGGIUNTO
-        
-        # Primary metrics
-        self.history['val_eer'].append(val_metrics['eer'])
-        self.history['val_auc'].append(val_metrics['auc'])
-        self.history['val_eer_threshold'].append(val_metrics['eer_threshold'])
-        
-        # Classification metrics
-        self.history['val_accuracy'].append(val_metrics['accuracy'])
-        self.history['val_precision'].append(val_metrics['precision'])
-        self.history['val_recall'].append(val_metrics['recall'])
-        self.history['val_f1'].append(val_metrics['f1'])
-        
-        # Secondary metrics
-        self.history['val_d_prime'].append(val_metrics['d_prime'])
-        self.history['val_decidability'].append(val_metrics['decidability'])
-        
-        # FAR-based metrics
-        self.history['val_acc_far_0.001'].append(val_metrics['acc_far_0.001'])
-        self.history['val_acc_far_0.01'].append(val_metrics['acc_far_0.01'])
-        self.history['val_frr_far_0.001'].append(val_metrics['frr_far_0.001'])
-        self.history['val_frr_far_0.01'].append(val_metrics['frr_far_0.01'])
-        self.history['val_threshold_far_0.001'].append(val_metrics['threshold_far_0.001'])
-        self.history['val_threshold_far_0.01'].append(val_metrics['threshold_far_0.01'])
-        
-        # Distribution statistics
-        self.history['val_mu_genuine'].append(val_metrics['mu_genuine'])
-        self.history['val_mu_impostor'].append(val_metrics['mu_impostor'])
-        self.history['val_sigma_genuine'].append(val_metrics['sigma_genuine'])
-        self.history['val_sigma_impostor'].append(val_metrics['sigma_impostor'])
+        self.history['val_loss'].append(val_loss)
     
-    def _print_epoch_summary(self, epoch: int, epochs: int, train_loss: float, 
-                            val_loss: float, val_metrics: Dict):
-        """Print formatted epoch summary with all metrics."""
+    def _print_epoch_summary(self, epoch: int, epochs: int, train_loss: float, val_loss: float):
+        """Print formatted epoch summary."""
+        print(f"\nEpoch {epoch+1}/{epochs} - Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
+    
+    def _print_final_metrics(self, metrics: Dict):
+        """Print comprehensive metrics at end of training."""
         print(f"\n{'='*70}")
-        print(f"Epoch {epoch+1}/{epochs} Summary")
+        print(f"FINAL VALIDATION METRICS")
         print(f"{'='*70}")
-        
-        print(f"\n📉 LOSSES:")
-        print(f"  Train Loss: {train_loss:.4f}")
-        print(f"  Val Loss:   {val_loss:.4f}")  # ✅ AGGIUNTO
         
         print(f"\n🎯 PRIMARY BIOMETRIC METRICS:")
-        print(f"  EER:              {val_metrics['eer']:.4f} ({val_metrics['eer']*100:.2f}%)")
-        print(f"  AUC:              {val_metrics['auc']:.4f}")
-        print(f"  EER Threshold:    {val_metrics['eer_threshold']:.4f}")
+        print(f"  EER:              {metrics['eer']:.4f} ({metrics['eer']*100:.2f}%)")
+        print(f"  AUC:              {metrics['auc']:.4f}")
+        print(f"  EER Threshold:    {metrics['eer_threshold']:.4f}")
         
         print(f"\n📊 CLASSIFICATION METRICS (@ EER threshold):")
-        print(f"  Accuracy:         {val_metrics['accuracy']:.4f}")
-        print(f"  Precision:        {val_metrics['precision']:.4f}")
-        print(f"  Recall:           {val_metrics['recall']:.4f}")
-        print(f"  F1-Score:         {val_metrics['f1']:.4f}")
+        print(f"  Accuracy:         {metrics['accuracy']:.4f}")
+        print(f"  Precision:        {metrics['precision']:.4f}")
+        print(f"  Recall:           {metrics['recall']:.4f}")
+        print(f"  F1-Score:         {metrics['f1']:.4f}")
         
         print(f"\n📈 DISCRIMINABILITY:")
-        print(f"  d-prime (d'):     {val_metrics['d_prime']:.4f}")
-        print(f"  Decidability:     {val_metrics['decidability']:.4f}")
+        print(f"  d-prime (d'):     {metrics['d_prime']:.4f}")
+        print(f"  Decidability:     {metrics['decidability']:.4f}")
         
         print(f"\n⚙️ FAR-BASED METRICS:")
-        print(f"  Acc @ FAR=0.1%:   {val_metrics['acc_far_0.001']:.4f} (FRR={val_metrics['frr_far_0.001']:.4f}, Thr={val_metrics['threshold_far_0.001']:.4f})")
-        print(f"  Acc @ FAR=1.0%:   {val_metrics['acc_far_0.01']:.4f} (FRR={val_metrics['frr_far_0.01']:.4f}, Thr={val_metrics['threshold_far_0.01']:.4f})")
+        print(f"  Acc @ FAR=0.1%:   {metrics['acc_far_0.001']:.4f} (FRR={metrics['frr_far_0.001']:.4f})")
+        print(f"  Acc @ FAR=1.0%:   {metrics['acc_far_0.01']:.4f} (FRR={metrics['frr_far_0.01']:.4f})")
         
         print(f"\n📏 DISTRIBUTION STATISTICS:")
-        print(f"  Genuine:          μ={val_metrics['mu_genuine']:.4f}, σ={val_metrics['sigma_genuine']:.4f}")
-        print(f"  Impostor:         μ={val_metrics['mu_impostor']:.4f}, σ={val_metrics['sigma_impostor']:.4f}")
+        print(f"  Genuine:          μ={metrics['mu_genuine']:.4f}, σ={metrics['sigma_genuine']:.4f}")
+        print(f"  Impostor:         μ={metrics['mu_impostor']:.4f}, σ={metrics['sigma_impostor']:.4f}")
         
-        print(f"{'='*70}")
+        print(f"{'='*70}\n")
     
     def train(
         self,
         train_loader,
-        val_loader,  # ✅ AGGIUNTO: serve per calcolare val_loss
+        val_loader,
         val_dataset,
         epochs: int = 50,
         patience: int = 7,
@@ -1957,34 +2038,28 @@ class BaseTrainer(ABC):
             # Train
             train_loss = self.train_epoch(train_loader)
             
-            # Validate
-            print(f"\nValidation Epoch {epoch+1}...")
-            
-            # Calculate val_loss
+            # Validate loss only
             val_loss = self.validate_loss(val_loader)
-            
-            # Calculate biometric metrics
-            val_metrics = self.validate_comprehensive(val_dataset, num_pairs=1000)
             
             # Update scheduler (if exists)
             if hasattr(self, 'scheduler'):
                 if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-                    self.scheduler.step(val_metrics['eer'])
+                    self.scheduler.step(val_loss)
                 else:
                     self.scheduler.step()
             
             # Update history
-            self._update_history(epoch + 1, train_loss, val_loss, val_metrics)
+            self._update_history(epoch + 1, train_loss, val_loss)
             
             # Print summary
-            self._print_epoch_summary(epoch, epochs, train_loss, val_loss, val_metrics)
+            self._print_epoch_summary(epoch, epochs, train_loss, val_loss)
             
-            # Early stopping on EER (all trainers)
-            if val_metrics['eer'] < self.best_eer:
-                self.best_eer = val_metrics['eer']
+            # Early stopping on validation loss
+            if val_loss < self.best_loss:
+                self.best_loss = val_loss
                 patience_counter = 0
                 self.save_checkpoint(is_best=True, fold=fold)
-                print(f"  ✓ Saved best model (EER={self.best_eer:.4f})")
+                print(f"  ✓ Saved best model (Val Loss={self.best_loss:.4f})")
             else:
                 patience_counter += 1
                 print(f"  Patience: {patience_counter}/{patience}")
@@ -1993,12 +2068,22 @@ class BaseTrainer(ABC):
                     print("  ⚠ Early stopping triggered")
                     break
         
+        # Final comprehensive validation
+        print(f"\n{'='*60}")
+        print("FINAL COMPREHENSIVE VALIDATION")
+        print(f"{'='*60}")
+        
+        final_metrics = self.validate_comprehensive(val_dataset, num_pairs=1000)
+        self._print_final_metrics(final_metrics)
+        
+        # Save final checkpoint and metrics
         self.save_checkpoint(is_best=False, fold=fold)
-        self.save_history()
+        if fold is None: self.save_history()
+        self.save_final_metrics(final_metrics, fold=fold)
         
-        print(f"\n✓ Training completed! Best EER={self.best_eer:.4f}\n")
+        print(f"\n✓ Training completed! Best Val Loss={self.best_loss:.4f}\n")
         
-        return self.history
+        return self.history, final_metrics
     
     def train_kfold(
         self,
@@ -2034,6 +2119,20 @@ class BaseTrainer(ABC):
         path = os.path.join(self.results_dir, f"{self.model_name}_history.csv")
         pd.DataFrame(self.history).to_csv(path, index=False)
     
+    def save_final_metrics(self, metrics: Dict, fold: int = None):
+        """Save final comprehensive metrics to CSV."""
+        
+        if fold is not None:
+            path = os.path.join(self.results_dir, f"{self.model_name}_fold{fold}_final_metrics.csv")
+        else:
+            path = os.path.join(self.results_dir, f"{self.model_name}_final_metrics.csv")
+        
+        pd.DataFrame([metrics]).to_csv(path, index=False)
+
+    def _init_history(self):
+        """Initialize empty history dict."""
+        return {k: [] for k in self.history.keys()}
+    
     def cleanup(self):
         """Cleanup resources."""
         self.model.cpu()
@@ -2045,11 +2144,6 @@ class BaseTrainer(ABC):
 """
 Triplet Loss Trainer
 Trainer class for triplet networks with comprehensive biometric evaluation.
-"""
-
-# src/training/trainer_triplet.py
-"""
-Triplet Loss Trainer
 """
 
 import torch
@@ -2101,7 +2195,7 @@ class TripletTrainer(BaseTrainer):
         self.model.train()
         train_loss = 0.0
         
-        for anchor, positive, negative in tqdm(train_loader, desc="Training", leave=False):
+        for anchor, positive, negative in tqdm(train_loader, desc="Training"):
             anchor = anchor.to(self.device)
             positive = positive.to(self.device)
             negative = negative.to(self.device)
@@ -2127,7 +2221,7 @@ class TripletTrainer(BaseTrainer):
         self.model.eval()
         val_loss = 0.0
 
-        for anchor, positive, negative in val_loader:
+        for anchor, positive, negative in tqdm(val_loader, desc="Validation"):
             anchor = anchor.to(self.device)
             positive = positive.to(self.device)
             negative = negative.to(self.device)
@@ -2169,6 +2263,7 @@ class TripletTrainer(BaseTrainer):
         print(f"{'='*70}\n")
         
         all_fold_histories = []
+        all_fold_metrics = []
         
         for fold in range(n_splits):
             print(f"\n{'#'*70}")
@@ -2190,13 +2285,13 @@ class TripletTrainer(BaseTrainer):
             self.model.apply(self._reset_weights)
             self._setup_optimizer()
             self.history = self._init_history()
-            self.best_eer = float('inf')
+            self.best_loss = float('inf')
             
             # Train this fold
-            fold_history = self.train(
+            fold_history, fold_metrics = self.train(
                 train_loader=train_loader,
-                val_loader=val_loader,  # ✅ Per val_loss
-                val_dataset=val_dataset,  # ✅ Per metriche
+                val_loader=val_loader,
+                val_dataset=val_dataset,
                 epochs=epochs,
                 patience=patience,
                 fold=fold + 1
@@ -2207,7 +2302,11 @@ class TripletTrainer(BaseTrainer):
             fold_df['fold'] = fold + 1
             all_fold_histories.append(fold_df)
             
-            print(f"\n✓ Fold {fold+1} - Best EER={self.best_eer:.4f}\n")
+            # Save fold metrics
+            fold_metrics['fold'] = fold + 1
+            all_fold_metrics.append(fold_metrics)
+            
+            print(f"\n✓ Fold {fold+1} - Best Val Loss={self.best_loss:.4f}, Final EER={fold_metrics['eer']:.4f}\n")
         
         # Save detailed results
         combined_history = pd.concat(all_fold_histories, ignore_index=True)
@@ -2217,26 +2316,23 @@ class TripletTrainer(BaseTrainer):
         )
         
         # Compute aggregated stats
-        fold_best_eers = combined_history.groupby('fold')['val_eer'].min().values
+        fold_eers = [m['eer'] for m in all_fold_metrics]
         
         aggregated = {
-            'mean_eer': np.mean(fold_best_eers),
-            'std_eer': np.std(fold_best_eers),
-            'all_folds_eer': fold_best_eers.tolist()
+            'mean_eer': np.mean(fold_eers),
+            'std_eer': np.std(fold_eers),
+            'all_folds_eer': fold_eers
         }
         
         print(f"\n{'='*70}")
         print(f"K-FOLD RESULTS")
         print(f"{'='*70}")
         print(f"EER: {aggregated['mean_eer']:.4f} ± {aggregated['std_eer']:.4f}")
-        print(f"Per-fold: {fold_best_eers}")
+        print(f"Per-fold: {fold_eers}")
         print(f"{'='*70}\n")
         
         return aggregated
 
-    def _init_history(self):
-        """Initialize empty history dict."""
-        return {k: [] for k in self.history.keys()}
 
 === src/training/trainer_bce.py ===
 import torch
@@ -2289,7 +2385,7 @@ class BCETrainer(BaseTrainer):
         self.model.train()
         train_loss = 0
         
-        for img1, img2, labels in tqdm(train_loader, desc="Training", leave=False):
+        for img1, img2, labels in tqdm(train_loader, desc="Training"):
             img1 = img1.to(self.device)
             img2 = img2.to(self.device)
             labels = labels.to(self.device)
@@ -2311,7 +2407,7 @@ class BCETrainer(BaseTrainer):
         self.model.eval()
         val_loss = 0.0
         
-        for img1, img2, labels in val_loader:
+        for img1, img2, labels in tqdm(val_loader, desc="Validation"):
             img1, img2, labels = img1.to(self.device), img2.to(self.device), labels.to(self.device)
             
             # Forward pass
@@ -2348,6 +2444,7 @@ class BCETrainer(BaseTrainer):
         print(f"{'='*70}\n")
         
         all_fold_histories = []
+        all_fold_metrics = []
         
         for fold in range(n_splits):
             print(f"\n{'#'*70}")
@@ -2369,13 +2466,13 @@ class BCETrainer(BaseTrainer):
             self.model.apply(self._reset_weights)
             self._setup_optimizer()
             self.history = self._init_history()
-            self.best_eer = float('inf')
+            self.best_loss = float('inf')
             
-            # Train this fold (passa val_loader E val_dataset)
-            fold_history = self.train(
+            # Train this fold
+            fold_history, fold_metrics = self.train(
                 train_loader=train_loader,
-                val_loader=val_loader,  # ✅ Per val_loss
-                val_dataset=val_dataset,  # ✅ Per metriche biometriche
+                val_loader=val_loader,
+                val_dataset=val_dataset,
                 epochs=epochs,
                 patience=patience,
                 fold=fold + 1
@@ -2386,7 +2483,11 @@ class BCETrainer(BaseTrainer):
             fold_df['fold'] = fold + 1
             all_fold_histories.append(fold_df)
             
-            print(f"\n✓ Fold {fold+1} - Best EER={self.best_eer:.4f}\n")
+            # Save fold metrics
+            fold_metrics['fold'] = fold + 1
+            all_fold_metrics.append(fold_metrics)
+            
+            print(f"\n✓ Fold {fold+1} - Best Val Loss={self.best_loss:.4f}, Final EER={fold_metrics['eer']:.4f}\n")
         
         # Save detailed results
         combined_history = pd.concat(all_fold_histories, ignore_index=True)
@@ -2396,34 +2497,28 @@ class BCETrainer(BaseTrainer):
         )
         
         # Compute aggregated stats
-        fold_best_eers = combined_history.groupby('fold')['val_eer'].min().values
-
+        fold_eers = [m['eer'] for m in all_fold_metrics]
+        
         aggregated = {
-            'mean_eer': np.mean(fold_best_eers),
-            'std_eer': np.std(fold_best_eers),
-            'all_folds_eer': fold_best_eers.tolist()
+            'mean_eer': np.mean(fold_eers),
+            'std_eer': np.std(fold_eers),
+            'all_folds_eer': fold_eers
         }
-
+        
         print(f"\n{'='*70}")
         print(f"K-FOLD RESULTS")
         print(f"{'='*70}")
         print(f"EER: {aggregated['mean_eer']:.4f} ± {aggregated['std_eer']:.4f}")
-        print(f"Per-fold: {fold_best_eers}")
+        print(f"Per-fold: {fold_eers}")
         print(f"{'='*70}\n")
-
-        return aggregated 
-    
-    def _init_history(self):
-        """Initialize empty history dict."""
-        return {k: [] for k in self.history.keys()}
-
+        
+        return aggregated
 
 === src/training/trainer_contrastive.py ===
 """
 Contrastive Loss Trainer
 Trainer class for contrastive learning with comprehensive biometric evaluation.
 """
-
 
 import torch
 import torch.nn as nn
@@ -2473,7 +2568,7 @@ class ContrastiveTrainer(BaseTrainer):
         self.model.train()
         train_loss = 0.0
 
-        for img1, img2, labels in tqdm(train_loader, desc="Training", leave=False):
+        for img1, img2, labels in tqdm(train_loader, desc="Training"):
             img1 = img1.to(self.device)
             img2 = img2.to(self.device)
             labels = labels.float().to(self.device)
@@ -2498,7 +2593,7 @@ class ContrastiveTrainer(BaseTrainer):
         self.model.eval()
         val_loss = 0.0
         
-        for img1, img2, labels in val_loader:
+        for img1, img2, labels in tqdm(val_loader, desc="Validation"):
             img1, img2, labels = img1.to(self.device), img2.to(self.device), labels.float().to(self.device)
             
             # Get embeddings
@@ -2537,6 +2632,7 @@ class ContrastiveTrainer(BaseTrainer):
         print(f"{'='*70}\n")
 
         all_fold_histories = []
+        all_fold_metrics = []
 
         for fold in range(n_splits):
             print(f"\n{'#'*70}")
@@ -2558,13 +2654,13 @@ class ContrastiveTrainer(BaseTrainer):
             self.model.apply(self._reset_weights)
             self._setup_optimizer()
             self.history = self._init_history()
-            self.best_eer = float('inf')
+            self.best_loss = float('inf')
 
             # Train this fold
-            fold_history = self.train(
+            fold_history, fold_metrics = self.train(
                 train_loader=train_loader,
-                val_loader=val_loader,  # ✅ Per val_loss
-                val_dataset=val_dataset,  # ✅ Per metriche
+                val_loader=val_loader,
+                val_dataset=val_dataset,
                 epochs=epochs,
                 patience=patience,
                 fold=fold + 1
@@ -2575,7 +2671,11 @@ class ContrastiveTrainer(BaseTrainer):
             fold_df['fold'] = fold + 1
             all_fold_histories.append(fold_df)
 
-            print(f"\n✓ Fold {fold+1} - Best EER={self.best_eer:.4f}\n")
+            # Save fold metrics
+            fold_metrics['fold'] = fold + 1
+            all_fold_metrics.append(fold_metrics)
+
+            print(f"\n✓ Fold {fold+1} - Best Val Loss={self.best_loss:.4f}, Final EER={fold_metrics['eer']:.4f}\n")
 
         # Save detailed results
         combined_history = pd.concat(all_fold_histories, ignore_index=True)
@@ -2585,26 +2685,22 @@ class ContrastiveTrainer(BaseTrainer):
         )
 
         # Compute aggregated stats
-        fold_best_eers = combined_history.groupby('fold')['val_eer'].min().values
+        fold_eers = [m['eer'] for m in all_fold_metrics]
 
         aggregated = {
-            'mean_eer': np.mean(fold_best_eers),
-            'std_eer': np.std(fold_best_eers),
-            'all_folds_eer': fold_best_eers.tolist()
+            'mean_eer': np.mean(fold_eers),
+            'std_eer': np.std(fold_eers),
+            'all_folds_eer': fold_eers
         }
 
         print(f"\n{'='*70}")
         print(f"K-FOLD RESULTS")
         print(f"{'='*70}")
         print(f"EER: {aggregated['mean_eer']:.4f} ± {aggregated['std_eer']:.4f}")
-        print(f"Per-fold: {fold_best_eers}")
+        print(f"Per-fold: {fold_eers}")
         print(f"{'='*70}\n")
 
         return aggregated
-
-    def _init_history(self):
-        """Initialize empty history dict."""
-        return {k: [] for k in self.history.keys()}
 
 === src/training/losses.py ===
 """
