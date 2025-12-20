@@ -61,17 +61,10 @@ def compute_verification_metrics(
 ) -> Dict[str, float]:
     """
     Compute comprehensive verification metrics from distance distributions.
-    
-    Args:
-        genuine_dists: Distances for genuine pairs (same writer)
-        impostor_dists: Distances for impostor pairs (different writers)
-        
-    Returns:
-        Dictionary with all verification and classification metrics
     """
     # Convert distances to similarity scores (lower distance = higher similarity)
     y_true = np.array([1] * len(genuine_dists) + [0] * len(impostor_dists))
-    y_scores = np.array([-d for d in genuine_dists] + [-d for d in impostor_dists])
+    y_scores = np.concatenate([-genuine_dists, -impostor_dists])  # ✅ FIX: usa concatenate
     
     # ROC Curve
     fpr, tpr, thresholds = roc_curve(y_true, y_scores)
@@ -88,11 +81,10 @@ def compute_verification_metrics(
     metrics['eer_threshold'] = eer_threshold
     
     # Classification metrics at EER threshold
-    y_scores_for_class = -genuine_dists.tolist() + (-impostor_dists).tolist()
-    eer_sim_threshold = -eer_threshold
+    eer_sim_threshold = -eer_threshold  # Convert to similarity
     eer_classification = compute_classification_metrics(
         y_true,
-        np.array(y_scores_for_class),
+        y_scores,  # ✅ Già è similarity scores
         eer_sim_threshold
     )
     
@@ -130,8 +122,14 @@ def compute_verification_metrics(
     metrics['sigma_genuine'] = sigma_genuine
     metrics['sigma_impostor'] = sigma_impostor
     
+    # Store raw distributions for plotting
+    metrics['genuine_dists'] = genuine_dists
+    metrics['impostor_dists'] = impostor_dists
+    metrics['fpr'] = fpr
+    metrics['tpr'] = tpr
+    metrics['thresholds'] = thresholds
+    
     return metrics
-
 
 def print_verification_results(metrics: Dict[str, float], dataset_name: str = "Validation"):
     """Print formatted verification results."""
