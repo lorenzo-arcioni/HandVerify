@@ -48,7 +48,7 @@ class BCETrainer(BaseTrainer):
         self.model.train()
         train_loss = 0
         
-        for img1, img2, labels in tqdm(train_loader, desc="Training", leave=False):
+        for img1, img2, labels in tqdm(train_loader, desc="Training"):
             img1 = img1.to(self.device)
             img2 = img2.to(self.device)
             labels = labels.to(self.device)

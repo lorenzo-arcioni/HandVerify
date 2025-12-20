@@ -52,7 +52,7 @@ class TripletTrainer(BaseTrainer):
         self.model.train()
         train_loss = 0.0
         
-        for anchor, positive, negative in tqdm(train_loader, desc="Training", leave=False):
+        for anchor, positive, negative in tqdm(train_loader, desc="Training"):
             anchor = anchor.to(self.device)
             positive = positive.to(self.device)
             negative = negative.to(self.device)
