@@ -3,6 +3,11 @@ Triplet Loss Trainer
 Trainer class for triplet networks with comprehensive biometric evaluation.
 """
 
+# src/training/trainer_triplet.py
+"""
+Triplet Loss Trainer
+"""
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -52,7 +57,7 @@ class TripletTrainer(BaseTrainer):
         self.model.train()
         train_loss = 0.0
         
-        for anchor, positive, negative in tqdm(train_loader, desc="Training"):
+        for anchor, positive, negative in tqdm(train_loader, desc="Training", leave=False):
             anchor = anchor.to(self.device)
             positive = positive.to(self.device)
             negative = negative.to(self.device)
@@ -72,12 +77,34 @@ class TripletTrainer(BaseTrainer):
         
         return train_loss / len(train_loader)
     
+    @torch.no_grad()
+    def validate_loss(self, val_loader: DataLoader) -> float:
+        """Calculate Triplet validation loss."""
+        self.model.eval()
+        val_loss = 0.0
+
+        for anchor, positive, negative in val_loader:
+            anchor = anchor.to(self.device)
+            positive = positive.to(self.device)
+            negative = negative.to(self.device)
+            
+            # Get embeddings
+            anchor_emb = self.model(anchor)
+            positive_emb = self.model(positive)
+            negative_emb = self.model(negative)
+            
+            # Triplet loss
+            loss = self.criterion(anchor_emb, positive_emb, negative_emb)
+            val_loss += loss.item()
+        
+        return val_loss / len(val_loader)
+
     def _get_embeddings(self, img1, img2):
         """Get embeddings from triplet network."""
         emb1 = self.model(img1)
         emb2 = self.model(img2)
         return emb1, emb2
-    
+
     def train_kfold(
         self,
         data_root: str,
@@ -98,7 +125,6 @@ class TripletTrainer(BaseTrainer):
         print(f"{'='*70}\n")
         
         all_fold_histories = []
-        fold_summaries = []
         
         for fold in range(n_splits):
             print(f"\n{'#'*70}")
@@ -125,10 +151,11 @@ class TripletTrainer(BaseTrainer):
             # Train this fold
             fold_history = self.train(
                 train_loader=train_loader,
-                val_dataset=val_dataset,
+                val_loader=val_loader,  # ✅ Per val_loss
+                val_dataset=val_dataset,  # ✅ Per metriche
                 epochs=epochs,
                 patience=patience,
-                fold=fold + 1  # Pass fold number for checkpoint naming
+                fold=fold + 1
             )
             
             # Save fold results
@@ -138,7 +165,7 @@ class TripletTrainer(BaseTrainer):
             
             print(f"\n✓ Fold {fold+1} - Best EER={self.best_eer:.4f}\n")
         
-        # Save only detailed results (summary derivable from this)
+        # Save detailed results
         combined_history = pd.concat(all_fold_histories, ignore_index=True)
         combined_history.to_csv(
             f"{self.results_dir}/{self.model_name}_kfold_detailed.csv",
@@ -162,7 +189,7 @@ class TripletTrainer(BaseTrainer):
         print(f"{'='*70}\n")
         
         return aggregated
-    
+
     def _init_history(self):
         """Initialize empty history dict."""
         return {k: [] for k in self.history.keys()}

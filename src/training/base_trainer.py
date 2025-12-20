@@ -1,3 +1,4 @@
+# src/training/base_trainer.py
 """
 Base Trainer Class
 Common functionality for all trainer types.
@@ -6,7 +7,7 @@ Common functionality for all trainer types.
 import os
 import gc
 import random
-from typing import Dict
+from typing import Dict, Optional
 from abc import ABC, abstractmethod
 
 import torch
@@ -39,6 +40,7 @@ class BaseTrainer(ABC):
         self.history = {
             'epoch': [],
             'train_loss': [],
+            'val_loss': [],  # ✅ AGGIUNTO
             # Primary biometric metrics
             'val_eer': [],
             'val_auc': [],
@@ -75,6 +77,19 @@ class BaseTrainer(ABC):
     @abstractmethod
     def train_epoch(self, train_loader):
         """Train for one epoch (implemented by subclasses)."""
+        pass
+    
+    @abstractmethod
+    def validate_loss(self, val_loader) -> float:
+        """
+        Calculate validation loss (implemented by subclasses).
+        
+        Args:
+            val_loader: Validation dataloader
+            
+        Returns:
+            Average validation loss
+        """
         pass
     
     @torch.no_grad()
@@ -140,10 +155,11 @@ class BaseTrainer(ABC):
         """Get embeddings from images (implemented by subclasses)."""
         pass
     
-    def _update_history(self, epoch: int, train_loss: float, val_metrics: Dict):
+    def _update_history(self, epoch: int, train_loss: float, val_loss: float, val_metrics: Dict):
         """Update history with all metrics."""
         self.history['epoch'].append(epoch)
         self.history['train_loss'].append(train_loss)
+        self.history['val_loss'].append(val_loss)  # ✅ AGGIUNTO
         
         # Primary metrics
         self.history['val_eer'].append(val_metrics['eer'])
@@ -174,14 +190,16 @@ class BaseTrainer(ABC):
         self.history['val_sigma_genuine'].append(val_metrics['sigma_genuine'])
         self.history['val_sigma_impostor'].append(val_metrics['sigma_impostor'])
     
-    def _print_epoch_summary(self, epoch: int, epochs: int, train_loss: float, val_metrics: Dict):
+    def _print_epoch_summary(self, epoch: int, epochs: int, train_loss: float, 
+                            val_loss: float, val_metrics: Dict):
         """Print formatted epoch summary with all metrics."""
         print(f"\n{'='*70}")
         print(f"Epoch {epoch+1}/{epochs} Summary")
         print(f"{'='*70}")
         
-        print(f"\n📉 TRAINING:")
+        print(f"\n📉 LOSSES:")
         print(f"  Train Loss: {train_loss:.4f}")
+        print(f"  Val Loss:   {val_loss:.4f}")  # ✅ AGGIUNTO
         
         print(f"\n🎯 PRIMARY BIOMETRIC METRICS:")
         print(f"  EER:              {val_metrics['eer']:.4f} ({val_metrics['eer']*100:.2f}%)")
@@ -211,6 +229,7 @@ class BaseTrainer(ABC):
     def train(
         self,
         train_loader,
+        val_loader,  # ✅ AGGIUNTO: serve per calcolare val_loss
         val_dataset,
         epochs: int = 50,
         patience: int = 7,
@@ -221,9 +240,11 @@ class BaseTrainer(ABC):
         
         Args:
             train_loader: Training dataloader
-            val_dataset: Validation dataset
+            val_loader: Validation dataloader (for loss calculation)
+            val_dataset: Validation dataset (for metric calculation)
             epochs: Number of epochs
             patience: Early stopping patience
+            fold: Fold number (for K-Fold)
             
         Returns:
             Training history
@@ -240,6 +261,11 @@ class BaseTrainer(ABC):
             
             # Validate
             print(f"\nValidation Epoch {epoch+1}...")
+            
+            # Calculate val_loss
+            val_loss = self.validate_loss(val_loader)
+            
+            # Calculate biometric metrics
             val_metrics = self.validate_comprehensive(val_dataset, num_pairs=1000)
             
             # Update scheduler (if exists)
@@ -250,10 +276,10 @@ class BaseTrainer(ABC):
                     self.scheduler.step()
             
             # Update history
-            self._update_history(epoch + 1, train_loss, val_metrics)
+            self._update_history(epoch + 1, train_loss, val_loss, val_metrics)
             
             # Print summary
-            self._print_epoch_summary(epoch, epochs, train_loss, val_metrics)
+            self._print_epoch_summary(epoch, epochs, train_loss, val_loss, val_metrics)
             
             # Early stopping on EER (all trainers)
             if val_metrics['eer'] < self.best_eer:

@@ -1,7 +1,8 @@
 """
-Supervised Contrastive Loss Trainer
-Trainer class for supervised contrastive learning with comprehensive biometric evaluation.
+Contrastive Loss Trainer
+Trainer class for contrastive learning with comprehensive biometric evaluation.
 """
+
 
 import torch
 import torch.nn as nn
@@ -51,10 +52,10 @@ class ContrastiveTrainer(BaseTrainer):
         self.model.train()
         train_loss = 0.0
 
-        for img1, img2, labels in tqdm(train_loader, desc="Training"):
+        for img1, img2, labels in tqdm(train_loader, desc="Training", leave=False):
             img1 = img1.to(self.device)
             img2 = img2.to(self.device)
-            labels = labels.float().to(self.device)  # Ensure float for ContrastiveLoss
+            labels = labels.float().to(self.device)
 
             self.optimizer.zero_grad()
 
@@ -69,6 +70,25 @@ class ContrastiveTrainer(BaseTrainer):
             train_loss += loss.item()
 
         return train_loss / len(train_loader)
+
+    @torch.no_grad()
+    def validate_loss(self, val_loader: DataLoader) -> float:
+        """Calculate Contrastive validation loss."""
+        self.model.eval()
+        val_loss = 0.0
+        
+        for img1, img2, labels in val_loader:
+            img1, img2, labels = img1.to(self.device), img2.to(self.device), labels.float().to(self.device)
+            
+            # Get embeddings
+            emb1 = self.model(img1)
+            emb2 = self.model(img2)
+            
+            # Contrastive loss
+            loss = self.criterion(emb1, emb2, labels)
+            val_loss += loss.item()
+        
+        return val_loss / len(val_loader)
 
     def _get_embeddings(self, img1, img2):
         """Get embeddings from contrastive network."""
@@ -122,10 +142,11 @@ class ContrastiveTrainer(BaseTrainer):
             # Train this fold
             fold_history = self.train(
                 train_loader=train_loader,
-                val_dataset=val_dataset,
+                val_loader=val_loader,  # ✅ Per val_loss
+                val_dataset=val_dataset,  # ✅ Per metriche
                 epochs=epochs,
                 patience=patience,
-                fold=fold + 1  # Pass fold number for checkpoint naming
+                fold=fold + 1
             )
 
             # Save fold results

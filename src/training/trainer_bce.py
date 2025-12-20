@@ -48,7 +48,7 @@ class BCETrainer(BaseTrainer):
         self.model.train()
         train_loss = 0
         
-        for img1, img2, labels in tqdm(train_loader, desc="Training"):
+        for img1, img2, labels in tqdm(train_loader, desc="Training", leave=False):
             img1 = img1.to(self.device)
             img2 = img2.to(self.device)
             labels = labels.to(self.device)
@@ -63,6 +63,24 @@ class BCETrainer(BaseTrainer):
             train_loss += loss.item()
         
         return train_loss / len(train_loader)
+    
+    @torch.no_grad()
+    def validate_loss(self, val_loader: DataLoader) -> float:
+        """Calculate BCE validation loss."""
+        self.model.eval()
+        val_loss = 0.0
+        
+        for img1, img2, labels in val_loader:
+            img1, img2, labels = img1.to(self.device), img2.to(self.device), labels.to(self.device)
+            
+            # Forward pass
+            outputs = self.model(img1, img2).squeeze()
+            
+            # BCE loss
+            loss = self.criterion(outputs, labels)
+            val_loss += loss.item()
+        
+        return val_loss / len(val_loader)
     
     def _get_embeddings(self, img1, img2):
         """Get embeddings from Siamese network."""
@@ -89,7 +107,6 @@ class BCETrainer(BaseTrainer):
         print(f"{'='*70}\n")
         
         all_fold_histories = []
-        fold_summaries = []
         
         for fold in range(n_splits):
             print(f"\n{'#'*70}")
@@ -113,13 +130,14 @@ class BCETrainer(BaseTrainer):
             self.history = self._init_history()
             self.best_eer = float('inf')
             
-            # Train this fold
+            # Train this fold (passa val_loader E val_dataset)
             fold_history = self.train(
                 train_loader=train_loader,
-                val_dataset=val_dataset,
+                val_loader=val_loader,  # ✅ Per val_loss
+                val_dataset=val_dataset,  # ✅ Per metriche biometriche
                 epochs=epochs,
                 patience=patience,
-                fold=fold + 1  # Pass fold number for checkpoint naming
+                fold=fold + 1
             )
             
             # Save fold results
@@ -129,7 +147,7 @@ class BCETrainer(BaseTrainer):
             
             print(f"\n✓ Fold {fold+1} - Best EER={self.best_eer:.4f}\n")
         
-        # Save only detailed results (summary derivable from this)
+        # Save detailed results
         combined_history = pd.concat(all_fold_histories, ignore_index=True)
         combined_history.to_csv(
             f"{self.results_dir}/{self.model_name}_kfold_detailed.csv",
@@ -157,35 +175,3 @@ class BCETrainer(BaseTrainer):
     def _init_history(self):
         """Initialize empty history dict."""
         return {k: [] for k in self.history.keys()}
-    
-    def _save_kfold_results(self, all_fold_histories, fold_summaries):
-        """Save k-fold detailed and summary results."""
-        combined_history = pd.concat(all_fold_histories, ignore_index=True)
-        combined_history.to_csv(
-            f"{self.results_dir}/{self.model_name}_kfold_detailed.csv",
-            index=False
-        )
-        
-        summary_df = pd.DataFrame(fold_summaries)
-        summary_df.to_csv(
-            f"{self.results_dir}/{self.model_name}_kfold_summary.csv",
-            index=False
-        )
-    
-    def _aggregate_kfold_results(self, fold_summaries):
-        """Aggregate k-fold results."""
-        all_eers = [f['best_eer'] for f in fold_summaries]
-        
-        aggregated = {
-            'mean_eer': np.mean(all_eers),
-            'std_eer': np.std(all_eers),
-            'fold_summaries': fold_summaries
-        }
-        
-        print(f"\n{'='*70}")
-        print(f"K-FOLD RESULTS")
-        print(f"{'='*70}")
-        print(f"EER: {aggregated['mean_eer']:.4f} ± {aggregated['std_eer']:.4f}")
-        print(f"{'='*70}\n")
-        
-        return aggregated

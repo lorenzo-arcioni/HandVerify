@@ -1256,17 +1256,10 @@ def compute_verification_metrics(
 ) -> Dict[str, float]:
     """
     Compute comprehensive verification metrics from distance distributions.
-    
-    Args:
-        genuine_dists: Distances for genuine pairs (same writer)
-        impostor_dists: Distances for impostor pairs (different writers)
-        
-    Returns:
-        Dictionary with all verification and classification metrics
     """
     # Convert distances to similarity scores (lower distance = higher similarity)
     y_true = np.array([1] * len(genuine_dists) + [0] * len(impostor_dists))
-    y_scores = np.array([-d for d in genuine_dists] + [-d for d in impostor_dists])
+    y_scores = np.concatenate([-genuine_dists, -impostor_dists])  # ✅ FIX: usa concatenate
     
     # ROC Curve
     fpr, tpr, thresholds = roc_curve(y_true, y_scores)
@@ -1283,17 +1276,10 @@ def compute_verification_metrics(
     metrics['eer_threshold'] = eer_threshold
     
     # Classification metrics at EER threshold
-    eer_classification = compute_classification_metrics(
-        y_true, 
-        -thresholds.reshape(-1)[np.argmin(np.abs(fpr - (1 - tpr)))],  # Similarity at EER
-        -eer_threshold  # Convert to similarity
-    )
-    # Actually, let's compute it properly with the actual threshold
-    y_scores_for_class = -genuine_dists.tolist() + (-impostor_dists).tolist()
-    eer_sim_threshold = -eer_threshold
+    eer_sim_threshold = -eer_threshold  # Convert to similarity
     eer_classification = compute_classification_metrics(
         y_true,
-        np.array(y_scores_for_class),
+        y_scores,  # ✅ Già è similarity scores
         eer_sim_threshold
     )
     
@@ -1331,8 +1317,14 @@ def compute_verification_metrics(
     metrics['sigma_genuine'] = sigma_genuine
     metrics['sigma_impostor'] = sigma_impostor
     
+    # Store raw distributions for plotting
+    metrics['genuine_dists'] = genuine_dists
+    metrics['impostor_dists'] = impostor_dists
+    metrics['fpr'] = fpr
+    metrics['tpr'] = tpr
+    metrics['thresholds'] = thresholds
+    
     return metrics
-
 
 def print_verification_results(metrics: Dict[str, float], dataset_name: str = "Validation"):
     """Print formatted verification results."""
@@ -2441,7 +2433,7 @@ class TripletTrainer(BaseTrainer):
         self.model.train()
         train_loss = 0.0
         
-        for anchor, positive, negative in tqdm(train_loader, desc="Training", leave=False):
+        for anchor, positive, negative in tqdm(train_loader, desc="Training"):
             anchor = anchor.to(self.device)
             positive = positive.to(self.device)
             negative = negative.to(self.device)
@@ -2608,7 +2600,7 @@ class BCETrainer(BaseTrainer):
         self.model.train()
         train_loss = 0
         
-        for img1, img2, labels in tqdm(train_loader, desc="Training", leave=False):
+        for img1, img2, labels in tqdm(train_loader, desc="Training"):
             img1 = img1.to(self.device)
             img2 = img2.to(self.device)
             labels = labels.to(self.device)
@@ -2698,6 +2690,21 @@ class BCETrainer(BaseTrainer):
         
         # Compute aggregated stats
         fold_best_eers = combined_history.groupby('fold')['val_eer'].min().values
+
+        aggregated = {
+            'mean_eer': np.mean(fold_best_eers),
+            'std_eer': np.std(fold_best_eers),
+            'all_folds_eer': fold_best_eers.tolist()
+        }
+
+        print(f"\n{'='*70}")
+        print(f"K-FOLD RESULTS")
+        print(f"{'='*70}")
+        print(f"EER: {aggregated['mean_eer']:.4f} ± {aggregated['std_eer']:.4f}")
+        print(f"Per-fold: {fold_best_eers}")
+        print(f"{'='*70}\n")
+
+        return aggregated 
     
     def _init_history(self):
         """Initialize empty history dict."""
@@ -2790,7 +2797,7 @@ class ContrastiveTrainer(BaseTrainer):
         self.model.train()
         train_loss = 0.0
 
-        for img1, img2, labels in tqdm(train_loader, desc="Training", leave=False):
+        for img1, img2, labels in tqdm(train_loader, desc="Training"):
             img1 = img1.to(self.device)
             img2 = img2.to(self.device)
             labels = labels.float().to(self.device)  # Ensure float for ContrastiveLoss
