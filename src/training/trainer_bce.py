@@ -48,7 +48,7 @@ class BCETrainer(BaseTrainer):
         self.model.train()
         train_loss = 0
         
-        for img1, img2, labels in tqdm(train_loader, desc="Training", leave=False):
+        for img1, img2, labels in tqdm(train_loader, desc="Training"):
             img1 = img1.to(self.device)
             img2 = img2.to(self.device)
             labels = labels.to(self.device)
@@ -70,7 +70,7 @@ class BCETrainer(BaseTrainer):
         self.model.eval()
         val_loss = 0.0
         
-        for img1, img2, labels in val_loader:
+        for img1, img2, labels in tqdm(val_loader, desc="Validation"):
             img1, img2, labels = img1.to(self.device), img2.to(self.device), labels.to(self.device)
             
             # Forward pass
@@ -107,6 +107,7 @@ class BCETrainer(BaseTrainer):
         print(f"{'='*70}\n")
         
         all_fold_histories = []
+        all_fold_metrics = []
         
         for fold in range(n_splits):
             print(f"\n{'#'*70}")
@@ -128,13 +129,13 @@ class BCETrainer(BaseTrainer):
             self.model.apply(self._reset_weights)
             self._setup_optimizer()
             self.history = self._init_history()
-            self.best_eer = float('inf')
+            self.best_loss = float('inf')
             
-            # Train this fold (passa val_loader E val_dataset)
-            fold_history = self.train(
+            # Train this fold
+            fold_history, fold_metrics = self.train(
                 train_loader=train_loader,
-                val_loader=val_loader,  # ✅ Per val_loss
-                val_dataset=val_dataset,  # ✅ Per metriche biometriche
+                val_loader=val_loader,
+                val_dataset=val_dataset,
                 epochs=epochs,
                 patience=patience,
                 fold=fold + 1
@@ -145,7 +146,11 @@ class BCETrainer(BaseTrainer):
             fold_df['fold'] = fold + 1
             all_fold_histories.append(fold_df)
             
-            print(f"\n✓ Fold {fold+1} - Best EER={self.best_eer:.4f}\n")
+            # Save fold metrics
+            fold_metrics['fold'] = fold + 1
+            all_fold_metrics.append(fold_metrics)
+            
+            print(f"\n✓ Fold {fold+1} - Best Val Loss={self.best_loss:.4f}, Final EER={fold_metrics['eer']:.4f}\n")
         
         # Save detailed results
         combined_history = pd.concat(all_fold_histories, ignore_index=True)
@@ -154,23 +159,30 @@ class BCETrainer(BaseTrainer):
             index=False
         )
         
+        # Save all fold metrics
+        fold_metrics_df = pd.DataFrame(all_fold_metrics)
+        fold_metrics_df.to_csv(
+            f"{self.results_dir}/{self.model_name}_kfold_metrics.csv",
+            index=False
+        )
+        
         # Compute aggregated stats
-        fold_best_eers = combined_history.groupby('fold')['val_eer'].min().values
-
+        fold_eers = [m['eer'] for m in all_fold_metrics]
+        
         aggregated = {
-            'mean_eer': np.mean(fold_best_eers),
-            'std_eer': np.std(fold_best_eers),
-            'all_folds_eer': fold_best_eers.tolist()
+            'mean_eer': np.mean(fold_eers),
+            'std_eer': np.std(fold_eers),
+            'all_folds_eer': fold_eers
         }
-
+        
         print(f"\n{'='*70}")
         print(f"K-FOLD RESULTS")
         print(f"{'='*70}")
         print(f"EER: {aggregated['mean_eer']:.4f} ± {aggregated['std_eer']:.4f}")
-        print(f"Per-fold: {fold_best_eers}")
+        print(f"Per-fold: {fold_eers}")
         print(f"{'='*70}\n")
-
-        return aggregated 
+        
+        return aggregated
     
     def _init_history(self):
         """Initialize empty history dict."""

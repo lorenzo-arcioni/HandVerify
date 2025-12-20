@@ -829,369 +829,6 @@ def create_contrastive_dataloaders_kfold(
     return train_loader, val_loader, train_dataset, val_dataset
 
 
-=== src/evaluation/visualization.py ===
-"""
-Visualization Functions
-Unified visualization for training history and biometric evaluation.
-"""
-
-import matplotlib.pyplot as plt
-import numpy as np
-from scipy.stats import norm
-from typing import Dict, List, Optional
-import os
-
-
-# ============================================================================
-# TRAINING VISUALIZATIONS
-# ============================================================================
-
-def plot_training_history(
-    history: Dict[str, List],
-    model_name: str,
-    save_path: Optional[str] = None
-):
-    """
-    Plot training and validation metrics (for BCE/Contrastive training).
-    
-    Args:
-        history: Dict with 'epoch', 'train_loss', 'train_acc', 'test_loss', 'test_acc'
-        model_name: Name of the model
-        save_path: Optional path to save figure
-    """
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
-    epochs = history['epoch']
-    
-    # Loss plot
-    ax1.plot(epochs, history['train_loss'], 'b-o', label='Train Loss', markersize=4)
-    ax1.plot(epochs, history['test_loss'], 'r-o', label='Test Loss', markersize=4)
-    ax1.set_xlabel('Epoch')
-    ax1.set_ylabel('Loss')
-    ax1.set_title(f'{model_name} - Loss')
-    ax1.legend()
-    ax1.grid(True, alpha=0.3)
-    
-    # Accuracy plot
-    ax2.plot(epochs, history['train_acc'], 'b-o', label='Train Accuracy', markersize=4)
-    ax2.plot(epochs, history['test_acc'], 'r-o', label='Test Accuracy', markersize=4)
-    ax2.set_xlabel('Epoch')
-    ax2.set_ylabel('Accuracy')
-    ax2.set_title(f'{model_name} - Accuracy')
-    ax2.legend()
-    ax2.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    
-    if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    plt.show()
-
-
-def plot_triplet_training_history(
-    history: Dict,
-    model_name: str,
-    save_path: Optional[str] = None
-):
-    """
-    Plot training history for triplet networks.
-    
-    Args:
-        history: Dict with 'epoch', 'train_loss', 'val_eer', 'val_auc'
-        model_name: Name of the model
-        save_path: Optional path to save figure
-    """
-    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(18, 5))
-    epochs = history['epoch']
-    
-    # Loss
-    ax1.plot(epochs, history['train_loss'], 'b-o', label='Train Loss', markersize=4)
-    ax1.set_xlabel('Epoch')
-    ax1.set_ylabel('Loss')
-    ax1.set_title(f'{model_name} - Triplet Loss')
-    ax1.legend()
-    ax1.grid(True, alpha=0.3)
-    
-    # EER
-    ax2.plot(epochs, history['val_eer'], 'r-o', label='Validation EER', markersize=4)
-    ax2.set_xlabel('Epoch')
-    ax2.set_ylabel('EER')
-    ax2.set_title(f'{model_name} - Equal Error Rate')
-    ax2.legend()
-    ax2.grid(True, alpha=0.3)
-    
-    # AUC
-    ax3.plot(epochs, history['val_auc'], 'g-o', label='Validation AUC', markersize=4)
-    ax3.set_xlabel('Epoch')
-    ax3.set_ylabel('AUC')
-    ax3.set_title(f'{model_name} - AUC-ROC')
-    ax3.legend()
-    ax3.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    
-    if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    plt.show()
-
-
-def plot_multiple_models_comparison(
-    results: Dict[str, Dict],
-    metric: str = 'test_loss',
-    save_path: Optional[str] = None
-):
-    """
-    Compare multiple models on a single metric.
-    
-    Args:
-        results: Dict mapping model names to their history dicts
-        metric: Metric to plot
-        save_path: Optional path to save figure
-    """
-    plt.figure(figsize=(12, 6))
-    
-    for model_name, result in results.items():
-        history = result['history']
-        epochs = history['epoch']
-        values = history[metric]
-        plt.plot(epochs, values, '-o', label=model_name, markersize=3)
-    
-    plt.xlabel('Epoch')
-    plt.ylabel(metric.replace('_', ' ').title())
-    plt.title(f'Model Comparison - {metric.replace("_", " ").title()}')
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.grid(True, alpha=0.3)
-    plt.tight_layout()
-    
-    if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    plt.show()
-
-
-# ============================================================================
-# BIOMETRIC VISUALIZATIONS
-# ============================================================================
-
-def plot_biometric_results(
-    metrics: Dict,
-    save_path: Optional[str] = None
-):
-    """
-    Comprehensive biometric evaluation visualization.
-    
-    Args:
-        metrics: Dictionary with all metrics from evaluate_comprehensive
-        save_path: Optional path to save figure
-    """
-    fig = plt.figure(figsize=(16, 12))
-    
-    # 1. ROC Curve with operating points
-    ax1 = plt.subplot(2, 3, 1)
-    ax1.plot(metrics['fpr'], metrics['tpr'], 'darkorange', lw=2,
-             label=f'AUC={metrics["auc"]:.4f}')
-    ax1.plot([0, 1], [0, 1], 'navy', lw=2, linestyle='--', label='Random')
-    
-    # Mark EER point
-    eer_idx = np.argmin(np.abs(metrics['fpr'] - (1 - metrics['tpr'])))
-    ax1.scatter(metrics['fpr'][eer_idx], metrics['tpr'][eer_idx],
-                color='red', s=100, zorder=5, label=f'EER={metrics["eer"]:.4f}')
-    
-    # Mark FAR operating points
-    for far_target in [0.001, 0.01]:
-        idx = np.argmin(np.abs(metrics['fpr'] - far_target))
-        ax1.scatter(metrics['fpr'][idx], metrics['tpr'][idx], s=80, zorder=5,
-                   label=f'FAR={far_target*100:.1f}%')
-    
-    ax1.set_xlabel('False Accept Rate (FAR)')
-    ax1.set_ylabel('True Accept Rate (TAR)')
-    ax1.set_title('ROC Curve with Operating Points')
-    ax1.legend(loc='lower right', fontsize=9)
-    ax1.grid(alpha=0.3)
-    
-    # 2. Distance distributions
-    ax2 = plt.subplot(2, 3, 2)
-    ax2.hist(metrics['genuine_dists'], bins=50, alpha=0.6,
-             label='Genuine', color='green', density=True)
-    ax2.hist(metrics['impostor_dists'], bins=50, alpha=0.6,
-             label='Impostor', color='red', density=True)
-    ax2.axvline(metrics['eer_threshold'], color='black', linestyle='--',
-                label=f'EER Threshold', linewidth=2)
-    ax2.set_xlabel('Euclidean Distance')
-    ax2.set_ylabel('Density')
-    ax2.set_title('Distance Distributions')
-    ax2.legend()
-    ax2.grid(alpha=0.3)
-    
-    # 3. FAR vs FRR curves
-    ax3 = plt.subplot(2, 3, 3)
-    frr = 1 - metrics['tpr']
-    ax3.plot(metrics['thresholds'], metrics['fpr'], label='FAR', color='red', lw=2)
-    ax3.plot(metrics['thresholds'], frr, label='FRR', color='blue', lw=2)
-    ax3.axvline(metrics['eer_threshold'], color='black', linestyle='--',
-                label=f'EER Point', linewidth=2)
-    ax3.set_xlabel('Threshold (Distance)')
-    ax3.set_ylabel('Error Rate')
-    ax3.set_title('FAR vs FRR')
-    ax3.set_yscale('log')
-    ax3.legend()
-    ax3.grid(alpha=0.3)
-    
-    # 4. Gaussian fits
-    ax4 = plt.subplot(2, 3, 4)
-    x = np.linspace(
-        0,
-        max(max(metrics['genuine_dists']), max(metrics['impostor_dists'])),
-        200
-    )
-    
-    genuine_pdf = norm.pdf(x, metrics['mu_genuine'], metrics['sigma_genuine'])
-    impostor_pdf = norm.pdf(x, metrics['mu_impostor'], metrics['sigma_impostor'])
-    
-    ax4.plot(x, genuine_pdf, 'g-', lw=2, label='Genuine (fitted)')
-    ax4.plot(x, impostor_pdf, 'r-', lw=2, label='Impostor (fitted)')
-    ax4.fill_between(x, 0, genuine_pdf, alpha=0.3, color='green')
-    ax4.fill_between(x, 0, impostor_pdf, alpha=0.3, color='red')
-    ax4.set_xlabel('Distance')
-    ax4.set_ylabel('Probability Density')
-    ax4.set_title(f'Gaussian Fits (d\'={metrics["d_prime"]:.2f})')
-    ax4.legend()
-    ax4.grid(alpha=0.3)
-    
-    # 5. Detection Error Tradeoff (DET) curve
-    ax5 = plt.subplot(2, 3, 5)
-    ax5.plot(metrics['fpr'] * 100, frr * 100, 'b-', lw=2)
-    ax5.scatter(metrics['fpr'][eer_idx] * 100, frr[eer_idx] * 100,
-                color='red', s=100, zorder=5, label=f'EER={metrics["eer"]*100:.2f}%')
-    ax5.set_xlabel('False Accept Rate (%)')
-    ax5.set_ylabel('False Reject Rate (%)')
-    ax5.set_title('Detection Error Tradeoff (DET)')
-    ax5.set_xscale('log')
-    ax5.set_yscale('log')
-    ax5.legend()
-    ax5.grid(alpha=0.3, which='both')
-    
-    # 6. Metrics summary table
-    ax6 = plt.subplot(2, 3, 6)
-    ax6.axis('off')
-    
-    summary_data = [
-        ['Metric', 'Value'],
-        ['EER', f'{metrics["eer"]:.4f} ({metrics["eer"]*100:.2f}%)'],
-        ['AUC-ROC', f'{metrics["auc"]:.4f}'],
-        ['Acc @ FAR=0.1%', f'{metrics["acc_far_0.1%"]:.4f}'],
-        ['Acc @ FAR=1.0%', f'{metrics["acc_far_1.0%"]:.4f}'],
-        ['d-prime', f'{metrics["d_prime"]:.4f}'],
-        ['Decidability', f'{metrics["decidability"]:.4f}'],
-    ]
-    
-    if metrics.get('rank1_identification') is not None:
-        summary_data.append(['Rank-1 ID Rate', f'{metrics["rank1_identification"]:.4f}'])
-    
-    table = ax6.table(cellText=summary_data, cellLoc='left', loc='center',
-                     colWidths=[0.6, 0.4])
-    table.auto_set_font_size(False)
-    table.set_fontsize(10)
-    table.scale(1, 2)
-    
-    # Style header
-    for i in range(2):
-        table[(0, i)].set_facecolor('#4CAF50')
-        table[(0, i)].set_text_props(weight='bold', color='white')
-    
-    ax6.set_title('Metrics Summary', fontweight='bold', fontsize=12, pad=20)
-    
-    plt.tight_layout()
-    
-    if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    plt.show()
-
-
-def plot_confusion_matrix(
-    cm: np.ndarray,
-    model_name: str,
-    save_path: Optional[str] = None
-):
-    """
-    Plot confusion matrix.
-    
-    Args:
-        cm: 2x2 confusion matrix
-        model_name: Name of the model
-        save_path: Optional path to save figure
-    """
-    fig, ax = plt.subplots(figsize=(8, 6))
-    
-    im = ax.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
-    ax.figure.colorbar(im, ax=ax)
-    
-    ax.set(xticks=np.arange(cm.shape[1]),
-           yticks=np.arange(cm.shape[0]),
-           xticklabels=['Different', 'Same'],
-           yticklabels=['Different', 'Same'],
-           title=f'{model_name} - Confusion Matrix',
-           ylabel='True label',
-           xlabel='Predicted label')
-    
-    # Text annotations
-    thresh = cm.max() / 2.
-    for i in range(cm.shape[0]):
-        for j in range(cm.shape[1]):
-            ax.text(j, i, format(cm[i, j], 'd'),
-                   ha="center", va="center",
-                   color="white" if cm[i, j] > thresh else "black")
-    
-    plt.tight_layout()
-    
-    if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    plt.show()
-
-
-# ============================================================================
-# COMPREHENSIVE REPORTS
-# ============================================================================
-
-def create_training_report(
-    results: Dict[str, Dict],
-    save_dir: str = "results"
-):
-    """
-    Create comprehensive training report with all visualizations.
-    
-    Args:
-        results: Dictionary mapping model names to result dictionaries
-        save_dir: Directory to save visualizations
-    """
-    os.makedirs(save_dir, exist_ok=True)
-    
-    # Individual model plots
-    for model_name, result in results.items():
-        plot_training_history(
-            history=result['history'],
-            model_name=model_name,
-            save_path=os.path.join(save_dir, f"{model_name}_history.png")
-        )
-    
-    # Comparison plots
-    for metric in ['train_loss', 'test_loss', 'train_acc', 'test_acc']:
-        if all(metric in res['history'] for res in results.values()):
-            plot_multiple_models_comparison(
-                results=results,
-                metric=metric,
-                save_path=os.path.join(save_dir, f"comparison_{metric}.png")
-            )
-    
-    # Summary
-    print(f"\n{'='*60}")
-    print("FINAL RESULTS")
-    print(f"{'='*60}")
-    for model_name, result in results.items():
-        best = result.get('best_loss') or result.get('best_eer', 'N/A')
-        print(f"{model_name:20s}: {best:.4f}" if isinstance(best, float) else f"{model_name:20s}: {best}")
-    
-    print(f"\n✓ Training report saved to {save_dir}")
-
-
 === src/evaluation/metrics.py ===
 """
 Evaluation Metrics for Writer Verification
@@ -2059,6 +1696,7 @@ Handwriting Verification Package
 __version__ = "0.1.0"
 
 === src/training/base_trainer.py ===
+# src/training/base_trainer.py
 """
 Base Trainer Class
 Common functionality for all trainer types.
@@ -2067,7 +1705,7 @@ Common functionality for all trainer types.
 import os
 import gc
 import random
-from typing import Dict
+from typing import Dict, Optional
 from abc import ABC, abstractmethod
 
 import torch
@@ -2100,6 +1738,7 @@ class BaseTrainer(ABC):
         self.history = {
             'epoch': [],
             'train_loss': [],
+            'val_loss': [],  # ✅ AGGIUNTO
             # Primary biometric metrics
             'val_eer': [],
             'val_auc': [],
@@ -2136,6 +1775,19 @@ class BaseTrainer(ABC):
     @abstractmethod
     def train_epoch(self, train_loader):
         """Train for one epoch (implemented by subclasses)."""
+        pass
+    
+    @abstractmethod
+    def validate_loss(self, val_loader) -> float:
+        """
+        Calculate validation loss (implemented by subclasses).
+        
+        Args:
+            val_loader: Validation dataloader
+            
+        Returns:
+            Average validation loss
+        """
         pass
     
     @torch.no_grad()
@@ -2201,10 +1853,11 @@ class BaseTrainer(ABC):
         """Get embeddings from images (implemented by subclasses)."""
         pass
     
-    def _update_history(self, epoch: int, train_loss: float, val_metrics: Dict):
+    def _update_history(self, epoch: int, train_loss: float, val_loss: float, val_metrics: Dict):
         """Update history with all metrics."""
         self.history['epoch'].append(epoch)
         self.history['train_loss'].append(train_loss)
+        self.history['val_loss'].append(val_loss)  # ✅ AGGIUNTO
         
         # Primary metrics
         self.history['val_eer'].append(val_metrics['eer'])
@@ -2235,14 +1888,16 @@ class BaseTrainer(ABC):
         self.history['val_sigma_genuine'].append(val_metrics['sigma_genuine'])
         self.history['val_sigma_impostor'].append(val_metrics['sigma_impostor'])
     
-    def _print_epoch_summary(self, epoch: int, epochs: int, train_loss: float, val_metrics: Dict):
+    def _print_epoch_summary(self, epoch: int, epochs: int, train_loss: float, 
+                            val_loss: float, val_metrics: Dict):
         """Print formatted epoch summary with all metrics."""
         print(f"\n{'='*70}")
         print(f"Epoch {epoch+1}/{epochs} Summary")
         print(f"{'='*70}")
         
-        print(f"\n📉 TRAINING:")
+        print(f"\n📉 LOSSES:")
         print(f"  Train Loss: {train_loss:.4f}")
+        print(f"  Val Loss:   {val_loss:.4f}")  # ✅ AGGIUNTO
         
         print(f"\n🎯 PRIMARY BIOMETRIC METRICS:")
         print(f"  EER:              {val_metrics['eer']:.4f} ({val_metrics['eer']*100:.2f}%)")
@@ -2272,6 +1927,7 @@ class BaseTrainer(ABC):
     def train(
         self,
         train_loader,
+        val_loader,  # ✅ AGGIUNTO: serve per calcolare val_loss
         val_dataset,
         epochs: int = 50,
         patience: int = 7,
@@ -2282,9 +1938,11 @@ class BaseTrainer(ABC):
         
         Args:
             train_loader: Training dataloader
-            val_dataset: Validation dataset
+            val_loader: Validation dataloader (for loss calculation)
+            val_dataset: Validation dataset (for metric calculation)
             epochs: Number of epochs
             patience: Early stopping patience
+            fold: Fold number (for K-Fold)
             
         Returns:
             Training history
@@ -2301,6 +1959,11 @@ class BaseTrainer(ABC):
             
             # Validate
             print(f"\nValidation Epoch {epoch+1}...")
+            
+            # Calculate val_loss
+            val_loss = self.validate_loss(val_loader)
+            
+            # Calculate biometric metrics
             val_metrics = self.validate_comprehensive(val_dataset, num_pairs=1000)
             
             # Update scheduler (if exists)
@@ -2311,10 +1974,10 @@ class BaseTrainer(ABC):
                     self.scheduler.step()
             
             # Update history
-            self._update_history(epoch + 1, train_loss, val_metrics)
+            self._update_history(epoch + 1, train_loss, val_loss, val_metrics)
             
             # Print summary
-            self._print_epoch_summary(epoch, epochs, train_loss, val_metrics)
+            self._print_epoch_summary(epoch, epochs, train_loss, val_loss, val_metrics)
             
             # Early stopping on EER (all trainers)
             if val_metrics['eer'] < self.best_eer:
@@ -2384,6 +2047,11 @@ Triplet Loss Trainer
 Trainer class for triplet networks with comprehensive biometric evaluation.
 """
 
+# src/training/trainer_triplet.py
+"""
+Triplet Loss Trainer
+"""
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -2433,7 +2101,7 @@ class TripletTrainer(BaseTrainer):
         self.model.train()
         train_loss = 0.0
         
-        for anchor, positive, negative in tqdm(train_loader, desc="Training"):
+        for anchor, positive, negative in tqdm(train_loader, desc="Training", leave=False):
             anchor = anchor.to(self.device)
             positive = positive.to(self.device)
             negative = negative.to(self.device)
@@ -2453,12 +2121,34 @@ class TripletTrainer(BaseTrainer):
         
         return train_loss / len(train_loader)
     
+    @torch.no_grad()
+    def validate_loss(self, val_loader: DataLoader) -> float:
+        """Calculate Triplet validation loss."""
+        self.model.eval()
+        val_loss = 0.0
+
+        for anchor, positive, negative in val_loader:
+            anchor = anchor.to(self.device)
+            positive = positive.to(self.device)
+            negative = negative.to(self.device)
+            
+            # Get embeddings
+            anchor_emb = self.model(anchor)
+            positive_emb = self.model(positive)
+            negative_emb = self.model(negative)
+            
+            # Triplet loss
+            loss = self.criterion(anchor_emb, positive_emb, negative_emb)
+            val_loss += loss.item()
+        
+        return val_loss / len(val_loader)
+
     def _get_embeddings(self, img1, img2):
         """Get embeddings from triplet network."""
         emb1 = self.model(img1)
         emb2 = self.model(img2)
         return emb1, emb2
-    
+
     def train_kfold(
         self,
         data_root: str,
@@ -2479,7 +2169,6 @@ class TripletTrainer(BaseTrainer):
         print(f"{'='*70}\n")
         
         all_fold_histories = []
-        fold_summaries = []
         
         for fold in range(n_splits):
             print(f"\n{'#'*70}")
@@ -2506,10 +2195,11 @@ class TripletTrainer(BaseTrainer):
             # Train this fold
             fold_history = self.train(
                 train_loader=train_loader,
-                val_dataset=val_dataset,
+                val_loader=val_loader,  # ✅ Per val_loss
+                val_dataset=val_dataset,  # ✅ Per metriche
                 epochs=epochs,
                 patience=patience,
-                fold=fold + 1  # Pass fold number for checkpoint naming
+                fold=fold + 1
             )
             
             # Save fold results
@@ -2519,7 +2209,7 @@ class TripletTrainer(BaseTrainer):
             
             print(f"\n✓ Fold {fold+1} - Best EER={self.best_eer:.4f}\n")
         
-        # Save only detailed results (summary derivable from this)
+        # Save detailed results
         combined_history = pd.concat(all_fold_histories, ignore_index=True)
         combined_history.to_csv(
             f"{self.results_dir}/{self.model_name}_kfold_detailed.csv",
@@ -2543,11 +2233,10 @@ class TripletTrainer(BaseTrainer):
         print(f"{'='*70}\n")
         
         return aggregated
-    
+
     def _init_history(self):
         """Initialize empty history dict."""
         return {k: [] for k in self.history.keys()}
-
 
 === src/training/trainer_bce.py ===
 import torch
@@ -2600,7 +2289,7 @@ class BCETrainer(BaseTrainer):
         self.model.train()
         train_loss = 0
         
-        for img1, img2, labels in tqdm(train_loader, desc="Training"):
+        for img1, img2, labels in tqdm(train_loader, desc="Training", leave=False):
             img1 = img1.to(self.device)
             img2 = img2.to(self.device)
             labels = labels.to(self.device)
@@ -2615,6 +2304,24 @@ class BCETrainer(BaseTrainer):
             train_loss += loss.item()
         
         return train_loss / len(train_loader)
+    
+    @torch.no_grad()
+    def validate_loss(self, val_loader: DataLoader) -> float:
+        """Calculate BCE validation loss."""
+        self.model.eval()
+        val_loss = 0.0
+        
+        for img1, img2, labels in val_loader:
+            img1, img2, labels = img1.to(self.device), img2.to(self.device), labels.to(self.device)
+            
+            # Forward pass
+            outputs = self.model(img1, img2).squeeze()
+            
+            # BCE loss
+            loss = self.criterion(outputs, labels)
+            val_loss += loss.item()
+        
+        return val_loss / len(val_loader)
     
     def _get_embeddings(self, img1, img2):
         """Get embeddings from Siamese network."""
@@ -2641,7 +2348,6 @@ class BCETrainer(BaseTrainer):
         print(f"{'='*70}\n")
         
         all_fold_histories = []
-        fold_summaries = []
         
         for fold in range(n_splits):
             print(f"\n{'#'*70}")
@@ -2665,13 +2371,14 @@ class BCETrainer(BaseTrainer):
             self.history = self._init_history()
             self.best_eer = float('inf')
             
-            # Train this fold
+            # Train this fold (passa val_loader E val_dataset)
             fold_history = self.train(
                 train_loader=train_loader,
-                val_dataset=val_dataset,
+                val_loader=val_loader,  # ✅ Per val_loss
+                val_dataset=val_dataset,  # ✅ Per metriche biometriche
                 epochs=epochs,
                 patience=patience,
-                fold=fold + 1  # Pass fold number for checkpoint naming
+                fold=fold + 1
             )
             
             # Save fold results
@@ -2681,7 +2388,7 @@ class BCETrainer(BaseTrainer):
             
             print(f"\n✓ Fold {fold+1} - Best EER={self.best_eer:.4f}\n")
         
-        # Save only detailed results (summary derivable from this)
+        # Save detailed results
         combined_history = pd.concat(all_fold_histories, ignore_index=True)
         combined_history.to_csv(
             f"{self.results_dir}/{self.model_name}_kfold_detailed.csv",
@@ -2709,45 +2416,14 @@ class BCETrainer(BaseTrainer):
     def _init_history(self):
         """Initialize empty history dict."""
         return {k: [] for k in self.history.keys()}
-    
-    def _save_kfold_results(self, all_fold_histories, fold_summaries):
-        """Save k-fold detailed and summary results."""
-        combined_history = pd.concat(all_fold_histories, ignore_index=True)
-        combined_history.to_csv(
-            f"{self.results_dir}/{self.model_name}_kfold_detailed.csv",
-            index=False
-        )
-        
-        summary_df = pd.DataFrame(fold_summaries)
-        summary_df.to_csv(
-            f"{self.results_dir}/{self.model_name}_kfold_summary.csv",
-            index=False
-        )
-    
-    def _aggregate_kfold_results(self, fold_summaries):
-        """Aggregate k-fold results."""
-        all_eers = [f['best_eer'] for f in fold_summaries]
-        
-        aggregated = {
-            'mean_eer': np.mean(all_eers),
-            'std_eer': np.std(all_eers),
-            'fold_summaries': fold_summaries
-        }
-        
-        print(f"\n{'='*70}")
-        print(f"K-FOLD RESULTS")
-        print(f"{'='*70}")
-        print(f"EER: {aggregated['mean_eer']:.4f} ± {aggregated['std_eer']:.4f}")
-        print(f"{'='*70}\n")
-        
-        return aggregated
 
 
 === src/training/trainer_contrastive.py ===
 """
-Supervised Contrastive Loss Trainer
-Trainer class for supervised contrastive learning with comprehensive biometric evaluation.
+Contrastive Loss Trainer
+Trainer class for contrastive learning with comprehensive biometric evaluation.
 """
+
 
 import torch
 import torch.nn as nn
@@ -2797,10 +2473,10 @@ class ContrastiveTrainer(BaseTrainer):
         self.model.train()
         train_loss = 0.0
 
-        for img1, img2, labels in tqdm(train_loader, desc="Training"):
+        for img1, img2, labels in tqdm(train_loader, desc="Training", leave=False):
             img1 = img1.to(self.device)
             img2 = img2.to(self.device)
-            labels = labels.float().to(self.device)  # Ensure float for ContrastiveLoss
+            labels = labels.float().to(self.device)
 
             self.optimizer.zero_grad()
 
@@ -2815,6 +2491,25 @@ class ContrastiveTrainer(BaseTrainer):
             train_loss += loss.item()
 
         return train_loss / len(train_loader)
+
+    @torch.no_grad()
+    def validate_loss(self, val_loader: DataLoader) -> float:
+        """Calculate Contrastive validation loss."""
+        self.model.eval()
+        val_loss = 0.0
+        
+        for img1, img2, labels in val_loader:
+            img1, img2, labels = img1.to(self.device), img2.to(self.device), labels.float().to(self.device)
+            
+            # Get embeddings
+            emb1 = self.model(img1)
+            emb2 = self.model(img2)
+            
+            # Contrastive loss
+            loss = self.criterion(emb1, emb2, labels)
+            val_loss += loss.item()
+        
+        return val_loss / len(val_loader)
 
     def _get_embeddings(self, img1, img2):
         """Get embeddings from contrastive network."""
@@ -2868,10 +2563,11 @@ class ContrastiveTrainer(BaseTrainer):
             # Train this fold
             fold_history = self.train(
                 train_loader=train_loader,
-                val_dataset=val_dataset,
+                val_loader=val_loader,  # ✅ Per val_loss
+                val_dataset=val_dataset,  # ✅ Per metriche
                 epochs=epochs,
                 patience=patience,
-                fold=fold + 1  # Pass fold number for checkpoint naming
+                fold=fold + 1
             )
 
             # Save fold results
