@@ -244,7 +244,7 @@ class BaseTrainer(ABC):
         
         # Save final checkpoint and metrics
         self.save_checkpoint(is_best=False, fold=fold)
-        self.save_history()
+        if fold is None: self.save_history()
         self.save_final_metrics(final_metrics, fold=fold)
         
         print(f"\n✓ Training completed! Best Val Loss={self.best_loss:.4f}\n")
@@ -287,16 +287,17 @@ class BaseTrainer(ABC):
     
     def save_final_metrics(self, metrics: Dict, fold: int = None):
         """Save final comprehensive metrics to CSV."""
-        # Remove arrays from metrics for saving
-        metrics_to_save = {k: v for k, v in metrics.items() 
-                          if not isinstance(v, np.ndarray)}
         
         if fold is not None:
             path = os.path.join(self.results_dir, f"{self.model_name}_fold{fold}_final_metrics.csv")
         else:
             path = os.path.join(self.results_dir, f"{self.model_name}_final_metrics.csv")
         
-        pd.DataFrame([metrics_to_save]).to_csv(path, index=False)
+        pd.DataFrame([metrics]).to_csv(path, index=False)
+
+    def _init_history(self):
+        """Initialize empty history dict."""
+        return {k: [] for k in self.history.keys()}
     
     def cleanup(self):
         """Cleanup resources."""

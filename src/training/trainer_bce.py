@@ -159,13 +159,6 @@ class BCETrainer(BaseTrainer):
             index=False
         )
         
-        # Save all fold metrics
-        fold_metrics_df = pd.DataFrame(all_fold_metrics)
-        fold_metrics_df.to_csv(
-            f"{self.results_dir}/{self.model_name}_kfold_metrics.csv",
-            index=False
-        )
-        
         # Compute aggregated stats
         fold_eers = [m['eer'] for m in all_fold_metrics]
         
@@ -183,7 +176,3 @@ class BCETrainer(BaseTrainer):
         print(f"{'='*70}\n")
         
         return aggregated
-    
-    def _init_history(self):
-        """Initialize empty history dict."""
-        return {k: [] for k in self.history.keys()}
