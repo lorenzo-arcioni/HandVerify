@@ -73,13 +73,7 @@ class BaseTrainer(ABC):
     def validate_comprehensive(self, val_dataset, num_pairs: int = 1000) -> Dict[str, float]:
         """
         Comprehensive validation computing all verification metrics.
-        
-        Args:
-            val_dataset: Validation dataset
-            num_pairs: Number of pairs to evaluate
-            
-        Returns:
-            Dictionary with all metrics
+        WITH DEBUG PRINTS
         """
         self.model.eval()
         genuine_dists = []
@@ -90,7 +84,7 @@ class BaseTrainer(ABC):
         
         print("\n🔍 Computing verification metrics...")
         
-        # Genuine pairs with progress bar
+        # Genuine pairs
         for _ in tqdm(range(num_pairs // 2), desc="  Genuine pairs"):
             writer = random.choice(writer_ids)
             if len(writer_images[writer]) < 2:
@@ -104,7 +98,7 @@ class BaseTrainer(ABC):
             dist = F.pairwise_distance(emb1, emb2).item()
             genuine_dists.append(dist)
         
-        # Impostor pairs with progress bar
+        # Impostor pairs
         for _ in tqdm(range(num_pairs // 2), desc="  Impostor pairs"):
             w1, w2 = random.sample(writer_ids, 2)
             img1_path = random.choice(writer_images[w1])
@@ -117,11 +111,93 @@ class BaseTrainer(ABC):
             dist = F.pairwise_distance(emb1, emb2).item()
             impostor_dists.append(dist)
         
-        # Compute all metrics at once
-        metrics = compute_verification_metrics(
-            np.array(genuine_dists),
-            np.array(impostor_dists)
-        )
+        # ========================================================================
+        # DEBUG PRINTS
+        # ========================================================================
+        genuine_dists = np.array(genuine_dists)
+        impostor_dists = np.array(impostor_dists)
+        
+        print("\n" + "="*70)
+        print("🐛 DEBUG: Distance Distributions")
+        print("="*70)
+        print(f"\nGenuine distances:")
+        print(f"  Count:  {len(genuine_dists)}")
+        print(f"  Min:    {genuine_dists.min():.4f}")
+        print(f"  Max:    {genuine_dists.max():.4f}")
+        print(f"  Mean:   {genuine_dists.mean():.4f}")
+        print(f"  Std:    {genuine_dists.std():.4f}")
+        print(f"  Median: {np.median(genuine_dists):.4f}")
+        
+        print(f"\nImpostor distances:")
+        print(f"  Count:  {len(impostor_dists)}")
+        print(f"  Min:    {impostor_dists.min():.4f}")
+        print(f"  Max:    {impostor_dists.max():.4f}")
+        print(f"  Mean:   {impostor_dists.mean():.4f}")
+        print(f"  Std:    {impostor_dists.std():.4f}")
+        print(f"  Median: {np.median(impostor_dists):.4f}")
+        
+        print(f"\nDistribution overlap:")
+        overlap_min = max(genuine_dists.min(), impostor_dists.min())
+        overlap_max = min(genuine_dists.max(), impostor_dists.max())
+        print(f"  Overlap range: [{overlap_min:.4f}, {overlap_max:.4f}]")
+        print(f"  Genuine in overlap: {((genuine_dists >= overlap_min) & (genuine_dists <= overlap_max)).sum()}/{len(genuine_dists)}")
+        print(f"  Impostor in overlap: {((impostor_dists >= overlap_min) & (impostor_dists <= overlap_max)).sum()}/{len(impostor_dists)}")
+        print("="*70 + "\n")
+        
+        # Compute metrics
+        metrics = compute_verification_metrics(genuine_dists, impostor_dists)
+        
+        # ========================================================================
+        # DEBUG: Verifica threshold e predictions
+        # ========================================================================
+        print("\n" + "="*70)
+        print("🐛 DEBUG: Threshold & Predictions")
+        print("="*70)
+        print(f"\nEER Threshold: {metrics['eer_threshold']:.4f}")
+        
+        # Simula predictions @ EER threshold
+        all_dists = np.concatenate([genuine_dists, impostor_dists])
+        all_labels = np.concatenate([np.ones(len(genuine_dists)), np.zeros(len(impostor_dists))])
+        predictions = (all_dists < metrics['eer_threshold']).astype(int)  # dist < thresh = same writer
+        
+        print(f"\nPredictions @ EER threshold:")
+        print(f"  Total samples: {len(predictions)}")
+        print(f"  Predicted SAME (1): {predictions.sum()} ({predictions.sum()/len(predictions)*100:.1f}%)")
+        print(f"  Predicted DIFF (0): {(1-predictions).sum()} ({(1-predictions).sum()/len(predictions)*100:.1f}%)")
+        
+        print(f"\nActual labels:")
+        print(f"  Genuine (1): {all_labels.sum()} ({all_labels.sum()/len(all_labels)*100:.1f}%)")
+        print(f"  Impostor (0): {(1-all_labels).sum()} ({(1-all_labels).sum()/len(all_labels)*100:.1f}%)")
+        
+        # Confusion matrix manual
+        tp = ((predictions == 1) & (all_labels == 1)).sum()
+        tn = ((predictions == 0) & (all_labels == 0)).sum()
+        fp = ((predictions == 1) & (all_labels == 0)).sum()
+        fn = ((predictions == 0) & (all_labels == 1)).sum()
+        
+        print(f"\nManual Confusion Matrix:")
+        print(f"  TP (genuine correctly as SAME):  {tp}")
+        print(f"  TN (impostor correctly as DIFF): {tn}")
+        print(f"  FP (impostor wrongly as SAME):   {fp}")
+        print(f"  FN (genuine wrongly as DIFF):    {fn}")
+        
+        manual_acc = (tp + tn) / len(predictions)
+        manual_prec = tp / (tp + fp) if (tp + fp) > 0 else 0
+        manual_rec = tp / (tp + fn) if (tp + fn) > 0 else 0
+        manual_f1 = 2 * manual_prec * manual_rec / (manual_prec + manual_rec) if (manual_prec + manual_rec) > 0 else 0
+        
+        print(f"\nManual metrics:")
+        print(f"  Accuracy:  {manual_acc:.4f}")
+        print(f"  Precision: {manual_prec:.4f}")
+        print(f"  Recall:    {manual_rec:.4f}")
+        print(f"  F1:        {manual_f1:.4f}")
+        
+        print(f"\nMetrics from compute_verification_metrics:")
+        print(f"  Accuracy:  {metrics['accuracy']:.4f}")
+        print(f"  Precision: {metrics['precision']:.4f}")
+        print(f"  Recall:    {metrics['recall']:.4f}")
+        print(f"  F1:        {metrics['f1']:.4f}")
+        print("="*70 + "\n")
         
         return metrics
     

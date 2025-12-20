@@ -108,13 +108,16 @@ def create_contrastive_dataloaders(
     random_state: int = 42,
 ):
     """
-    Create train and test dataloaders for contrastive learning.
+    Create train and test dataloaders.
     
     Args:
         data_root: Root directory containing writer subdirectories
         batch_size: Batch size for dataloaders
         num_workers: Number of workers for data loading
         test_size: Proportion of writers to use for testing
+                   - 0.0: Use all data for training (test will be empty)
+                   - 1.0: Use all data for testing (train will be empty)
+                   - 0.0 < test_size < 1.0: Normal train/test split
         pairs_per_writer: Number of pairs to generate per writer
         target_size: Target image size
         random_state: Random seed for reproducibility
@@ -132,44 +135,61 @@ def create_contrastive_dataloaders(
         if os.path.isdir(os.path.join(data_root, d))
     ]
     
-    # Split into train and test
-    train_dirs, test_dirs = train_test_split(
-        writer_dirs, 
-        test_size=test_size, 
-        random_state=random_state
-    )
+    # Handle edge cases
+    if test_size == 0.0:
+        # All data for training
+        train_dirs = writer_dirs
+        test_dirs = []
+    elif test_size == 1.0:
+        # All data for testing
+        train_dirs = []
+        test_dirs = writer_dirs
+    else:
+        # Normal split
+        train_dirs, test_dirs = train_test_split(
+            writer_dirs, 
+            test_size=test_size, 
+            random_state=random_state
+        )
     
-    # Create datasets
-    train_dataset = ContrastiveDataset(
-        train_dirs, 
-        train=True, 
-        pairs_per_writer=pairs_per_writer,
-        target_size=target_size
-    )
+    # Create datasets (handle empty cases)
+    if train_dirs:
+        train_dataset = ContrastiveDataset(
+            train_dirs, 
+            train=True, 
+            pairs_per_writer=pairs_per_writer,
+            target_size=target_size
+        )
+        
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            num_workers=num_workers,
+            pin_memory=True
+        )
+    else:
+        train_dataset = None
+        train_loader = None
     
-    test_dataset = ContrastiveDataset(
-        test_dirs, 
-        train=False, 
-        pairs_per_writer=pairs_per_writer,
-        target_size=target_size
-    )
-    
-    # Create dataloaders
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=num_workers,
-        pin_memory=True
-    )
-    
-    test_loader = DataLoader(
-        test_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        pin_memory=True
-    )
+    if test_dirs:
+        test_dataset = ContrastiveDataset(
+            test_dirs, 
+            train=False, 
+            pairs_per_writer=pairs_per_writer,
+            target_size=target_size
+        )
+        
+        test_loader = DataLoader(
+            test_dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=num_workers,
+            pin_memory=True
+        )
+    else:
+        test_dataset = None
+        test_loader = None
     
     return train_loader, test_loader, train_dataset, test_dataset
 
