@@ -4,17 +4,11 @@ Unified metrics and visualization for model evaluation.
 """
 
 from .metrics import (
-    # Classification metrics
-    compute_basic_metrics,
-    compute_confusion_matrix,
-    
-    # Biometric metrics
+    # Verification & classification metrics
     compute_eer,
-    compute_biometric_metrics,
-    compute_rank1_identification,
-    
-    # Comprehensive evaluation
-    evaluate_comprehensive,
+    compute_classification_metrics,
+    compute_verification_metrics,
+    print_verification_results,
 )
 
 from .visualization import (
@@ -33,12 +27,10 @@ from .visualization import (
 
 __all__ = [
     # Metrics
-    'compute_basic_metrics',
-    'compute_confusion_matrix',
     'compute_eer',
-    'compute_biometric_metrics',
-    'compute_rank1_identification',
-    'evaluate_comprehensive',
+    'compute_classification_metrics',
+    'compute_verification_metrics',
+    'print_verification_results',
     
     # Visualizations
     'plot_training_history',

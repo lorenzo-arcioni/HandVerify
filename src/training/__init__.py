@@ -1,21 +1,26 @@
 # src/training/__init__.py
 """
 Training module
+Aggregates trainers and loss functions for easy import.
 """
 
+# Loss functions
 from .losses import BCELoss, ContrastiveLoss, TripletLoss, CombinedLoss
-from .trainer_bce import BCETrainer, train_multiple_models
+
+# Trainers
+from .trainer_bce import BCETrainer
 from .trainer_triplet import TripletTrainer
-from .trainer_contrastive import ContrastiveTrainer, SupConLoss
+from .trainer_contrastive import ContrastiveTrainer
 
 __all__ = [
+    # Losses
     'BCELoss',
     'ContrastiveLoss',
     'TripletLoss',
     'CombinedLoss',
+    
+    # Trainers
     'BCETrainer',
-    'train_multiple_models',
     'TripletTrainer',
     'ContrastiveTrainer',
-    'SupConLoss',
 ]
