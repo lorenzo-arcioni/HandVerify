@@ -43,83 +43,263 @@ def get_test_transforms(target_size: int = 448):
     ])
 
 
-=== src/data/siamese_dataset.py ===
-"""
-Siamese Dataset
-Dataset class for loading image pairs for Siamese networks.
-"""
+=== src/data/dataloader_factory.py ===
+# ============================================================================
+# dataloader_factory.py
+# ============================================================================
 
 import os
+
+from .siamese_dataset import SiameseDataset
+from .triplet_dataset import TripletDataset
+from .contrastive_dataset import ContrastiveDataset
+
+from torch.utils.data import DataLoader
+from sklearn.model_selection import train_test_split, KFold
+
+"""
+DataLoader Factory
+Unified functions to create dataloaders for any dataset type.
+"""
+
+def create_dataloaders(
+    dataset_class,
+    data_root: str,
+    batch_size: int = 16,
+    num_workers: int = 4,
+    test_size: float = 0.2,
+    samples_per_writer: int = 100,
+    target_size: int = 448,
+    random_state: int = 42,
+    **dataset_kwargs
+):
+    """
+    Generic dataloader creator for any dataset type.
+    
+    Args:
+        dataset_class: Dataset class to instantiate (SiameseDataset, etc.)
+        data_root: Root directory with writer subdirectories
+        batch_size: Batch size
+        num_workers: Number of workers
+        test_size: Train/test split ratio (0.0 = all train, 1.0 = all test)
+        samples_per_writer: Samples to generate per writer
+        target_size: Image size
+        random_state: Random seed
+        **dataset_kwargs: Additional args for dataset constructor
+    
+    Returns:
+        (train_loader, test_loader, train_dataset, test_dataset)
+    """
+    # Get writer directories
+    writer_dirs = [
+        os.path.join(data_root, d) 
+        for d in sorted(os.listdir(data_root)) 
+        if os.path.isdir(os.path.join(data_root, d))
+    ]
+    
+    # Split directories
+    if test_size == 0.0:
+        train_dirs, test_dirs = writer_dirs, []
+    elif test_size == 1.0:
+        train_dirs, test_dirs = [], writer_dirs
+    else:
+        train_dirs, test_dirs = train_test_split(
+            writer_dirs, test_size=test_size, random_state=random_state
+        )
+    
+    # Create datasets
+    train_dataset = dataset_class(
+        train_dirs, 
+        train=True, 
+        samples_per_writer=samples_per_writer,
+        target_size=target_size,
+        **dataset_kwargs
+    ) if train_dirs else None
+    
+    test_dataset = dataset_class(
+        test_dirs, 
+        train=False, 
+        samples_per_writer=samples_per_writer,
+        target_size=target_size,
+        **dataset_kwargs
+    ) if test_dirs else None
+    
+    # Create dataloaders
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True
+    ) if train_dataset else None
+    
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True
+    ) if test_dataset else None
+    
+    return train_loader, test_loader, train_dataset, test_dataset
+
+
+def create_kfold_dataloaders(
+    dataset_class,
+    data_root: str,
+    n_splits: int = 5,
+    current_fold: int = 0,
+    batch_size: int = 16,
+    num_workers: int = 4,
+    samples_per_writer: int = 100,
+    target_size: int = 448,
+    random_state: int = 42,
+    **dataset_kwargs
+):
+    """
+    Generic K-Fold dataloader creator.
+    
+    Args:
+        dataset_class: Dataset class to instantiate
+        data_root: Root directory with writer subdirectories
+        n_splits: Number of folds
+        current_fold: Current fold index (0 to n_splits-1)
+        batch_size: Batch size
+        num_workers: Number of workers
+        samples_per_writer: Samples to generate per writer
+        target_size: Image size
+        random_state: Random seed
+        **dataset_kwargs: Additional args for dataset constructor
+    
+    Returns:
+        (train_loader, val_loader, train_dataset, val_dataset)
+    """
+    # Get writer directories
+    writer_dirs = [
+        os.path.join(data_root, d) 
+        for d in sorted(os.listdir(data_root)) 
+        if os.path.isdir(os.path.join(data_root, d))
+    ]
+    
+    # K-Fold split
+    kfold = KFold(n_splits=n_splits, shuffle=True, random_state=random_state)
+    splits = list(kfold.split(writer_dirs))
+    train_idx, val_idx = splits[current_fold]
+    
+    train_dirs = [writer_dirs[i] for i in train_idx]
+    val_dirs = [writer_dirs[i] for i in val_idx]
+    
+    # Create datasets
+    train_dataset = dataset_class(
+        train_dirs, 
+        train=True, 
+        samples_per_writer=samples_per_writer,
+        target_size=target_size,
+        **dataset_kwargs
+    )
+    
+    val_dataset = dataset_class(
+        val_dirs, 
+        train=False, 
+        samples_per_writer=samples_per_writer,
+        target_size=target_size,
+        **dataset_kwargs
+    )
+    
+    # Create dataloaders
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True
+    )
+    
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True
+    )
+    
+    return train_loader, val_loader, train_dataset, val_dataset
+
+
+# ============================================================================
+# Convenience wrappers (backward compatibility)
+# ============================================================================
+
+# Siamese
+def create_siamese_dataloaders(*args, **kwargs):
+    """Create Siamese dataloaders."""
+    return create_dataloaders(SiameseDataset, *args, **kwargs)
+
+def create_siamese_kfold_dataloaders(*args, **kwargs):
+    """Create Siamese K-Fold dataloaders."""
+    return create_kfold_dataloaders(SiameseDataset, *args, **kwargs)
+
+
+# Contrastive
+def create_contrastive_dataloaders(*args, **kwargs):
+    """Create Contrastive dataloaders."""
+    return create_dataloaders(ContrastiveDataset, *args, **kwargs)
+
+def create_contrastive_kfold_dataloaders(*args, **kwargs):
+    """Create Contrastive K-Fold dataloaders."""
+    return create_kfold_dataloaders(ContrastiveDataset, *args, **kwargs)
+
+
+# Triplet
+def create_triplet_dataloaders(*args, **kwargs):
+    """Create Triplet dataloaders."""
+    return create_dataloaders(TripletDataset, *args, **kwargs)
+
+def create_triplet_kfold_dataloaders(*args, **kwargs):
+    """Create Triplet K-Fold dataloaders."""
+    return create_kfold_dataloaders(TripletDataset, *args, **kwargs)
+
+=== src/data/siamese_dataset.py ===
+# ============================================================================
+# siamese_dataset.py
+# ============================================================================
+
 import random
 from pathlib import Path
 from typing import List, Tuple
 
 import torch
-from torch.utils.data import Dataset
-from PIL import Image
-from  .transforms import get_train_transforms, get_test_transforms
 
+from .base_dataset import BaseWriterDataset
 
-class SiameseDataset(Dataset):
-    """
-    Dataset for Siamese network training.
-    Generates positive (same writer) and negative (different writer) pairs.
-    """
+"""Siamese Dataset - Binary pairs with labels"""
+
+class SiameseDataset(BaseWriterDataset):
+    """Dataset for Siamese network training (positive/negative pairs)."""
     
     def __init__(
         self,
         writer_dirs: List[str],
         train: bool = True,
         positive_ratio: float = 0.5,
-        pairs_per_writer: int = 50,
+        samples_per_writer: int = 100,
         target_size: int = 448,
     ):
-        """
-        Args:
-            writer_dirs: List of directories, each containing images from one writer
-            train: Whether this is training set (applies augmentation if True)
-            positive_ratio: Proportion of positive pairs to generate
-            pairs_per_writer: Number of pairs to generate per writer
-            target_size: Target image size for resizing
-        """
-        self.writer_dirs = writer_dirs
         self.positive_ratio = positive_ratio
-        self.train = train
-        self.target_size = target_size
-        
-        # Define transforms
-        if self.train:
-            self.transform = get_train_transforms(self.target_size)
-        else:
-            self.transform = get_test_transforms(self.target_size)
-        
-        # Load image paths for each writer
-        self.writer_images = {}
-        for writer_dir in writer_dirs:
-            writer_id = Path(writer_dir).name
-            images = [
-                os.path.join(writer_dir, f) 
-                for f in os.listdir(writer_dir) 
-                if f.endswith(('.png', '.jpg', '.jpeg'))
-            ]
-            if len(images) >= 2:
-                self.writer_images[writer_id] = images
-        
-        self.writer_ids = list(self.writer_images.keys())
-        self.num_pairs = len(self.writer_ids) * pairs_per_writer
-    
-    def __len__(self) -> int:
-        return self.num_pairs
+        super().__init__(
+            writer_dirs=writer_dirs,
+            train=train,
+            samples_per_writer=samples_per_writer,
+            target_size=target_size,
+            min_images_per_writer=2
+        )
     
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Returns:
-            Tuple of (image1, image2, label) where label=1 for same writer, 0 otherwise
-        """
+        """Generate a pair with label."""
         is_positive = random.random() < self.positive_ratio
         
         if is_positive:
-            # Same writer - select two different images from same writer
+            # Same writer
             writer_id = random.choice(self.writer_ids)
             img1_path, img2_path = random.sample(self.writer_images[writer_id], 2)
             label = 1.0
@@ -130,763 +310,255 @@ class SiameseDataset(Dataset):
             img2_path = random.choice(self.writer_images[writer2])
             label = 0.0
         
-        # Load images as grayscale
-        img1 = Image.open(img1_path).convert("L")
-        img2 = Image.open(img2_path).convert("L")
-        
-        # Apply transforms
-        img1 = self.transform(img1)
-        img2 = self.transform(img2)
+        img1 = self._load_image(img1_path)
+        img2 = self._load_image(img2_path)
         
         return img1, img2, torch.tensor(label, dtype=torch.float32)
 
-
-def create_dataloaders(
-    data_root: str,
-    batch_size: int = 16,
-    num_workers: int = 4,
-    test_size: float = 0.2,
-    pairs_per_writer: int = 100,
-    target_size: int = 448,
-    random_state: int = 42,
-):
-    """
-    Create train and test dataloaders.
-    
-    Args:
-        data_root: Root directory containing writer subdirectories
-        batch_size: Batch size for dataloaders
-        num_workers: Number of workers for data loading
-        test_size: Proportion of writers to use for testing
-                   - 0.0: Use all data for training (test will be empty)
-                   - 1.0: Use all data for testing (train will be empty)
-                   - 0.0 < test_size < 1.0: Normal train/test split
-        pairs_per_writer: Number of pairs to generate per writer
-        target_size: Target image size
-        random_state: Random seed for reproducibility
-        
-    Returns:
-        Tuple of (train_loader, test_loader, train_dataset, test_dataset)
-    """
-    from sklearn.model_selection import train_test_split
-    from torch.utils.data import DataLoader
-    
-    # Get all writer directories
-    writer_dirs = [
-        os.path.join(data_root, d) 
-        for d in sorted(os.listdir(data_root)) 
-        if os.path.isdir(os.path.join(data_root, d))
-    ]
-    
-    # Handle edge cases
-    if test_size == 0.0:
-        # All data for training
-        train_dirs = writer_dirs
-        test_dirs = []
-    elif test_size == 1.0:
-        # All data for testing
-        train_dirs = []
-        test_dirs = writer_dirs
-    else:
-        # Normal split
-        train_dirs, test_dirs = train_test_split(
-            writer_dirs, 
-            test_size=test_size, 
-            random_state=random_state
-        )
-    
-    # Create datasets (handle empty cases)
-    if train_dirs:
-        train_dataset = SiameseDataset(
-            train_dirs, 
-            train=True, 
-            pairs_per_writer=pairs_per_writer,
-            target_size=target_size
-        )
-        
-        train_loader = DataLoader(
-            train_dataset,
-            batch_size=batch_size,
-            shuffle=True,
-            num_workers=num_workers,
-            pin_memory=True
-        )
-    else:
-        train_dataset = None
-        train_loader = None
-    
-    if test_dirs:
-        test_dataset = SiameseDataset(
-            test_dirs, 
-            train=False, 
-            pairs_per_writer=pairs_per_writer,
-            target_size=target_size
-        )
-        
-        test_loader = DataLoader(
-            test_dataset,
-            batch_size=batch_size,
-            shuffle=False,
-            num_workers=num_workers,
-            pin_memory=True
-        )
-    else:
-        test_dataset = None
-        test_loader = None
-    
-    return train_loader, test_loader, train_dataset, test_dataset
-
-def create_dataloaders_kfold(
-    data_root: str,
-    n_splits: int = 5,
-    current_fold: int = 0,
-    batch_size: int = 16,
-    num_workers: int = 4,
-    pairs_per_writer: int = 100,
-    target_size: int = 448,
-    random_state: int = 42,
-):
-    """
-    Create train and test dataloaders for a specific K-Fold split.
-    
-    Args:
-        data_root: Root directory containing writer subdirectories
-        n_splits: Number of folds for K-Fold
-        current_fold: Current fold index (0 to n_splits-1)
-        batch_size: Batch size for dataloaders
-        num_workers: Number of workers for data loading
-        pairs_per_writer: Number of pairs to generate per writer
-        target_size: Target image size
-        random_state: Random seed for reproducibility
-        
-    Returns:
-        Tuple of (train_loader, val_loader, train_dataset, val_dataset)
-    """
-    from sklearn.model_selection import KFold
-    from torch.utils.data import DataLoader
-    
-    # Get all writer directories
-    writer_dirs = [
-        os.path.join(data_root, d) 
-        for d in sorted(os.listdir(data_root)) 
-        if os.path.isdir(os.path.join(data_root, d))
-    ]
-    
-    # K-Fold split
-    kfold = KFold(n_splits=n_splits, shuffle=True, random_state=random_state)
-    splits = list(kfold.split(writer_dirs))
-    train_idx, val_idx = splits[current_fold]
-    
-    train_dirs = [writer_dirs[i] for i in train_idx]
-    val_dirs = [writer_dirs[i] for i in val_idx]
-    
-    # Create datasets
-    train_dataset = SiameseDataset(
-        train_dirs, 
-        train=True, 
-        pairs_per_writer=pairs_per_writer,
-        target_size=target_size
-    )
-    
-    val_dataset = SiameseDataset(
-        val_dirs, 
-        train=False, 
-        pairs_per_writer=pairs_per_writer,
-        target_size=target_size
-    )
-    
-    # Create dataloaders
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=num_workers,
-        pin_memory=True
-    )
-    
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        pin_memory=True
-    )
-    
-    return train_loader, val_loader, train_dataset, val_dataset
-
-
 === src/data/triplet_dataset.py ===
-"""
-Triplet Dataset
-Dataset class for loading image triplets for metric learning.
-"""
+# ============================================================================
+# triplet_dataset.py
+# ============================================================================
 
-import os
 import random
-from pathlib import Path
 from typing import List, Tuple
 
 import torch
-from torch.utils.data import Dataset
-from PIL import Image
-from .transforms import get_train_transforms, get_test_transforms
 
+from .base_dataset import BaseWriterDataset
 
-class TripletDataset(Dataset):
-    """
-    Dataset for Triplet network training.
-    Generates triplets: (anchor, positive, negative)
-    - anchor and positive are from the same writer
-    - negative is from a different writer
-    """
+"""Triplet Dataset - Anchor, Positive, Negative"""
+
+class TripletDataset(BaseWriterDataset):
+    """Dataset for Triplet network training."""
     
     def __init__(
         self,
         writer_dirs: List[str],
         train: bool = True,
-        triplets_per_writer: int = 100,
+        samples_per_writer: int = 100,
         target_size: int = 448,
     ):
-        """
-        Args:
-            writer_dirs: List of directories, each containing images from one writer
-            train: Whether this is training set (applies augmentation if True)
-            triplets_per_writer: Number of triplets to generate per writer
-            target_size: Target image size for resizing
-        """
-        self.writer_dirs = writer_dirs
-        self.train = train
-        self.target_size = target_size
-        self.triplets_per_writer = triplets_per_writer
-        
-        # Define transforms
-        if self.train:
-            self.transform = get_train_transforms(self.target_size)
-        else:
-            self.transform = get_test_transforms(self.target_size)
-        
-        # Load image paths for each writer
-        self.writer_images = {}
-        for writer_dir in writer_dirs:
-            writer_id = Path(writer_dir).name
-            images = [
-                os.path.join(writer_dir, f) 
-                for f in os.listdir(writer_dir) 
-                if f.endswith(('.png', '.jpg', '.jpeg'))
-            ]
-            if len(images) >= 2:  # Need at least 2 images for anchor/positive
-                self.writer_images[writer_id] = images
-        
-        self.writer_ids = list(self.writer_images.keys())
-        self.num_triplets = len(self.writer_ids) * triplets_per_writer
-        
-        print(f"{'TRAIN' if train else 'TEST'}: {len(self.writer_ids)} writers, "
-              f"{self.num_triplets} triplets")
-    
-    def __len__(self) -> int:
-        return self.num_triplets
+        super().__init__(
+            writer_dirs=writer_dirs,
+            train=train,
+            samples_per_writer=samples_per_writer,
+            target_size=target_size,
+            min_images_per_writer=2
+        )
     
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Returns:
-            Tuple of (anchor, positive, negative) images
-        """
-        # Select anchor writer
+        """Generate a triplet (anchor, positive, negative)."""
+        # Anchor writer
         anchor_writer = random.choice(self.writer_ids)
         
-        # Get anchor and positive from same writer
-        anchor_path, positive_path = random.sample(self.writer_images[anchor_writer], 2)
+        # Anchor and positive from same writer
+        anchor_path, positive_path = random.sample(
+            self.writer_images[anchor_writer], 2
+        )
         
-        # Get negative from different writer
-        negative_writer = random.choice([w for w in self.writer_ids if w != anchor_writer])
+        # Negative from different writer
+        negative_writer = random.choice(
+            [w for w in self.writer_ids if w != anchor_writer]
+        )
         negative_path = random.choice(self.writer_images[negative_writer])
         
-        # Load images as grayscale
-        anchor = Image.open(anchor_path).convert("L")
-        positive = Image.open(positive_path).convert("L")
-        negative = Image.open(negative_path).convert("L")
-        
-        # Apply transforms
-        anchor = self.transform(anchor)
-        positive = self.transform(positive)
-        negative = self.transform(negative)
+        anchor = self._load_image(anchor_path)
+        positive = self._load_image(positive_path)
+        negative = self._load_image(negative_path)
         
         return anchor, positive, negative
-
-
-def create_triplet_dataloaders(
-    data_root: str,
-    batch_size: int = 16,
-    num_workers: int = 4,
-    test_size: float = 0.2,
-    triplets_per_writer: int = 100,
-    target_size: int = 448,
-    random_state: int = 42,
-):
-    """
-    Create train and test dataloaders.
-    
-    Args:
-        data_root: Root directory containing writer subdirectories
-        batch_size: Batch size for dataloaders
-        num_workers: Number of workers for data loading
-        test_size: Proportion of writers to use for testing
-                   - 0.0: Use all data for training (test will be empty)
-                   - 1.0: Use all data for testing (train will be empty)
-                   - 0.0 < test_size < 1.0: Normal train/test split
-        triplets_per_writer: Number of pairs to generate per writer
-        target_size: Target image size
-        random_state: Random seed for reproducibility
-        
-    Returns:
-        Tuple of (train_loader, test_loader, train_dataset, test_dataset)
-    """
-    from sklearn.model_selection import train_test_split
-    from torch.utils.data import DataLoader
-    
-    # Get all writer directories
-    writer_dirs = [
-        os.path.join(data_root, d) 
-        for d in sorted(os.listdir(data_root)) 
-        if os.path.isdir(os.path.join(data_root, d))
-    ]
-    
-    # Handle edge cases
-    if test_size == 0.0:
-        # All data for training
-        train_dirs = writer_dirs
-        test_dirs = []
-    elif test_size == 1.0:
-        # All data for testing
-        train_dirs = []
-        test_dirs = writer_dirs
-    else:
-        # Normal split
-        train_dirs, test_dirs = train_test_split(
-            writer_dirs, 
-            test_size=test_size, 
-            random_state=random_state
-        )
-    
-    # Create datasets (handle empty cases)
-    if train_dirs:
-        train_dataset = TripletDataset(
-            train_dirs, 
-            train=True, 
-            triplets_per_writer=triplets_per_writer,
-            target_size=target_size
-        )
-        
-        train_loader = DataLoader(
-            train_dataset,
-            batch_size=batch_size,
-            shuffle=True,
-            num_workers=num_workers,
-            pin_memory=True
-        )
-    else:
-        train_dataset = None
-        train_loader = None
-    
-    if test_dirs:
-        test_dataset = TripletDataset(
-            test_dirs, 
-            train=False, 
-            triplets_per_writer=triplets_per_writer,
-            target_size=target_size
-        )
-        
-        test_loader = DataLoader(
-            test_dataset,
-            batch_size=batch_size,
-            shuffle=False,
-            num_workers=num_workers,
-            pin_memory=True
-        )
-    else:
-        test_dataset = None
-        test_loader = None
-    
-    return train_loader, test_loader, train_dataset, test_dataset
-
-def create_triplet_dataloaders_kfold(
-    data_root: str,
-    n_splits: int = 5,
-    current_fold: int = 0,
-    batch_size: int = 16,
-    num_workers: int = 4,
-    triplets_per_writer: int = 100,
-    target_size: int = 448,
-    random_state: int = 42,
-):
-    """
-    Create train and test dataloaders for triplet learning with K-Fold.
-    
-    Args:
-        data_root: Root directory containing writer subdirectories
-        n_splits: Number of folds for K-Fold
-        current_fold: Current fold index (0 to n_splits-1)
-        batch_size: Batch size for dataloaders
-        num_workers: Number of workers for data loading
-        triplets_per_writer: Number of triplets to generate per writer
-        target_size: Target image size
-        random_state: Random seed for reproducibility
-        
-    Returns:
-        Tuple of (train_loader, val_loader, train_dataset, val_dataset)
-    """
-    from sklearn.model_selection import KFold
-    from torch.utils.data import DataLoader
-    
-    # Get all writer directories
-    writer_dirs = [
-        os.path.join(data_root, d) 
-        for d in sorted(os.listdir(data_root)) 
-        if os.path.isdir(os.path.join(data_root, d))
-    ]
-    
-    # K-Fold split
-    kfold = KFold(n_splits=n_splits, shuffle=True, random_state=random_state)
-    splits = list(kfold.split(writer_dirs))
-    train_idx, val_idx = splits[current_fold]
-    
-    train_dirs = [writer_dirs[i] for i in train_idx]
-    val_dirs = [writer_dirs[i] for i in val_idx]
-    
-    # Create datasets
-    train_dataset = TripletDataset(
-        train_dirs, 
-        train=True, 
-        triplets_per_writer=triplets_per_writer,
-        target_size=target_size
-    )
-    
-    val_dataset = TripletDataset(
-        val_dirs, 
-        train=False, 
-        triplets_per_writer=triplets_per_writer,
-        target_size=target_size
-    )
-    
-    # Create dataloaders
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=num_workers,
-        pin_memory=True
-    )
-    
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        pin_memory=True
-    )
-    
-    return train_loader, val_loader, train_dataset, val_dataset
 
 
 === src/data/__init__.py ===
 # src/data/__init__.py
 """
-Data module
+Data module - Refactored with modular structure
 """
 
-from .siamese_dataset import SiameseDataset, create_dataloaders, create_dataloaders_kfold
-from .triplet_dataset import TripletDataset, create_triplet_dataloaders, create_triplet_dataloaders_kfold
-from .contrastive_dataset import ContrastiveDataset, create_contrastive_dataloaders, create_contrastive_dataloaders_kfold
+from .base_dataset import BaseWriterDataset
+from .siamese_dataset import SiameseDataset
+from .contrastive_dataset import ContrastiveDataset
+from .triplet_dataset import TripletDataset
+
+from .dataloader_factory import (
+    create_dataloaders,
+    create_kfold_dataloaders,
+    # Convenience wrappers
+    create_siamese_dataloaders,
+    create_siamese_kfold_dataloaders,
+    create_contrastive_dataloaders,
+    create_contrastive_kfold_dataloaders,
+    create_triplet_dataloaders,
+    create_triplet_kfold_dataloaders,
+)
+
 from .transforms import get_train_transforms, get_test_transforms
 
 __all__ = [
+    # Base class
+    'BaseWriterDataset',
+    
+    # Dataset classes
     'SiameseDataset',
-    'create_dataloaders',
-    'create_dataloaders_kfold',
-    'TripletDataset',
-    'create_triplet_dataloaders',
-    'create_triplet_dataloaders_kfold',
     'ContrastiveDataset',
+    'TripletDataset',
+    
+    # Generic factory functions
+    'create_dataloaders',
+    'create_kfold_dataloaders',
+    
+    # Type-specific convenience functions (backward compatibility)
+    'create_siamese_dataloaders',
+    'create_siamese_kfold_dataloaders',
     'create_contrastive_dataloaders',
-    'create_contrastive_dataloaders_kfold',
+    'create_contrastive_kfold_dataloaders',
+    'create_triplet_dataloaders',
+    'create_triplet_kfold_dataloaders',
+    
+    # Transforms
     'get_train_transforms',
     'get_test_transforms',
 ]
 
-
-=== src/data/contrastive_dataset.py ===
+=== src/data/base_dataset.py ===
 """
-Contrastive Dataset
-Dataset class for contrastive learning with positive and negative pairs.
+Base Dataset Classes
+Provides common functionality for all dataset types.
 """
 
 import os
-import random
 from pathlib import Path
-from typing import List, Tuple
+from typing import List
+from abc import ABC, abstractmethod
 
 import torch
 from torch.utils.data import Dataset
 from PIL import Image
+
 from .transforms import get_train_transforms, get_test_transforms
 
 
-class ContrastiveDataset(Dataset):
+class BaseWriterDataset(Dataset, ABC):
     """
-    Dataset for Contrastive Learning.
-    Generates positive pairs (same writer) and negative pairs (different writers).
-    Uses strong augmentation to create two views of each image.
+    Base class for writer verification datasets.
+    Handles common operations like loading writer directories and transforms.
     """
     
     def __init__(
         self,
         writer_dirs: List[str],
         train: bool = True,
-        pairs_per_writer: int = 100,
+        samples_per_writer: int = 100,
         target_size: int = 448,
+        min_images_per_writer: int = 2,
     ):
         """
         Args:
             writer_dirs: List of directories, each containing images from one writer
             train: Whether this is training set (applies augmentation if True)
-            pairs_per_writer: Number of pairs to generate per writer
+            samples_per_writer: Number of samples to generate per writer
             target_size: Target image size for resizing
+            min_images_per_writer: Minimum images required per writer
         """
         self.writer_dirs = writer_dirs
         self.train = train
         self.target_size = target_size
-        self.pairs_per_writer = pairs_per_writer
+        self.samples_per_writer = samples_per_writer
+        self.min_images_per_writer = min_images_per_writer
         
         # Define transforms
-        if self.train:
-            self.transform = get_train_transforms(self.target_size)
-        else:
-            self.transform = get_test_transforms(self.target_size)
+        self.transform = (get_train_transforms(target_size) if train 
+                         else get_test_transforms(target_size))
         
-        # Load image paths for each writer
-        self.writer_images = {}
-        for writer_dir in writer_dirs:
+        # Load writer images
+        self.writer_images = self._load_writer_images()
+        self.writer_ids = list(self.writer_images.keys())
+        self.num_samples = len(self.writer_ids) * samples_per_writer
+        
+        print(f"{'TRAIN' if train else 'VAL'}: {len(self.writer_ids)} writers, "
+              f"{self.num_samples} samples")
+    
+    def _load_writer_images(self) -> dict:
+        """Load image paths for each writer."""
+        writer_images = {}
+        
+        for writer_dir in self.writer_dirs:
             writer_id = Path(writer_dir).name
             images = [
                 os.path.join(writer_dir, f) 
                 for f in os.listdir(writer_dir) 
-                if f.endswith(('.png', '.jpg', '.jpeg'))
+                if f.lower().endswith(('.png', '.jpg', '.jpeg'))
             ]
-            if len(images) >= 2:  # Need at least 2 images for positive pairs
-                self.writer_images[writer_id] = images
+            
+            if len(images) >= self.min_images_per_writer:
+                writer_images[writer_id] = images
         
-        self.writer_ids = list(self.writer_images.keys())
-        self.num_pairs = len(self.writer_ids) * pairs_per_writer
-        
-        print(f"{'TRAIN' if train else 'TEST'}: {len(self.writer_ids)} writers, "
-              f"{self.num_pairs} pairs")
+        return writer_images
+    
+    def _load_image(self, path: str) -> torch.Tensor:
+        """Load and transform a single image."""
+        img = Image.open(path).convert("L")
+        return self.transform(img)
     
     def __len__(self) -> int:
-        return self.num_pairs
+        return self.num_samples
+    
+    @abstractmethod
+    def __getitem__(self, idx: int):
+        """Generate a sample (must be implemented by subclasses)."""
+        pass
+
+
+=== src/data/contrastive_dataset.py ===
+# ============================================================================
+# contrastive_dataset.py
+# ============================================================================
+"""Contrastive Dataset - Similar to Siamese but 50/50 ratio"""
+
+import random
+from typing import List, Tuple
+
+import torch
+
+from .base_dataset import BaseWriterDataset
+
+class ContrastiveDataset(BaseWriterDataset):
+    """Dataset for Contrastive Learning (balanced positive/negative samples)."""
+    
+    def __init__(
+        self,
+        writer_dirs: List[str],
+        train: bool = True,
+        samples_per_writer: int = 100,
+        target_size: int = 448,
+    ):
+        super().__init__(
+            writer_dirs=writer_dirs,
+            train=train,
+            samples_per_writer=samples_per_writer,
+            target_size=target_size,
+            min_images_per_writer=2
+        )
     
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Returns:
-            Tuple of (img1, img2, label) where label=1 for positive, 0 for negative
-        """
-        # Randomly decide if this is a positive or negative pair
+        """Generate a pair with label (50/50 positive/negative)."""
         is_positive = random.random() < 0.5
         
         if is_positive:
-            # Positive pair: two images from same writer
             writer_id = random.choice(self.writer_ids)
             img1_path, img2_path = random.sample(self.writer_images[writer_id], 2)
             label = 1.0
         else:
-            # Negative pair: images from different writers
             writer1, writer2 = random.sample(self.writer_ids, 2)
             img1_path = random.choice(self.writer_images[writer1])
             img2_path = random.choice(self.writer_images[writer2])
             label = 0.0
         
-        # Load images as grayscale
-        img1 = Image.open(img1_path).convert("L")
-        img2 = Image.open(img2_path).convert("L")
-        
-        # Apply transforms
-        img1 = self.transform(img1)
-        img2 = self.transform(img2)
+        img1 = self._load_image(img1_path)
+        img2 = self._load_image(img2_path)
         
         return img1, img2, torch.tensor(label, dtype=torch.float32)
-
-
-def create_contrastive_dataloaders(
-    data_root: str,
-    batch_size: int = 16,
-    num_workers: int = 4,
-    test_size: float = 0.2,
-    pairs_per_writer: int = 100,
-    target_size: int = 448,
-    random_state: int = 42,
-):
-    """
-    Create train and test dataloaders.
-    
-    Args:
-        data_root: Root directory containing writer subdirectories
-        batch_size: Batch size for dataloaders
-        num_workers: Number of workers for data loading
-        test_size: Proportion of writers to use for testing
-                   - 0.0: Use all data for training (test will be empty)
-                   - 1.0: Use all data for testing (train will be empty)
-                   - 0.0 < test_size < 1.0: Normal train/test split
-        pairs_per_writer: Number of pairs to generate per writer
-        target_size: Target image size
-        random_state: Random seed for reproducibility
-        
-    Returns:
-        Tuple of (train_loader, test_loader, train_dataset, test_dataset)
-    """
-    from sklearn.model_selection import train_test_split
-    from torch.utils.data import DataLoader
-    
-    # Get all writer directories
-    writer_dirs = [
-        os.path.join(data_root, d) 
-        for d in sorted(os.listdir(data_root)) 
-        if os.path.isdir(os.path.join(data_root, d))
-    ]
-    
-    # Handle edge cases
-    if test_size == 0.0:
-        # All data for training
-        train_dirs = writer_dirs
-        test_dirs = []
-    elif test_size == 1.0:
-        # All data for testing
-        train_dirs = []
-        test_dirs = writer_dirs
-    else:
-        # Normal split
-        train_dirs, test_dirs = train_test_split(
-            writer_dirs, 
-            test_size=test_size, 
-            random_state=random_state
-        )
-    
-    # Create datasets (handle empty cases)
-    if train_dirs:
-        train_dataset = ContrastiveDataset(
-            train_dirs, 
-            train=True, 
-            pairs_per_writer=pairs_per_writer,
-            target_size=target_size
-        )
-        
-        train_loader = DataLoader(
-            train_dataset,
-            batch_size=batch_size,
-            shuffle=True,
-            num_workers=num_workers,
-            pin_memory=True
-        )
-    else:
-        train_dataset = None
-        train_loader = None
-    
-    if test_dirs:
-        test_dataset = ContrastiveDataset(
-            test_dirs, 
-            train=False, 
-            pairs_per_writer=pairs_per_writer,
-            target_size=target_size
-        )
-        
-        test_loader = DataLoader(
-            test_dataset,
-            batch_size=batch_size,
-            shuffle=False,
-            num_workers=num_workers,
-            pin_memory=True
-        )
-    else:
-        test_dataset = None
-        test_loader = None
-    
-    return train_loader, test_loader, train_dataset, test_dataset
-
-def create_contrastive_dataloaders_kfold(
-    data_root: str,
-    n_splits: int = 5,
-    current_fold: int = 0,
-    batch_size: int = 16,
-    num_workers: int = 4,
-    pairs_per_writer: int = 100,
-    target_size: int = 448,
-    random_state: int = 42,
-):
-    """
-    Create train and test dataloaders for contrastive learning with K-Fold.
-    
-    Args:
-        data_root: Root directory containing writer subdirectories
-        n_splits: Number of folds for K-Fold
-        current_fold: Current fold index (0 to n_splits-1)
-        batch_size: Batch size for dataloaders
-        num_workers: Number of workers for data loading
-        pairs_per_writer: Number of pairs to generate per writer
-        target_size: Target image size
-        random_state: Random seed for reproducibility
-        
-    Returns:
-        Tuple of (train_loader, val_loader, train_dataset, val_dataset)
-    """
-    from sklearn.model_selection import KFold
-    from torch.utils.data import DataLoader
-    
-    # Get all writer directories
-    writer_dirs = [
-        os.path.join(data_root, d) 
-        for d in sorted(os.listdir(data_root)) 
-        if os.path.isdir(os.path.join(data_root, d))
-    ]
-    
-    # K-Fold split
-    kfold = KFold(n_splits=n_splits, shuffle=True, random_state=random_state)
-    splits = list(kfold.split(writer_dirs))
-    train_idx, val_idx = splits[current_fold]
-    
-    train_dirs = [writer_dirs[i] for i in train_idx]
-    val_dirs = [writer_dirs[i] for i in val_idx]
-    
-    # Create datasets
-    train_dataset = ContrastiveDataset(
-        train_dirs, 
-        train=True, 
-        pairs_per_writer=pairs_per_writer,
-        target_size=target_size
-    )
-    
-    val_dataset = ContrastiveDataset(
-        val_dirs, 
-        train=False, 
-        pairs_per_writer=pairs_per_writer,
-        target_size=target_size
-    )
-    
-    # Create dataloaders
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=num_workers,
-        pin_memory=True
-    )
-    
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        pin_memory=True
-    )
-    
-    return train_loader, val_loader, train_dataset, val_dataset
 
 
 === src/evaluation/metrics.py ===
@@ -1831,7 +1503,13 @@ class BaseTrainer(ABC):
     def validate_comprehensive(self, val_dataset, num_pairs: int = 1000) -> Dict[str, float]:
         """
         Comprehensive validation computing all verification metrics.
-        WITH DEBUG PRINTS
+        
+        Args:
+            val_dataset: Validation dataset
+            num_pairs: Number of pairs to evaluate
+            
+        Returns:
+            Dictionary with all metrics
         """
         self.model.eval()
         genuine_dists = []
@@ -1842,7 +1520,7 @@ class BaseTrainer(ABC):
         
         print("\n🔍 Computing verification metrics...")
         
-        # Genuine pairs
+        # Genuine pairs with progress bar
         for _ in tqdm(range(num_pairs // 2), desc="  Genuine pairs"):
             writer = random.choice(writer_ids)
             if len(writer_images[writer]) < 2:
@@ -1856,7 +1534,7 @@ class BaseTrainer(ABC):
             dist = F.pairwise_distance(emb1, emb2).item()
             genuine_dists.append(dist)
         
-        # Impostor pairs
+        # Impostor pairs with progress bar
         for _ in tqdm(range(num_pairs // 2), desc="  Impostor pairs"):
             w1, w2 = random.sample(writer_ids, 2)
             img1_path = random.choice(writer_images[w1])
@@ -1869,93 +1547,11 @@ class BaseTrainer(ABC):
             dist = F.pairwise_distance(emb1, emb2).item()
             impostor_dists.append(dist)
         
-        # ========================================================================
-        # DEBUG PRINTS
-        # ========================================================================
-        genuine_dists = np.array(genuine_dists)
-        impostor_dists = np.array(impostor_dists)
-        
-        print("\n" + "="*70)
-        print("🐛 DEBUG: Distance Distributions")
-        print("="*70)
-        print(f"\nGenuine distances:")
-        print(f"  Count:  {len(genuine_dists)}")
-        print(f"  Min:    {genuine_dists.min():.4f}")
-        print(f"  Max:    {genuine_dists.max():.4f}")
-        print(f"  Mean:   {genuine_dists.mean():.4f}")
-        print(f"  Std:    {genuine_dists.std():.4f}")
-        print(f"  Median: {np.median(genuine_dists):.4f}")
-        
-        print(f"\nImpostor distances:")
-        print(f"  Count:  {len(impostor_dists)}")
-        print(f"  Min:    {impostor_dists.min():.4f}")
-        print(f"  Max:    {impostor_dists.max():.4f}")
-        print(f"  Mean:   {impostor_dists.mean():.4f}")
-        print(f"  Std:    {impostor_dists.std():.4f}")
-        print(f"  Median: {np.median(impostor_dists):.4f}")
-        
-        print(f"\nDistribution overlap:")
-        overlap_min = max(genuine_dists.min(), impostor_dists.min())
-        overlap_max = min(genuine_dists.max(), impostor_dists.max())
-        print(f"  Overlap range: [{overlap_min:.4f}, {overlap_max:.4f}]")
-        print(f"  Genuine in overlap: {((genuine_dists >= overlap_min) & (genuine_dists <= overlap_max)).sum()}/{len(genuine_dists)}")
-        print(f"  Impostor in overlap: {((impostor_dists >= overlap_min) & (impostor_dists <= overlap_max)).sum()}/{len(impostor_dists)}")
-        print("="*70 + "\n")
-        
-        # Compute metrics
-        metrics = compute_verification_metrics(genuine_dists, impostor_dists)
-        
-        # ========================================================================
-        # DEBUG: Verifica threshold e predictions
-        # ========================================================================
-        print("\n" + "="*70)
-        print("🐛 DEBUG: Threshold & Predictions")
-        print("="*70)
-        print(f"\nEER Threshold: {metrics['eer_threshold']:.4f}")
-        
-        # Simula predictions @ EER threshold
-        all_dists = np.concatenate([genuine_dists, impostor_dists])
-        all_labels = np.concatenate([np.ones(len(genuine_dists)), np.zeros(len(impostor_dists))])
-        predictions = (all_dists < metrics['eer_threshold']).astype(int)  # dist < thresh = same writer
-        
-        print(f"\nPredictions @ EER threshold:")
-        print(f"  Total samples: {len(predictions)}")
-        print(f"  Predicted SAME (1): {predictions.sum()} ({predictions.sum()/len(predictions)*100:.1f}%)")
-        print(f"  Predicted DIFF (0): {(1-predictions).sum()} ({(1-predictions).sum()/len(predictions)*100:.1f}%)")
-        
-        print(f"\nActual labels:")
-        print(f"  Genuine (1): {all_labels.sum()} ({all_labels.sum()/len(all_labels)*100:.1f}%)")
-        print(f"  Impostor (0): {(1-all_labels).sum()} ({(1-all_labels).sum()/len(all_labels)*100:.1f}%)")
-        
-        # Confusion matrix manual
-        tp = ((predictions == 1) & (all_labels == 1)).sum()
-        tn = ((predictions == 0) & (all_labels == 0)).sum()
-        fp = ((predictions == 1) & (all_labels == 0)).sum()
-        fn = ((predictions == 0) & (all_labels == 1)).sum()
-        
-        print(f"\nManual Confusion Matrix:")
-        print(f"  TP (genuine correctly as SAME):  {tp}")
-        print(f"  TN (impostor correctly as DIFF): {tn}")
-        print(f"  FP (impostor wrongly as SAME):   {fp}")
-        print(f"  FN (genuine wrongly as DIFF):    {fn}")
-        
-        manual_acc = (tp + tn) / len(predictions)
-        manual_prec = tp / (tp + fp) if (tp + fp) > 0 else 0
-        manual_rec = tp / (tp + fn) if (tp + fn) > 0 else 0
-        manual_f1 = 2 * manual_prec * manual_rec / (manual_prec + manual_rec) if (manual_prec + manual_rec) > 0 else 0
-        
-        print(f"\nManual metrics:")
-        print(f"  Accuracy:  {manual_acc:.4f}")
-        print(f"  Precision: {manual_prec:.4f}")
-        print(f"  Recall:    {manual_rec:.4f}")
-        print(f"  F1:        {manual_f1:.4f}")
-        
-        print(f"\nMetrics from compute_verification_metrics:")
-        print(f"  Accuracy:  {metrics['accuracy']:.4f}")
-        print(f"  Precision: {metrics['precision']:.4f}")
-        print(f"  Recall:    {metrics['recall']:.4f}")
-        print(f"  F1:        {metrics['f1']:.4f}")
-        print("="*70 + "\n")
+        # Compute all metrics at once
+        metrics = compute_verification_metrics(
+            np.array(genuine_dists),
+            np.array(impostor_dists)
+        )
         
         return metrics
     
