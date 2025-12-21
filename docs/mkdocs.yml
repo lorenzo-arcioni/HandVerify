@@ -1,0 +1,70 @@
+site_name: Handwritten Verification Framework
+site_description: Deep Learning framework for handwritten text verification
+site_author: Il tuo nome
+repo_url: https://github.com/lorenzo-arcioni/HandVerify
+repo_name: lorenzo-arcioni/HandVerify
+
+theme:
+  name: material
+  language: it
+  features:
+    - navigation.instant
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.highlight
+    - search.share
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+
+markdown_extensions:
+  - admonition
+  - pymdownx.superfences
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.tabbed
+  - pymdownx.snippets
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: ["../src"]
+          options:
+            show_source: true
+            show_root_heading: true
+            docstring_style: google
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Project:
+      - Structure: project-structure.md
+      - Datasets: datasets.md
+  - Training:
+      - Training: training.md
+      - Evaluation: evaluation.md
+  - Results: results.md
+  - Notebooks: notebooks.md
+  - API Reference:
+      - Data: api/data.md
+      - Models: api/models.md
+      - Training: api/training.md
+      - Evaluation: api/evaluation.md
+      - Utils: api/utils.md
+
