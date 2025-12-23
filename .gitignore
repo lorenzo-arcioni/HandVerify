@@ -2,4 +2,5 @@ datasets/
 notebooks/images
 notebooks/embedding_analysis_results
 .venv/
+docs/site
 __pycache__

@@ -51,7 +51,7 @@ def create_dataloaders(
         if os.path.isdir(os.path.join(data_root, d))
     ]
     
-    # Split directories
+    # Train/Test Split directories
     if test_size == 0.0:
         train_dirs, test_dirs = writer_dirs, []
     elif test_size == 1.0:
