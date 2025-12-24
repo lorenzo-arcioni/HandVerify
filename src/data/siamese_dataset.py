@@ -2,7 +2,7 @@
 # siamese_dataset.py
 # ============================================================================
 import random
-from itertools import combinations
+from itertools import combinations, product
 from typing import List, Tuple
 import torch
 from .base_dataset import BaseWriterDataset
@@ -56,7 +56,6 @@ class SiameseDataset(BaseWriterDataset):
         """
         positive_pairs = []
         negative_pairs = []
-        negative_pairs_set = set()  # Per controllo duplicati O(1)
         
         # Separa autori per numero di immagini
         multi_image_writers = [w for w in self.writer_ids 
@@ -73,10 +72,9 @@ class SiameseDataset(BaseWriterDataset):
         for writer_id in multi_image_writers:
             images = self.writer_images[writer_id]
             
-            # Tutte le combinazioni uniche (i, j) con i < j
-            for i in range(len(images) - 1):
-                for j in range(i + 1, len(images)):
-                    positive_pairs.append((images[i], images[j], 1.0))
+            # Usa combinations per generare tutte le coppie uniche
+            for img1, img2 in combinations(images, 2):
+                positive_pairs.append((img1, img2, 1.0))
         
         print(f"Generated {len(positive_pairs)} positive pairs (all possible combinations)")
         
@@ -87,11 +85,10 @@ class SiameseDataset(BaseWriterDataset):
         
         # Calcola il numero totale di coppie negative possibili
         total_negative_possible = 0
-        for i in range(len(self.writer_ids)):
-            writer1_images = self.writer_images[self.writer_ids[i]]
-            for j in range(i + 1, len(self.writer_ids)):
-                writer2_images = self.writer_images[self.writer_ids[j]]
-                total_negative_possible += len(writer1_images) * len(writer2_images)
+        for writer1_id, writer2_id in combinations(self.writer_ids, 2):
+            writer1_images = self.writer_images[writer1_id]
+            writer2_images = self.writer_images[writer2_id]
+            total_negative_possible += len(writer1_images) * len(writer2_images)
         
         print(f"Need {num_negative_needed} negative pairs for {self.positive_ratio*100:.0f}% positive ratio")
         print(f"Total possible negative pairs: {total_negative_possible}")
@@ -110,20 +107,12 @@ class SiameseDataset(BaseWriterDataset):
             writer1_images = self.writer_images[writer1_id]
             writer2_images = self.writer_images[writer2_id]
             
-            # Genera tutte le coppie tra le immagini di questi due writer
-            for img1 in writer1_images:
-                for img2 in writer2_images:
-                    if len(negative_pairs) >= num_negative_needed:
-                        break
-                    
-                    pair_key = tuple(sorted([img1, img2]))
-                    if pair_key not in negative_pairs_set:
-                        negative_pairs_set.add(pair_key)
-                        negative_pairs.append((img1, img2, 0.0))
-                
+            # Usa product per il prodotto cartesiano tra le due liste di immagini
+            for img1, img2 in product(writer1_images, writer2_images):
                 if len(negative_pairs) >= num_negative_needed:
                     break
-                
+                negative_pairs.append((img1, img2, 0.0))
+        
         print(f"Generated {len(negative_pairs)} negative pairs")
         
         # ===================================================================

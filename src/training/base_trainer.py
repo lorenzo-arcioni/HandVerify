@@ -17,6 +17,8 @@ import numpy as np
 from PIL import Image
 from tqdm import tqdm
 
+from itertools import combinations, product
+
 from ..evaluation.metrics import compute_verification_metrics
 
 
@@ -70,58 +72,51 @@ class BaseTrainer(ABC):
         pass
     
     @torch.no_grad()
-    def validate_comprehensive(self, val_dataset, num_pairs: int = 1000) -> Dict[str, float]:
+    def validate_comprehensive(self, val_dataset) -> Dict[str, float]:
         """
         Comprehensive validation computing all verification metrics.
+        Usa tutte le coppie pre-generate dal val_dataset.
         
         Args:
-            val_dataset: Validation dataset
-            num_pairs: Number of pairs to evaluate
-            
+            val_dataset: Validation dataset (con coppie già generate)
+        
         Returns:
             Dictionary with all metrics
         """
         self.model.eval()
+        
         genuine_dists = []
         impostor_dists = []
         
-        writer_ids = val_dataset.writer_ids
-        writer_images = val_dataset.writer_images
+        print(f"\n🔍 Computing verification metrics on {len(val_dataset)} pairs...")
         
-        print("\n🔍 Computing verification metrics...")
-        
-        # Genuine pairs with progress bar
-        for _ in tqdm(range(num_pairs // 2), desc="  Genuine pairs"):
-            writer = random.choice(writer_ids)
-            if len(writer_images[writer]) < 2:
-                continue
+        # Itera su tutte le coppie del validation dataset
+        for idx in tqdm(range(len(val_dataset)), desc="  Evaluating pairs"):
+            img1_path, img2_path, label = val_dataset.pairs[idx]
             
-            img1_path, img2_path = random.sample(writer_images[writer], 2)
+            # Carica le immagini
             img1 = val_dataset.transform(Image.open(img1_path).convert("L")).unsqueeze(0).to(self.device)
             img2 = val_dataset.transform(Image.open(img2_path).convert("L")).unsqueeze(0).to(self.device)
             
+            # Calcola embeddings e distanza
             emb1, emb2 = self._get_embeddings(img1, img2)
             dist = F.pairwise_distance(emb1, emb2).item()
-            genuine_dists.append(dist)
-        
-        # Impostor pairs with progress bar
-        for _ in tqdm(range(num_pairs // 2), desc="  Impostor pairs"):
-            w1, w2 = random.sample(writer_ids, 2)
-            img1_path = random.choice(writer_images[w1])
-            img2_path = random.choice(writer_images[w2])
             
-            img1 = val_dataset.transform(Image.open(img1_path).convert("L")).unsqueeze(0).to(self.device)
-            img2 = val_dataset.transform(Image.open(img2_path).convert("L")).unsqueeze(0).to(self.device)
-            
-            emb1, emb2 = self._get_embeddings(img1, img2)
-            dist = F.pairwise_distance(emb1, emb2).item()
-            impostor_dists.append(dist)
+            # Classifica in base al label
+            if label == 1.0:
+                genuine_dists.append(dist)
+            else:
+                impostor_dists.append(dist)
         
-        # Compute all metrics at once
+        # Calcola metriche
         metrics = compute_verification_metrics(
             np.array(genuine_dists),
             np.array(impostor_dists)
         )
+        
+        print(f"\n  ✓ Evaluated {len(genuine_dists)} genuine + {len(impostor_dists)} impostor pairs")
+        actual_ratio = len(genuine_dists) / (len(genuine_dists) + len(impostor_dists)) * 100
+        print(f"  Actual ratio: {actual_ratio:.1f}% genuine")
         
         return metrics
     

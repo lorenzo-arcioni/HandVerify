@@ -22,7 +22,6 @@ def create_dataloaders(
     batch_size: int = 16,
     num_workers: int = 4,
     test_size: float = 0.2,
-    samples_per_writer: int = 100,
     target_size: int = 448,
     random_state: int = 42,
     **dataset_kwargs
@@ -65,7 +64,6 @@ def create_dataloaders(
     train_dataset = dataset_class(
         train_dirs, 
         train=True, 
-        samples_per_writer=samples_per_writer,
         target_size=target_size,
         **dataset_kwargs
     ) if train_dirs else None
@@ -73,7 +71,6 @@ def create_dataloaders(
     test_dataset = dataset_class(
         test_dirs, 
         train=False, 
-        samples_per_writer=samples_per_writer,
         target_size=target_size,
         **dataset_kwargs
     ) if test_dirs else None
@@ -105,7 +102,6 @@ def create_kfold_dataloaders(
     current_fold: int = 0,
     batch_size: int = 16,
     num_workers: int = 4,
-    samples_per_writer: int = 100,
     target_size: int = 448,
     random_state: int = 42,
     **dataset_kwargs
@@ -147,7 +143,6 @@ def create_kfold_dataloaders(
     train_dataset = dataset_class(
         train_dirs, 
         train=True, 
-        samples_per_writer=samples_per_writer,
         target_size=target_size,
         **dataset_kwargs
     )
@@ -155,7 +150,6 @@ def create_kfold_dataloaders(
     val_dataset = dataset_class(
         val_dirs, 
         train=False, 
-        samples_per_writer=samples_per_writer,
         target_size=target_size,
         **dataset_kwargs
     )
