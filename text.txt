@@ -1,6 +1,5 @@
 
 
-
 === src/data/transforms.py ===
 """
 Data Transforms
@@ -68,7 +67,6 @@ def create_dataloaders(
     batch_size: int = 16,
     num_workers: int = 4,
     test_size: float = 0.2,
-    samples_per_writer: int = 100,
     target_size: int = 448,
     random_state: int = 42,
     **dataset_kwargs
@@ -97,7 +95,7 @@ def create_dataloaders(
         if os.path.isdir(os.path.join(data_root, d))
     ]
     
-    # Split directories
+    # Train/Test Split directories
     if test_size == 0.0:
         train_dirs, test_dirs = writer_dirs, []
     elif test_size == 1.0:
@@ -111,7 +109,6 @@ def create_dataloaders(
     train_dataset = dataset_class(
         train_dirs, 
         train=True, 
-        samples_per_writer=samples_per_writer,
         target_size=target_size,
         **dataset_kwargs
     ) if train_dirs else None
@@ -119,7 +116,6 @@ def create_dataloaders(
     test_dataset = dataset_class(
         test_dirs, 
         train=False, 
-        samples_per_writer=samples_per_writer,
         target_size=target_size,
         **dataset_kwargs
     ) if test_dirs else None
@@ -151,7 +147,6 @@ def create_kfold_dataloaders(
     current_fold: int = 0,
     batch_size: int = 16,
     num_workers: int = 4,
-    samples_per_writer: int = 100,
     target_size: int = 448,
     random_state: int = 42,
     **dataset_kwargs
@@ -193,7 +188,6 @@ def create_kfold_dataloaders(
     train_dataset = dataset_class(
         train_dirs, 
         train=True, 
-        samples_per_writer=samples_per_writer,
         target_size=target_size,
         **dataset_kwargs
     )
@@ -201,7 +195,6 @@ def create_kfold_dataloaders(
     val_dataset = dataset_class(
         val_dirs, 
         train=False, 
-        samples_per_writer=samples_per_writer,
         target_size=target_size,
         **dataset_kwargs
     )
@@ -263,13 +256,10 @@ def create_triplet_kfold_dataloaders(*args, **kwargs):
 # ============================================================================
 # siamese_dataset.py
 # ============================================================================
-
 import random
-from pathlib import Path
+from itertools import combinations, product
 from typing import List, Tuple
-
 import torch
-
 from .base_dataset import BaseWriterDataset
 
 """Siamese Dataset - Binary pairs with labels"""
@@ -282,49 +272,132 @@ class SiameseDataset(BaseWriterDataset):
         writer_dirs: List[str],
         train: bool = True,
         positive_ratio: float = 0.5,
-        samples_per_writer: int = 100,
         target_size: int = 448,
     ):
         self.positive_ratio = positive_ratio
+        
         super().__init__(
             writer_dirs=writer_dirs,
             train=train,
-            samples_per_writer=samples_per_writer,
             target_size=target_size,
-            min_images_per_writer=2
         )
+        
+        # Pre-genera tutte le coppie possibili
+        self.pairs = self._generate_all_possible_pairs()
+        self.num_samples = len(self.pairs)
+        
+        num_positive = sum(1 for p in self.pairs if p[2] == 1.0)
+        num_negative = sum(1 for p in self.pairs if p[2] == 0.0)
+        actual_ratio = num_positive / len(self.pairs) * 100 if self.pairs else 0
+        
+        print(f"{'TRAIN' if train else 'VAL'}: Generated {len(self.pairs)} pairs")
+        print(f"  - Positive: {num_positive} ({actual_ratio:.1f}%)")
+        print(f"  - Negative: {num_negative} ({100-actual_ratio:.1f}%)")
+        print(f"  - Writers: {len(self.writer_ids)} total")
+        print(f"    - With ≥2 images: {sum(1 for w in self.writer_ids if len(self.writer_images[w]) >= 2)}")
+        print(f"    - With 1 image: {sum(1 for w in self.writer_ids if len(self.writer_images[w]) == 1)}")
+    
+    def _generate_all_possible_pairs(self) -> List[Tuple[str, str, float]]:
+        """
+        Genera TUTTE le coppie uniche possibili massimizzando l'uso dei dati.
+        
+        Strategia:
+        1. Genera tutte le coppie positive possibili (stesso writer)
+        2. Genera coppie negative per rispettare il positive_ratio
+        3. Usa autori con 1 immagine solo per coppie negative
+        
+        Returns:
+            Lista di tuple (img1_path, img2_path, label)
+        """
+        positive_pairs = []
+        negative_pairs = []
+        
+        # Separa autori per numero di immagini
+        multi_image_writers = [w for w in self.writer_ids 
+                            if len(self.writer_images[w]) >= 2]
+        single_image_writers = [w for w in self.writer_ids 
+                                if len(self.writer_images[w]) == 1]
+        
+        print(f"\nGenerating pairs from {len(multi_image_writers)} multi-image writers "
+            f"and {len(single_image_writers)} single-image writers...")
+        
+        # ===================================================================
+        # STEP 1: Genera TUTTE le coppie positive possibili
+        # ===================================================================
+        for writer_id in multi_image_writers:
+            images = self.writer_images[writer_id]
+            
+            # Usa combinations per generare tutte le coppie uniche
+            for img1, img2 in combinations(images, 2):
+                positive_pairs.append((img1, img2, 1.0))
+        
+        print(f"Generated {len(positive_pairs)} positive pairs (all possible combinations)")
+        
+        # ===================================================================
+        # STEP 2: Calcola quante coppie negative servono e quante sono possibili
+        # ===================================================================
+        num_negative_needed = int(len(positive_pairs) * (1 - self.positive_ratio) / self.positive_ratio)
+        
+        # Calcola il numero totale di coppie negative possibili
+        total_negative_possible = 0
+        for writer1_id, writer2_id in combinations(self.writer_ids, 2):
+            writer1_images = self.writer_images[writer1_id]
+            writer2_images = self.writer_images[writer2_id]
+            total_negative_possible += len(writer1_images) * len(writer2_images)
+        
+        print(f"Need {num_negative_needed} negative pairs for {self.positive_ratio*100:.0f}% positive ratio")
+        print(f"Total possible negative pairs: {total_negative_possible}")
+        
+        if total_negative_possible > 0:
+            print(f"Using {num_negative_needed / total_negative_possible * 100:.2f}% of possible negative pairs")
+        
+        # ===================================================================
+        # STEP 3: Genera coppie negative
+        # ===================================================================
+        # Itera su tutte le coppie di writer diversi
+        for writer1_id, writer2_id in combinations(self.writer_ids, 2):
+            if len(negative_pairs) >= num_negative_needed:
+                break
+            
+            writer1_images = self.writer_images[writer1_id]
+            writer2_images = self.writer_images[writer2_id]
+            
+            # Usa product per il prodotto cartesiano tra le due liste di immagini
+            for img1, img2 in product(writer1_images, writer2_images):
+                if len(negative_pairs) >= num_negative_needed:
+                    break
+                negative_pairs.append((img1, img2, 0.0))
+        
+        print(f"Generated {len(negative_pairs)} negative pairs")
+        
+        # ===================================================================
+        # STEP 4: Combina e mescola
+        # ===================================================================
+        all_pairs = positive_pairs + negative_pairs
+        random.shuffle(all_pairs)
+        
+        return all_pairs
     
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Generate a pair with label."""
-        is_positive = random.random() < self.positive_ratio
-        
-        if is_positive:
-            # Same writer
-            writer_id = random.choice(self.writer_ids)
-            img1_path, img2_path = random.sample(self.writer_images[writer_id], 2)
-            label = 1.0
-        else:
-            # Different writers
-            writer1, writer2 = random.sample(self.writer_ids, 2)
-            img1_path = random.choice(self.writer_images[writer1])
-            img2_path = random.choice(self.writer_images[writer2])
-            label = 0.0
+        """Carica e restituisce una coppia pre-generata."""
+        img1_path, img2_path, label = self.pairs[idx]
         
         img1 = self._load_image(img1_path)
         img2 = self._load_image(img2_path)
         
         return img1, img2, torch.tensor(label, dtype=torch.float32)
+    
+    def __len__(self) -> int:
+        return len(self.pairs)
 
 === src/data/triplet_dataset.py ===
 # ============================================================================
 # triplet_dataset.py
 # ============================================================================
-
 import random
+from itertools import combinations
 from typing import List, Tuple
-
 import torch
-
 from .base_dataset import BaseWriterDataset
 
 """Triplet Dataset - Anchor, Positive, Negative"""
@@ -336,39 +409,99 @@ class TripletDataset(BaseWriterDataset):
         self,
         writer_dirs: List[str],
         train: bool = True,
-        samples_per_writer: int = 100,
         target_size: int = 448,
     ):
         super().__init__(
             writer_dirs=writer_dirs,
             train=train,
-            samples_per_writer=samples_per_writer,
             target_size=target_size,
-            min_images_per_writer=2
         )
+        
+        # Pre-genera tutte le triple
+        self.triplets = self._generate_all_triplets()
+        self.num_samples = len(self.triplets)
+        
+        print(f"{'TRAIN' if train else 'VAL'}: Generated {len(self.triplets)} triplets")
+        print(f"  - Writers: {len(self.writer_ids)} total")
+        print(f"    - With ≥2 images: {sum(1 for w in self.writer_ids if len(self.writer_images[w]) >= 2)}")
+        print(f"    - With 1 image: {sum(1 for w in self.writer_ids if len(self.writer_images[w]) == 1)}")
+    
+    def _generate_all_triplets(self) -> List[Tuple[str, str, str]]:
+        """
+        Genera tutte le triple possibili.
+        Per ogni coppia positiva (anchor, positive), genera triple con tutti i possibili negativi.
+        
+        Returns:
+            Lista di tuple (anchor_path, positive_path, negative_path)
+        """
+        triplets = []
+        triplets_set = set()
+        
+        # Separa autori per numero di immagini
+        multi_image_writers = [w for w in self.writer_ids 
+                              if len(self.writer_images[w]) >= 2]
+        single_image_writers = [w for w in self.writer_ids 
+                                if len(self.writer_images[w]) == 1]
+        
+        print(f"\nGenerating triplets from {len(multi_image_writers)} multi-image writers "
+              f"and {len(single_image_writers)} single-image writers...")
+        
+        # ===================================================================
+        # STEP 1: Per ogni writer con ≥2 immagini, genera coppie positive
+        # ===================================================================
+        positive_pairs = []
+        for writer_id in multi_image_writers:
+            images = self.writer_images[writer_id]
+            for i in range(len(images) - 1):
+                for j in range(i + 1, len(images)):
+                    positive_pairs.append((writer_id, images[i], images[j]))
+        
+        print(f"Generated {len(positive_pairs)} positive pairs (anchor-positive)")
+        
+        # ===================================================================
+        # STEP 2: Per ogni coppia positiva, genera triple con negativi
+        # ===================================================================
+        # Conta i negativi possibili
+        total_triplets_possible = 0
+        for writer_id, anchor, positive in positive_pairs:
+            for other_writer_id in self.writer_ids:
+                if other_writer_id != writer_id:
+                    total_triplets_possible += len(self.writer_images[other_writer_id])
+        
+        print(f"Total possible triplets: {total_triplets_possible}")
+        
+        # Genera tutte le triple
+        for writer_id, anchor, positive in positive_pairs:
+            for other_writer_id in self.writer_ids:
+                if other_writer_id == writer_id:
+                    continue
+                
+                negative_images = self.writer_images[other_writer_id]
+                
+                for negative in negative_images:
+                    # Crea chiave per evitare duplicati
+                    triplet_key = (anchor, positive, negative)
+                    
+                    if triplet_key not in triplets_set:
+                        triplets_set.add(triplet_key)
+                        triplets.append((anchor, positive, negative))
+        
+        print(f"Generated {len(triplets)} unique triplets")
+        
+        return triplets
     
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Generate a triplet (anchor, positive, negative)."""
-        # Anchor writer
-        anchor_writer = random.choice(self.writer_ids)
-        
-        # Anchor and positive from same writer
-        anchor_path, positive_path = random.sample(
-            self.writer_images[anchor_writer], 2
-        )
-        
-        # Negative from different writer
-        negative_writer = random.choice(
-            [w for w in self.writer_ids if w != anchor_writer]
-        )
-        negative_path = random.choice(self.writer_images[negative_writer])
+        """Carica e restituisce una tripla pre-generata."""
+        anchor_path, positive_path, negative_path = self.triplets[idx]
         
         anchor = self._load_image(anchor_path)
         positive = self._load_image(positive_path)
         negative = self._load_image(negative_path)
         
         return anchor, positive, negative
-
+    
+    def __len__(self) -> int:
+        return len(self.triplets)
 
 === src/data/__init__.py ===
 # src/data/__init__.py
@@ -440,44 +573,21 @@ from .transforms import get_train_transforms, get_test_transforms
 
 
 class BaseWriterDataset(Dataset, ABC):
-    """
-    Base class for writer verification datasets.
-    Handles common operations like loading writer directories and transforms.
-    """
-    
     def __init__(
         self,
         writer_dirs: List[str],
         train: bool = True,
-        samples_per_writer: int = 100,
         target_size: int = 448,
-        min_images_per_writer: int = 2,
     ):
-        """
-        Args:
-            writer_dirs: List of directories, each containing images from one writer
-            train: Whether this is training set (applies augmentation if True)
-            samples_per_writer: Number of samples to generate per writer
-            target_size: Target image size for resizing
-            min_images_per_writer: Minimum images required per writer
-        """
         self.writer_dirs = writer_dirs
         self.train = train
         self.target_size = target_size
-        self.samples_per_writer = samples_per_writer
-        self.min_images_per_writer = min_images_per_writer
         
-        # Define transforms
         self.transform = (get_train_transforms(target_size) if train 
                          else get_test_transforms(target_size))
         
-        # Load writer images
         self.writer_images = self._load_writer_images()
         self.writer_ids = list(self.writer_images.keys())
-        self.num_samples = len(self.writer_ids) * samples_per_writer
-        
-        print(f"{'TRAIN' if train else 'VAL'}: {len(self.writer_ids)} writers, "
-              f"{self.num_samples} samples")
     
     def _load_writer_images(self) -> dict:
         """Load image paths for each writer."""
@@ -490,10 +600,9 @@ class BaseWriterDataset(Dataset, ABC):
                 for f in os.listdir(writer_dir) 
                 if f.lower().endswith(('.png', '.jpg', '.jpeg'))
             ]
+
+            writer_images[writer_id] = images
             
-            if len(images) >= self.min_images_per_writer:
-                writer_images[writer_id] = images
-        
         return writer_images
     
     def _load_image(self, path: str) -> torch.Tensor:
@@ -515,12 +624,10 @@ class BaseWriterDataset(Dataset, ABC):
 # contrastive_dataset.py
 # ============================================================================
 """Contrastive Dataset - Similar to Siamese but 50/50 ratio"""
-
 import random
+from itertools import combinations
 from typing import List, Tuple
-
 import torch
-
 from .base_dataset import BaseWriterDataset
 
 class ContrastiveDataset(BaseWriterDataset):
@@ -530,36 +637,123 @@ class ContrastiveDataset(BaseWriterDataset):
         self,
         writer_dirs: List[str],
         train: bool = True,
-        samples_per_writer: int = 100,
         target_size: int = 448,
     ):
         super().__init__(
             writer_dirs=writer_dirs,
             train=train,
-            samples_per_writer=samples_per_writer,
             target_size=target_size,
-            min_images_per_writer=2
         )
+        
+        # Pre-genera tutte le coppie con ratio 50/50
+        self.pairs = self._generate_all_possible_pairs()
+        self.num_samples = len(self.pairs)
+        
+        num_positive = sum(1 for p in self.pairs if p[2] == 1.0)
+        num_negative = sum(1 for p in self.pairs if p[2] == 0.0)
+        actual_ratio = num_positive / len(self.pairs) * 100 if self.pairs else 0
+        
+        print(f"{'TRAIN' if train else 'VAL'}: Generated {len(self.pairs)} pairs")
+        print(f"  - Positive: {num_positive} ({actual_ratio:.1f}%)")
+        print(f"  - Negative: {num_negative} ({100-actual_ratio:.1f}%)")
+        print(f"  - Writers: {len(self.writer_ids)} total")
+        print(f"    - With ≥2 images: {sum(1 for w in self.writer_ids if len(self.writer_images[w]) >= 2)}")
+        print(f"    - With 1 image: {sum(1 for w in self.writer_ids if len(self.writer_images[w]) == 1)}")
+    
+    def _generate_all_possible_pairs(self) -> List[Tuple[str, str, float]]:
+        """
+        Genera tutte le coppie possibili con ratio 50/50.
+        
+        Returns:
+            Lista di tuple (img1_path, img2_path, label)
+        """
+        positive_pairs = []
+        negative_pairs = []
+        negative_pairs_set = set()
+        
+        # Separa autori per numero di immagini
+        multi_image_writers = [w for w in self.writer_ids 
+                              if len(self.writer_images[w]) >= 2]
+        single_image_writers = [w for w in self.writer_ids 
+                                if len(self.writer_images[w]) == 1]
+        
+        print(f"\nGenerating pairs from {len(multi_image_writers)} multi-image writers "
+              f"and {len(single_image_writers)} single-image writers...")
+        
+        # ===================================================================
+        # STEP 1: Genera TUTTE le coppie positive possibili
+        # ===================================================================
+        for writer_id in multi_image_writers:
+            images = self.writer_images[writer_id]
+            
+            for i in range(len(images) - 1):
+                for j in range(i + 1, len(images)):
+                    positive_pairs.append((images[i], images[j], 1.0))
+        
+        print(f"Generated {len(positive_pairs)} positive pairs (all possible combinations)")
+        
+        # ===================================================================
+        # STEP 2: Genera STESSO NUMERO di coppie negative (ratio 50/50)
+        # ===================================================================
+        num_negative_needed = len(positive_pairs)
+        
+        # Calcola il numero totale di coppie negative possibili
+        total_negative_possible = 0
+        for writer1_id, writer2_id in combinations(self.writer_ids, 2):
+            writer1_images = self.writer_images[writer1_id]
+            writer2_images = self.writer_images[writer2_id]
+            total_negative_possible += len(writer1_images) * len(writer2_images)
+        
+        print(f"Need {num_negative_needed} negative pairs for 50% positive ratio")
+        print(f"Total possible negative pairs: {total_negative_possible}")
+        
+        if total_negative_possible > 0:
+            print(f"Using {num_negative_needed / total_negative_possible * 100:.2f}% of possible negative pairs")
+        
+        # ===================================================================
+        # STEP 3: Genera coppie negative
+        # ===================================================================
+        for writer1_id, writer2_id in combinations(self.writer_ids, 2):
+            if len(negative_pairs) >= num_negative_needed:
+                break
+            
+            writer1_images = self.writer_images[writer1_id]
+            writer2_images = self.writer_images[writer2_id]
+            
+            for img1 in writer1_images:
+                for img2 in writer2_images:
+                    if len(negative_pairs) >= num_negative_needed:
+                        break
+                    
+                    pair_key = tuple(sorted([img1, img2]))
+                    if pair_key not in negative_pairs_set:
+                        negative_pairs_set.add(pair_key)
+                        negative_pairs.append((img1, img2, 0.0))
+                
+                if len(negative_pairs) >= num_negative_needed:
+                    break
+        
+        print(f"Generated {len(negative_pairs)} negative pairs")
+        
+        # ===================================================================
+        # STEP 4: Combina e mescola
+        # ===================================================================
+        all_pairs = positive_pairs + negative_pairs
+        random.shuffle(all_pairs)
+        
+        return all_pairs
     
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Generate a pair with label (50/50 positive/negative)."""
-        is_positive = random.random() < 0.5
-        
-        if is_positive:
-            writer_id = random.choice(self.writer_ids)
-            img1_path, img2_path = random.sample(self.writer_images[writer_id], 2)
-            label = 1.0
-        else:
-            writer1, writer2 = random.sample(self.writer_ids, 2)
-            img1_path = random.choice(self.writer_images[writer1])
-            img2_path = random.choice(self.writer_images[writer2])
-            label = 0.0
+        """Carica e restituisce una coppia pre-generata."""
+        img1_path, img2_path, label = self.pairs[idx]
         
         img1 = self._load_image(img1_path)
         img2 = self._load_image(img2_path)
         
         return img1, img2, torch.tensor(label, dtype=torch.float32)
-
+    
+    def __len__(self) -> int:
+        return len(self.pairs)
 
 === src/evaluation/metrics.py ===
 """
@@ -618,21 +812,37 @@ def compute_classification_metrics(
         'f1': f1_score(y_true, y_pred, zero_division=0),
     }
 
-
 def compute_verification_metrics(
     genuine_dists: np.ndarray,
-    impostor_dists: np.ndarray
+    impostor_dists: np.ndarray,
+    distances_are_similarity: bool = False
 ) -> Dict[str, float]:
     """
-    Compute comprehensive verification metrics from distance distributions.
+    Compute verification metrics for biometric systems.
+
+        Args:
+            genuine_dists (np.ndarray): Genuine pair distances or similarity scores.
+            impostor_dists (np.ndarray): Impostor pair distances or similarity scores.
+            distances_are_similarity (bool): If True, input arrays are similarity scores
+                (higher = more similar). If False, inputs are distances (lower = more similar).
+
+        Returns:
+            Dict[str, float]: A dictionary containing ROC/AUC, EER, accuracy, FAR metrics,
+            d-prime, and raw distributions.
     """
+
     # Convert distances to similarity scores (lower distance = higher similarity)
     y_true = np.array([1] * len(genuine_dists) + [0] * len(impostor_dists))
-    y_scores = np.concatenate([-genuine_dists, -impostor_dists])  # ✅ FIX: usa concatenate
-    
+
+    # If distances are similarity scores, convert to similarity scores
+    if distances_are_similarity:
+        y_scores = np.concatenate([genuine_dists, impostor_dists])
+    else:
+        y_scores = np.concatenate([-genuine_dists, -impostor_dists])
+
     # ROC Curve
     fpr, tpr, thresholds = roc_curve(y_true, y_scores)
-    thresholds = -thresholds  # Convert back to distances
+    if not distances_are_similarity: thresholds = -thresholds  # Convert back to distances
     
     # Primary biometric metrics
     metrics = {
@@ -645,7 +855,7 @@ def compute_verification_metrics(
     metrics['eer_threshold'] = eer_threshold
     
     # Classification metrics at EER threshold
-    eer_sim_threshold = -eer_threshold  # Convert to similarity
+    eer_sim_threshold = eer_threshold if distances_are_similarity else -eer_threshold  # Convert to similarity
     eer_classification = compute_classification_metrics(
         y_true,
         y_scores,  # ✅ Già è similarity scores
@@ -703,9 +913,9 @@ def print_verification_results(metrics: Dict[str, float], dataset_name: str = "V
     print(f"📊 PRIMARY METRICS:")
     print(f"  EER (Equal Error Rate):     {metrics['eer']:.4f} ({metrics['eer']*100:.2f}%)")
     print(f"  AUC-ROC:                     {metrics['auc']:.4f}")
-    print(f"  Accuracy @ EER threshold:    {metrics['accuracy']:.4f}")
     
     print(f"\n🎯 CLASSIFICATION METRICS (@ EER threshold):")
+    print(f"  Accuracy @ EER threshold:    {metrics['accuracy']:.4f}")
     print(f"  Precision:                   {metrics['precision']:.4f}")
     print(f"  Recall:                      {metrics['recall']:.4f}")
     print(f"  F1-Score:                    {metrics['f1']:.4f}")
@@ -1264,19 +1474,6 @@ class BaseSiameseNetwork(nn.Module):
         # Concatenate and classify
         combined = torch.cat([feat1, feat2], dim=1)
         return self.fc(combined)
-    
-    def get_embedding(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Extract normalized embeddings for an image.
-        
-        Args:
-            x: Input image
-            
-        Returns:
-            Normalized feature vector
-        """
-        feat = self.forward_one(x)
-        return F.normalize(feat, p=2, dim=1)
 
 class BaseContrastiveNetwork(nn.Module):
     """
@@ -1447,7 +1644,7 @@ import numpy as np
 from PIL import Image
 from tqdm import tqdm
 
-from ..evaluation.metrics import compute_verification_metrics
+from ..evaluation.metrics import compute_verification_metrics, print_verification_results
 
 
 class BaseTrainer(ABC):
@@ -1500,58 +1697,64 @@ class BaseTrainer(ABC):
         pass
     
     @torch.no_grad()
-    def validate_comprehensive(self, val_dataset, num_pairs: int = 1000) -> Dict[str, float]:
+    def validate_comprehensive(self, val_dataset) -> Dict[str, float]:
         """
         Comprehensive validation computing all verification metrics.
+        Usa tutte le coppie pre-generate dal val_dataset.
+
+        Se la sottoclasse implementa _get_embeddings, viene usata per calcolare le
+        metriche di Similarity (contrastive/triplet). Altrimenti, si assume BCE
+        Siamese e si usa direttamente l'output del modello.
         
         Args:
-            val_dataset: Validation dataset
-            num_pairs: Number of pairs to evaluate
-            
+            val_dataset: Validation dataset (con coppie già generate)
+        
         Returns:
             Dictionary with all metrics
         """
         self.model.eval()
-        genuine_dists = []
-        impostor_dists = []
         
-        writer_ids = val_dataset.writer_ids
-        writer_images = val_dataset.writer_images
+        genuine_scores = []
+        impostor_scores = []
+
+        # Controllo se la sottoclasse ha implementato _get_embeddings
+        use_embeddings = hasattr(self, "_get_embeddings") and callable(getattr(self, "_get_embeddings")) \
+                        and self._get_embeddings.__func__ is not BaseTrainer._get_embeddings
+
+        print(f"\n🔍 Computing verification metrics on {len(val_dataset)} pairs...")
         
-        print("\n🔍 Computing verification metrics...")
-        
-        # Genuine pairs with progress bar
-        for _ in tqdm(range(num_pairs // 2), desc="  Genuine pairs"):
-            writer = random.choice(writer_ids)
-            if len(writer_images[writer]) < 2:
-                continue
+        for idx in tqdm(range(len(val_dataset)), desc="  Evaluating pairs"):
+            img1_path, img2_path, label = val_dataset.pairs[idx]
             
-            img1_path, img2_path = random.sample(writer_images[writer], 2)
+            # Carica le immagini
             img1 = val_dataset.transform(Image.open(img1_path).convert("L")).unsqueeze(0).to(self.device)
             img2 = val_dataset.transform(Image.open(img2_path).convert("L")).unsqueeze(0).to(self.device)
             
-            emb1, emb2 = self._get_embeddings(img1, img2)
-            dist = F.pairwise_distance(emb1, emb2).item()
-            genuine_dists.append(dist)
-        
-        # Impostor pairs with progress bar
-        for _ in tqdm(range(num_pairs // 2), desc="  Impostor pairs"):
-            w1, w2 = random.sample(writer_ids, 2)
-            img1_path = random.choice(writer_images[w1])
-            img2_path = random.choice(writer_images[w2])
+            if use_embeddings:
+                # Metric learning: contrastive / triplet
+                emb1, emb2 = self._get_embeddings(img1, img2)
+                score = F.cosine_similarity(emb1, emb2).item()
+            else:
+                # BCE Siamese: output diretto
+                score = self.model(img1, img2).item()
             
-            img1 = val_dataset.transform(Image.open(img1_path).convert("L")).unsqueeze(0).to(self.device)
-            img2 = val_dataset.transform(Image.open(img2_path).convert("L")).unsqueeze(0).to(self.device)
-            
-            emb1, emb2 = self._get_embeddings(img1, img2)
-            dist = F.pairwise_distance(emb1, emb2).item()
-            impostor_dists.append(dist)
+            if label == 1.0:
+                genuine_scores.append(score)
+            else:
+                impostor_scores.append(score)
         
-        # Compute all metrics at once
+        # Decide se i score sono già similarity o vanno invertiti
+        distances_are_similarity = not use_embeddings  # BCE → già similarity
+
         metrics = compute_verification_metrics(
-            np.array(genuine_dists),
-            np.array(impostor_dists)
+            np.array(genuine_scores),
+            np.array(impostor_scores),
+            distances_are_similarity=distances_are_similarity
         )
+        
+        print(f"\n  ✓ Evaluated {len(genuine_scores)} genuine + {len(impostor_scores)} impostor pairs")
+        actual_ratio = len(genuine_scores) / (len(genuine_scores) + len(impostor_scores)) * 100
+        print(f"  Actual ratio: {actual_ratio:.1f}% genuine")
         
         return metrics
     
@@ -1569,37 +1772,6 @@ class BaseTrainer(ABC):
     def _print_epoch_summary(self, epoch: int, epochs: int, train_loss: float, val_loss: float):
         """Print formatted epoch summary."""
         print(f"\nEpoch {epoch+1}/{epochs} - Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
-    
-    def _print_final_metrics(self, metrics: Dict):
-        """Print comprehensive metrics at end of training."""
-        print(f"\n{'='*70}")
-        print(f"FINAL VALIDATION METRICS")
-        print(f"{'='*70}")
-        
-        print(f"\n🎯 PRIMARY BIOMETRIC METRICS:")
-        print(f"  EER:              {metrics['eer']:.4f} ({metrics['eer']*100:.2f}%)")
-        print(f"  AUC:              {metrics['auc']:.4f}")
-        print(f"  EER Threshold:    {metrics['eer_threshold']:.4f}")
-        
-        print(f"\n📊 CLASSIFICATION METRICS (@ EER threshold):")
-        print(f"  Accuracy:         {metrics['accuracy']:.4f}")
-        print(f"  Precision:        {metrics['precision']:.4f}")
-        print(f"  Recall:           {metrics['recall']:.4f}")
-        print(f"  F1-Score:         {metrics['f1']:.4f}")
-        
-        print(f"\n📈 DISCRIMINABILITY:")
-        print(f"  d-prime (d'):     {metrics['d_prime']:.4f}")
-        print(f"  Decidability:     {metrics['decidability']:.4f}")
-        
-        print(f"\n⚙️ FAR-BASED METRICS:")
-        print(f"  Acc @ FAR=0.1%:   {metrics['acc_far_0.001']:.4f} (FRR={metrics['frr_far_0.001']:.4f})")
-        print(f"  Acc @ FAR=1.0%:   {metrics['acc_far_0.01']:.4f} (FRR={metrics['frr_far_0.01']:.4f})")
-        
-        print(f"\n📏 DISTRIBUTION STATISTICS:")
-        print(f"  Genuine:          μ={metrics['mu_genuine']:.4f}, σ={metrics['sigma_genuine']:.4f}")
-        print(f"  Impostor:         μ={metrics['mu_impostor']:.4f}, σ={metrics['sigma_impostor']:.4f}")
-        
-        print(f"{'='*70}\n")
     
     def train(
         self,
@@ -1670,7 +1842,7 @@ class BaseTrainer(ABC):
         print(f"{'='*60}")
         
         final_metrics = self.validate_comprehensive(val_dataset, num_pairs=1000)
-        self._print_final_metrics(final_metrics)
+        print_verification_results(final_metrics)
         
         # Save final checkpoint and metrics
         self.save_checkpoint(is_best=False, fold=fold)
@@ -2014,11 +2186,6 @@ class BCETrainer(BaseTrainer):
             val_loss += loss.item()
         
         return val_loss / len(val_loader)
-    
-    def _get_embeddings(self, img1, img2):
-        """Get embeddings from Siamese network."""
-        emb1, emb2 = self.model(img1, img2, return_embeddings=True)
-        return emb1, emb2
     
     def train_kfold(
         self,

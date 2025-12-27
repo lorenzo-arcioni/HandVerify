@@ -17,9 +17,7 @@ import numpy as np
 from PIL import Image
 from tqdm import tqdm
 
-from itertools import combinations, product
-
-from ..evaluation.metrics import compute_verification_metrics
+from ..evaluation.metrics import compute_verification_metrics, print_verification_results
 
 
 class BaseTrainer(ABC):
@@ -76,6 +74,10 @@ class BaseTrainer(ABC):
         """
         Comprehensive validation computing all verification metrics.
         Usa tutte le coppie pre-generate dal val_dataset.
+
+        Se la sottoclasse implementa _get_embeddings, viene usata per calcolare le
+        metriche di Similarity (contrastive/triplet). Altrimenti, si assume BCE
+        Siamese e si usa direttamente l'output del modello.
         
         Args:
             val_dataset: Validation dataset (con coppie già generate)
@@ -85,12 +87,15 @@ class BaseTrainer(ABC):
         """
         self.model.eval()
         
-        genuine_dists = []
-        impostor_dists = []
-        
+        genuine_scores = []
+        impostor_scores = []
+
+        # Controllo se la sottoclasse ha implementato _get_embeddings
+        use_embeddings = hasattr(self, "_get_embeddings") and callable(getattr(self, "_get_embeddings")) \
+                        and self._get_embeddings.__func__ is not BaseTrainer._get_embeddings
+
         print(f"\n🔍 Computing verification metrics on {len(val_dataset)} pairs...")
         
-        # Itera su tutte le coppie del validation dataset
         for idx in tqdm(range(len(val_dataset)), desc="  Evaluating pairs"):
             img1_path, img2_path, label = val_dataset.pairs[idx]
             
@@ -98,24 +103,30 @@ class BaseTrainer(ABC):
             img1 = val_dataset.transform(Image.open(img1_path).convert("L")).unsqueeze(0).to(self.device)
             img2 = val_dataset.transform(Image.open(img2_path).convert("L")).unsqueeze(0).to(self.device)
             
-            # Calcola embeddings e distanza
-            emb1, emb2 = self._get_embeddings(img1, img2)
-            dist = F.pairwise_distance(emb1, emb2).item()
-            
-            # Classifica in base al label
-            if label == 1.0:
-                genuine_dists.append(dist)
+            if use_embeddings:
+                # Metric learning: contrastive / triplet
+                emb1, emb2 = self._get_embeddings(img1, img2)
+                score = F.cosine_similarity(emb1, emb2).item()
             else:
-                impostor_dists.append(dist)
+                # BCE Siamese: output diretto
+                score = self.model(img1, img2).item()
+            
+            if label == 1.0:
+                genuine_scores.append(score)
+            else:
+                impostor_scores.append(score)
         
-        # Calcola metriche
+        # Decide se i score sono già similarity o vanno invertiti
+        distances_are_similarity = not use_embeddings  # BCE → già similarity
+
         metrics = compute_verification_metrics(
-            np.array(genuine_dists),
-            np.array(impostor_dists)
+            np.array(genuine_scores),
+            np.array(impostor_scores),
+            distances_are_similarity=distances_are_similarity
         )
         
-        print(f"\n  ✓ Evaluated {len(genuine_dists)} genuine + {len(impostor_dists)} impostor pairs")
-        actual_ratio = len(genuine_dists) / (len(genuine_dists) + len(impostor_dists)) * 100
+        print(f"\n  ✓ Evaluated {len(genuine_scores)} genuine + {len(impostor_scores)} impostor pairs")
+        actual_ratio = len(genuine_scores) / (len(genuine_scores) + len(impostor_scores)) * 100
         print(f"  Actual ratio: {actual_ratio:.1f}% genuine")
         
         return metrics
@@ -134,37 +145,6 @@ class BaseTrainer(ABC):
     def _print_epoch_summary(self, epoch: int, epochs: int, train_loss: float, val_loss: float):
         """Print formatted epoch summary."""
         print(f"\nEpoch {epoch+1}/{epochs} - Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
-    
-    def _print_final_metrics(self, metrics: Dict):
-        """Print comprehensive metrics at end of training."""
-        print(f"\n{'='*70}")
-        print(f"FINAL VALIDATION METRICS")
-        print(f"{'='*70}")
-        
-        print(f"\n🎯 PRIMARY BIOMETRIC METRICS:")
-        print(f"  EER:              {metrics['eer']:.4f} ({metrics['eer']*100:.2f}%)")
-        print(f"  AUC:              {metrics['auc']:.4f}")
-        print(f"  EER Threshold:    {metrics['eer_threshold']:.4f}")
-        
-        print(f"\n📊 CLASSIFICATION METRICS (@ EER threshold):")
-        print(f"  Accuracy:         {metrics['accuracy']:.4f}")
-        print(f"  Precision:        {metrics['precision']:.4f}")
-        print(f"  Recall:           {metrics['recall']:.4f}")
-        print(f"  F1-Score:         {metrics['f1']:.4f}")
-        
-        print(f"\n📈 DISCRIMINABILITY:")
-        print(f"  d-prime (d'):     {metrics['d_prime']:.4f}")
-        print(f"  Decidability:     {metrics['decidability']:.4f}")
-        
-        print(f"\n⚙️ FAR-BASED METRICS:")
-        print(f"  Acc @ FAR=0.1%:   {metrics['acc_far_0.001']:.4f} (FRR={metrics['frr_far_0.001']:.4f})")
-        print(f"  Acc @ FAR=1.0%:   {metrics['acc_far_0.01']:.4f} (FRR={metrics['frr_far_0.01']:.4f})")
-        
-        print(f"\n📏 DISTRIBUTION STATISTICS:")
-        print(f"  Genuine:          μ={metrics['mu_genuine']:.4f}, σ={metrics['sigma_genuine']:.4f}")
-        print(f"  Impostor:         μ={metrics['mu_impostor']:.4f}, σ={metrics['sigma_impostor']:.4f}")
-        
-        print(f"{'='*70}\n")
     
     def train(
         self,
@@ -235,7 +215,7 @@ class BaseTrainer(ABC):
         print(f"{'='*60}")
         
         final_metrics = self.validate_comprehensive(val_dataset, num_pairs=1000)
-        self._print_final_metrics(final_metrics)
+        print_verification_results(final_metrics)
         
         # Save final checkpoint and metrics
         self.save_checkpoint(is_best=False, fold=fold)

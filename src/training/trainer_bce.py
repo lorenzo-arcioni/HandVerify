@@ -82,11 +82,6 @@ class BCETrainer(BaseTrainer):
         
         return val_loss / len(val_loader)
     
-    def _get_embeddings(self, img1, img2):
-        """Get embeddings from Siamese network."""
-        emb1, emb2 = self.model(img1, img2, return_embeddings=True)
-        return emb1, emb2
-    
     def train_kfold(
         self,
         data_root: str,

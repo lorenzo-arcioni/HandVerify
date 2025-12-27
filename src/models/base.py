@@ -101,19 +101,6 @@ class BaseSiameseNetwork(nn.Module):
         # Concatenate and classify
         combined = torch.cat([feat1, feat2], dim=1)
         return self.fc(combined)
-    
-    def get_embedding(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Extract normalized embeddings for an image.
-        
-        Args:
-            x: Input image
-            
-        Returns:
-            Normalized feature vector
-        """
-        feat = self.forward_one(x)
-        return F.normalize(feat, p=2, dim=1)
 
 class BaseContrastiveNetwork(nn.Module):
     """

@@ -54,21 +54,37 @@ def compute_classification_metrics(
         'f1': f1_score(y_true, y_pred, zero_division=0),
     }
 
-
 def compute_verification_metrics(
     genuine_dists: np.ndarray,
-    impostor_dists: np.ndarray
+    impostor_dists: np.ndarray,
+    distances_are_similarity: bool = False
 ) -> Dict[str, float]:
     """
-    Compute comprehensive verification metrics from distance distributions.
+    Compute verification metrics for biometric systems.
+
+        Args:
+            genuine_dists (np.ndarray): Genuine pair distances or similarity scores.
+            impostor_dists (np.ndarray): Impostor pair distances or similarity scores.
+            distances_are_similarity (bool): If True, input arrays are similarity scores
+                (higher = more similar). If False, inputs are distances (lower = more similar).
+
+        Returns:
+            Dict[str, float]: A dictionary containing ROC/AUC, EER, accuracy, FAR metrics,
+            d-prime, and raw distributions.
     """
+
     # Convert distances to similarity scores (lower distance = higher similarity)
     y_true = np.array([1] * len(genuine_dists) + [0] * len(impostor_dists))
-    y_scores = np.concatenate([-genuine_dists, -impostor_dists])  # ✅ FIX: usa concatenate
-    
+
+    # If distances are similarity scores, convert to similarity scores
+    if distances_are_similarity:
+        y_scores = np.concatenate([genuine_dists, impostor_dists])
+    else:
+        y_scores = np.concatenate([-genuine_dists, -impostor_dists])
+
     # ROC Curve
     fpr, tpr, thresholds = roc_curve(y_true, y_scores)
-    thresholds = -thresholds  # Convert back to distances
+    if not distances_are_similarity: thresholds = -thresholds  # Convert back to distances
     
     # Primary biometric metrics
     metrics = {
@@ -81,7 +97,7 @@ def compute_verification_metrics(
     metrics['eer_threshold'] = eer_threshold
     
     # Classification metrics at EER threshold
-    eer_sim_threshold = -eer_threshold  # Convert to similarity
+    eer_sim_threshold = eer_threshold if distances_are_similarity else -eer_threshold  # Convert to similarity
     eer_classification = compute_classification_metrics(
         y_true,
         y_scores,  # ✅ Già è similarity scores
@@ -139,9 +155,9 @@ def print_verification_results(metrics: Dict[str, float], dataset_name: str = "V
     print(f"📊 PRIMARY METRICS:")
     print(f"  EER (Equal Error Rate):     {metrics['eer']:.4f} ({metrics['eer']*100:.2f}%)")
     print(f"  AUC-ROC:                     {metrics['auc']:.4f}")
-    print(f"  Accuracy @ EER threshold:    {metrics['accuracy']:.4f}")
     
     print(f"\n🎯 CLASSIFICATION METRICS (@ EER threshold):")
+    print(f"  Accuracy @ EER threshold:    {metrics['accuracy']:.4f}")
     print(f"  Precision:                   {metrics['precision']:.4f}")
     print(f"  Recall:                      {metrics['recall']:.4f}")
     print(f"  F1-Score:                    {metrics['f1']:.4f}")
