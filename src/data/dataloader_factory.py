@@ -35,7 +35,6 @@ def create_dataloaders(
         batch_size: Batch size
         num_workers: Number of workers
         test_size: Train/test split ratio (0.0 = all train, 1.0 = all test)
-        samples_per_writer: Samples to generate per writer
         target_size: Image size
         random_state: Random seed
         **dataset_kwargs: Additional args for dataset constructor
@@ -116,7 +115,6 @@ def create_kfold_dataloaders(
         current_fold: Current fold index (0 to n_splits-1)
         batch_size: Batch size
         num_workers: Number of workers
-        samples_per_writer: Samples to generate per writer
         target_size: Image size
         random_state: Random seed
         **dataset_kwargs: Additional args for dataset constructor

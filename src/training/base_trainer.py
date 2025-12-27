@@ -209,7 +209,7 @@ class BaseTrainer(ABC):
         print("FINAL COMPREHENSIVE VALIDATION")
         print(f"{'='*60}")
         
-        final_metrics = self.validate_comprehensive(val_dataset, num_pairs=1000)
+        final_metrics = self.validate_comprehensive(val_dataset)
         print_verification_results(final_metrics)
         
         # Save final checkpoint and metrics
