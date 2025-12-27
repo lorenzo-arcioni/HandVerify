@@ -80,7 +80,6 @@ def create_dataloaders(
         batch_size: Batch size
         num_workers: Number of workers
         test_size: Train/test split ratio (0.0 = all train, 1.0 = all test)
-        samples_per_writer: Samples to generate per writer
         target_size: Image size
         random_state: Random seed
         **dataset_kwargs: Additional args for dataset constructor
@@ -161,7 +160,6 @@ def create_kfold_dataloaders(
         current_fold: Current fold index (0 to n_splits-1)
         batch_size: Batch size
         num_workers: Number of workers
-        samples_per_writer: Samples to generate per writer
         target_size: Image size
         random_state: Random seed
         **dataset_kwargs: Additional args for dataset constructor
@@ -256,13 +254,9 @@ def create_triplet_kfold_dataloaders(*args, **kwargs):
 # ============================================================================
 # siamese_dataset.py
 # ============================================================================
-import random
-from itertools import combinations, product
 from typing import List, Tuple
 import torch
 from .base_dataset import BaseWriterDataset
-
-"""Siamese Dataset - Binary pairs with labels"""
 
 class SiameseDataset(BaseWriterDataset):
     """Dataset for Siamese network training (positive/negative pairs)."""
@@ -275,116 +269,19 @@ class SiameseDataset(BaseWriterDataset):
         target_size: int = 448,
     ):
         self.positive_ratio = positive_ratio
+        super().__init__(writer_dirs=writer_dirs, train=train, target_size=target_size)
         
-        super().__init__(
-            writer_dirs=writer_dirs,
-            train=train,
-            target_size=target_size,
-        )
-        
-        # Pre-genera tutte le coppie possibili
-        self.pairs = self._generate_all_possible_pairs()
+        self.pairs = self._generate_all_samples(positive_ratio=self.positive_ratio, triplet=False)
         self.num_samples = len(self.pairs)
         
         num_positive = sum(1 for p in self.pairs if p[2] == 1.0)
-        num_negative = sum(1 for p in self.pairs if p[2] == 0.0)
-        actual_ratio = num_positive / len(self.pairs) * 100 if self.pairs else 0
-        
-        print(f"{'TRAIN' if train else 'VAL'}: Generated {len(self.pairs)} pairs")
-        print(f"  - Positive: {num_positive} ({actual_ratio:.1f}%)")
-        print(f"  - Negative: {num_negative} ({100-actual_ratio:.1f}%)")
-        print(f"  - Writers: {len(self.writer_ids)} total")
-        print(f"    - With ≥2 images: {sum(1 for w in self.writer_ids if len(self.writer_images[w]) >= 2)}")
-        print(f"    - With 1 image: {sum(1 for w in self.writer_ids if len(self.writer_images[w]) == 1)}")
-    
-    def _generate_all_possible_pairs(self) -> List[Tuple[str, str, float]]:
-        """
-        Genera TUTTE le coppie uniche possibili massimizzando l'uso dei dati.
-        
-        Strategia:
-        1. Genera tutte le coppie positive possibili (stesso writer)
-        2. Genera coppie negative per rispettare il positive_ratio
-        3. Usa autori con 1 immagine solo per coppie negative
-        
-        Returns:
-            Lista di tuple (img1_path, img2_path, label)
-        """
-        positive_pairs = []
-        negative_pairs = []
-        
-        # Separa autori per numero di immagini
-        multi_image_writers = [w for w in self.writer_ids 
-                            if len(self.writer_images[w]) >= 2]
-        single_image_writers = [w for w in self.writer_ids 
-                                if len(self.writer_images[w]) == 1]
-        
-        print(f"\nGenerating pairs from {len(multi_image_writers)} multi-image writers "
-            f"and {len(single_image_writers)} single-image writers...")
-        
-        # ===================================================================
-        # STEP 1: Genera TUTTE le coppie positive possibili
-        # ===================================================================
-        for writer_id in multi_image_writers:
-            images = self.writer_images[writer_id]
-            
-            # Usa combinations per generare tutte le coppie uniche
-            for img1, img2 in combinations(images, 2):
-                positive_pairs.append((img1, img2, 1.0))
-        
-        print(f"Generated {len(positive_pairs)} positive pairs (all possible combinations)")
-        
-        # ===================================================================
-        # STEP 2: Calcola quante coppie negative servono e quante sono possibili
-        # ===================================================================
-        num_negative_needed = int(len(positive_pairs) * (1 - self.positive_ratio) / self.positive_ratio)
-        
-        # Calcola il numero totale di coppie negative possibili
-        total_negative_possible = 0
-        for writer1_id, writer2_id in combinations(self.writer_ids, 2):
-            writer1_images = self.writer_images[writer1_id]
-            writer2_images = self.writer_images[writer2_id]
-            total_negative_possible += len(writer1_images) * len(writer2_images)
-        
-        print(f"Need {num_negative_needed} negative pairs for {self.positive_ratio*100:.0f}% positive ratio")
-        print(f"Total possible negative pairs: {total_negative_possible}")
-        
-        if total_negative_possible > 0:
-            print(f"Using {num_negative_needed / total_negative_possible * 100:.2f}% of possible negative pairs")
-        
-        # ===================================================================
-        # STEP 3: Genera coppie negative
-        # ===================================================================
-        # Itera su tutte le coppie di writer diversi
-        for writer1_id, writer2_id in combinations(self.writer_ids, 2):
-            if len(negative_pairs) >= num_negative_needed:
-                break
-            
-            writer1_images = self.writer_images[writer1_id]
-            writer2_images = self.writer_images[writer2_id]
-            
-            # Usa product per il prodotto cartesiano tra le due liste di immagini
-            for img1, img2 in product(writer1_images, writer2_images):
-                if len(negative_pairs) >= num_negative_needed:
-                    break
-                negative_pairs.append((img1, img2, 0.0))
-        
-        print(f"Generated {len(negative_pairs)} negative pairs")
-        
-        # ===================================================================
-        # STEP 4: Combina e mescola
-        # ===================================================================
-        all_pairs = positive_pairs + negative_pairs
-        random.shuffle(all_pairs)
-        
-        return all_pairs
+        print(f"{'TRAIN' if train else 'VAL'}: {len(self.pairs)} pairs "
+              f"({num_positive} positive, {len(self.pairs)-num_positive} negative)")
     
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Carica e restituisce una coppia pre-generata."""
         img1_path, img2_path, label = self.pairs[idx]
-        
         img1 = self._load_image(img1_path)
         img2 = self._load_image(img2_path)
-        
         return img1, img2, torch.tensor(label, dtype=torch.float32)
     
     def __len__(self) -> int:
@@ -394,13 +291,9 @@ class SiameseDataset(BaseWriterDataset):
 # ============================================================================
 # triplet_dataset.py
 # ============================================================================
-import random
-from itertools import combinations
 from typing import List, Tuple
 import torch
 from .base_dataset import BaseWriterDataset
-
-"""Triplet Dataset - Anchor, Positive, Negative"""
 
 class TripletDataset(BaseWriterDataset):
     """Dataset for Triplet network training."""
@@ -411,97 +304,23 @@ class TripletDataset(BaseWriterDataset):
         train: bool = True,
         target_size: int = 448,
     ):
-        super().__init__(
-            writer_dirs=writer_dirs,
-            train=train,
-            target_size=target_size,
-        )
+        super().__init__(writer_dirs=writer_dirs, train=train, target_size=target_size)
         
-        # Pre-genera tutte le triple
-        self.triplets = self._generate_all_triplets()
+        self.triplets = self._generate_all_samples(triplet=True)
         self.num_samples = len(self.triplets)
         
-        print(f"{'TRAIN' if train else 'VAL'}: Generated {len(self.triplets)} triplets")
-        print(f"  - Writers: {len(self.writer_ids)} total")
-        print(f"    - With ≥2 images: {sum(1 for w in self.writer_ids if len(self.writer_images[w]) >= 2)}")
-        print(f"    - With 1 image: {sum(1 for w in self.writer_ids if len(self.writer_images[w]) == 1)}")
-    
-    def _generate_all_triplets(self) -> List[Tuple[str, str, str]]:
-        """
-        Genera tutte le triple possibili.
-        Per ogni coppia positiva (anchor, positive), genera triple con tutti i possibili negativi.
-        
-        Returns:
-            Lista di tuple (anchor_path, positive_path, negative_path)
-        """
-        triplets = []
-        triplets_set = set()
-        
-        # Separa autori per numero di immagini
-        multi_image_writers = [w for w in self.writer_ids 
-                              if len(self.writer_images[w]) >= 2]
-        single_image_writers = [w for w in self.writer_ids 
-                                if len(self.writer_images[w]) == 1]
-        
-        print(f"\nGenerating triplets from {len(multi_image_writers)} multi-image writers "
-              f"and {len(single_image_writers)} single-image writers...")
-        
-        # ===================================================================
-        # STEP 1: Per ogni writer con ≥2 immagini, genera coppie positive
-        # ===================================================================
-        positive_pairs = []
-        for writer_id in multi_image_writers:
-            images = self.writer_images[writer_id]
-            for i in range(len(images) - 1):
-                for j in range(i + 1, len(images)):
-                    positive_pairs.append((writer_id, images[i], images[j]))
-        
-        print(f"Generated {len(positive_pairs)} positive pairs (anchor-positive)")
-        
-        # ===================================================================
-        # STEP 2: Per ogni coppia positiva, genera triple con negativi
-        # ===================================================================
-        # Conta i negativi possibili
-        total_triplets_possible = 0
-        for writer_id, anchor, positive in positive_pairs:
-            for other_writer_id in self.writer_ids:
-                if other_writer_id != writer_id:
-                    total_triplets_possible += len(self.writer_images[other_writer_id])
-        
-        print(f"Total possible triplets: {total_triplets_possible}")
-        
-        # Genera tutte le triple
-        for writer_id, anchor, positive in positive_pairs:
-            for other_writer_id in self.writer_ids:
-                if other_writer_id == writer_id:
-                    continue
-                
-                negative_images = self.writer_images[other_writer_id]
-                
-                for negative in negative_images:
-                    # Crea chiave per evitare duplicati
-                    triplet_key = (anchor, positive, negative)
-                    
-                    if triplet_key not in triplets_set:
-                        triplets_set.add(triplet_key)
-                        triplets.append((anchor, positive, negative))
-        
-        print(f"Generated {len(triplets)} unique triplets")
-        
-        return triplets
+        print(f"{'TRAIN' if train else 'VAL'}: {len(self.triplets)} triplets")
     
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Carica e restituisce una tripla pre-generata."""
         anchor_path, positive_path, negative_path = self.triplets[idx]
-        
         anchor = self._load_image(anchor_path)
         positive = self._load_image(positive_path)
         negative = self._load_image(negative_path)
-        
         return anchor, positive, negative
     
     def __len__(self) -> int:
         return len(self.triplets)
+
 
 === src/data/__init__.py ===
 # src/data/__init__.py
@@ -561,9 +380,11 @@ Provides common functionality for all dataset types.
 """
 
 import os
+import random
 from pathlib import Path
-from typing import List
+from typing import List, Tuple, Union
 from abc import ABC, abstractmethod
+from itertools import combinations, product
 
 import torch
 from torch.utils.data import Dataset
@@ -600,7 +421,6 @@ class BaseWriterDataset(Dataset, ABC):
                 for f in os.listdir(writer_dir) 
                 if f.lower().endswith(('.png', '.jpg', '.jpeg'))
             ]
-
             writer_images[writer_id] = images
             
         return writer_images
@@ -610,6 +430,72 @@ class BaseWriterDataset(Dataset, ABC):
         img = Image.open(path).convert("L")
         return self.transform(img)
     
+    def _generate_all_samples(
+        self, 
+        positive_ratio: float = 0.5, 
+        triplet: bool = False
+    ) -> List[Union[Tuple[str, str, float], Tuple[str, str, str]]]:
+        """
+        Genera tutte le coppie o triple possibili.
+        
+        Args:
+            positive_ratio: Rapporto di coppie positive (ignorato se triplet=True)
+            triplet: Se True genera triple (anchor, positive, negative)
+                    Se False genera coppie (img1, img2, label)
+        
+        Returns:
+            Lista di tuple (coppie con label o triple)
+        """
+        multi_image_writers = [w for w in self.writer_ids 
+                              if len(self.writer_images[w]) >= 2]
+        
+        print(f"\nGenerating {'triplets' if triplet else 'pairs'} from "
+              f"{len(multi_image_writers)} multi-image writers...")
+        
+        # Genera tutte le coppie positive (stesso writer)
+        positive_pairs = []
+        for writer_id in multi_image_writers:
+            images = self.writer_images[writer_id]
+            for img1, img2 in combinations(images, 2):
+                positive_pairs.append((writer_id, img1, img2))
+        
+        print(f"Generated {len(positive_pairs)} positive pairs")
+        
+        if triplet:
+            # Genera triple: per ogni coppia positiva, aggiungi tutti i negativi possibili
+            triplets = []
+            for writer_id, anchor, positive in positive_pairs:
+                for other_writer_id in self.writer_ids:
+                    if other_writer_id != writer_id:
+                        for negative in self.writer_images[other_writer_id]:
+                            triplets.append((anchor, positive, negative))
+            
+            print(f"Generated {len(triplets)} triplets")
+            return triplets
+        
+        else:
+            # Genera coppie con label
+            pairs = [(img1, img2, 1.0) for _, img1, img2 in positive_pairs]
+            
+            # Calcola quante negative servono
+            num_negative_needed = int(len(pairs) * (1 - positive_ratio) / positive_ratio)
+            
+            # Genera coppie negative
+            negative_pairs = []
+            for w1, w2 in combinations(self.writer_ids, 2):
+                if len(negative_pairs) >= num_negative_needed:
+                    break
+                for img1, img2 in product(self.writer_images[w1], self.writer_images[w2]):
+                    if len(negative_pairs) >= num_negative_needed:
+                        break
+                    negative_pairs.append((img1, img2, 0.0))
+            
+            print(f"Generated {len(negative_pairs)} negative pairs")
+            
+            all_pairs = pairs + negative_pairs
+            random.shuffle(all_pairs)
+            return all_pairs
+    
     def __len__(self) -> int:
         return self.num_samples
     
@@ -618,20 +504,16 @@ class BaseWriterDataset(Dataset, ABC):
         """Generate a sample (must be implemented by subclasses)."""
         pass
 
-
 === src/data/contrastive_dataset.py ===
 # ============================================================================
 # contrastive_dataset.py
 # ============================================================================
-"""Contrastive Dataset - Similar to Siamese but 50/50 ratio"""
-import random
-from itertools import combinations
 from typing import List, Tuple
 import torch
 from .base_dataset import BaseWriterDataset
 
 class ContrastiveDataset(BaseWriterDataset):
-    """Dataset for Contrastive Learning (balanced positive/negative samples)."""
+    """Dataset for Contrastive Learning (balanced 50/50 positive/negative)."""
     
     def __init__(
         self,
@@ -639,121 +521,24 @@ class ContrastiveDataset(BaseWriterDataset):
         train: bool = True,
         target_size: int = 448,
     ):
-        super().__init__(
-            writer_dirs=writer_dirs,
-            train=train,
-            target_size=target_size,
-        )
+        super().__init__(writer_dirs=writer_dirs, train=train, target_size=target_size)
         
-        # Pre-genera tutte le coppie con ratio 50/50
-        self.pairs = self._generate_all_possible_pairs()
+        self.pairs = self._generate_all_samples(positive_ratio=0.5, triplet=False)
         self.num_samples = len(self.pairs)
         
         num_positive = sum(1 for p in self.pairs if p[2] == 1.0)
-        num_negative = sum(1 for p in self.pairs if p[2] == 0.0)
-        actual_ratio = num_positive / len(self.pairs) * 100 if self.pairs else 0
-        
-        print(f"{'TRAIN' if train else 'VAL'}: Generated {len(self.pairs)} pairs")
-        print(f"  - Positive: {num_positive} ({actual_ratio:.1f}%)")
-        print(f"  - Negative: {num_negative} ({100-actual_ratio:.1f}%)")
-        print(f"  - Writers: {len(self.writer_ids)} total")
-        print(f"    - With ≥2 images: {sum(1 for w in self.writer_ids if len(self.writer_images[w]) >= 2)}")
-        print(f"    - With 1 image: {sum(1 for w in self.writer_ids if len(self.writer_images[w]) == 1)}")
-    
-    def _generate_all_possible_pairs(self) -> List[Tuple[str, str, float]]:
-        """
-        Genera tutte le coppie possibili con ratio 50/50.
-        
-        Returns:
-            Lista di tuple (img1_path, img2_path, label)
-        """
-        positive_pairs = []
-        negative_pairs = []
-        negative_pairs_set = set()
-        
-        # Separa autori per numero di immagini
-        multi_image_writers = [w for w in self.writer_ids 
-                              if len(self.writer_images[w]) >= 2]
-        single_image_writers = [w for w in self.writer_ids 
-                                if len(self.writer_images[w]) == 1]
-        
-        print(f"\nGenerating pairs from {len(multi_image_writers)} multi-image writers "
-              f"and {len(single_image_writers)} single-image writers...")
-        
-        # ===================================================================
-        # STEP 1: Genera TUTTE le coppie positive possibili
-        # ===================================================================
-        for writer_id in multi_image_writers:
-            images = self.writer_images[writer_id]
-            
-            for i in range(len(images) - 1):
-                for j in range(i + 1, len(images)):
-                    positive_pairs.append((images[i], images[j], 1.0))
-        
-        print(f"Generated {len(positive_pairs)} positive pairs (all possible combinations)")
-        
-        # ===================================================================
-        # STEP 2: Genera STESSO NUMERO di coppie negative (ratio 50/50)
-        # ===================================================================
-        num_negative_needed = len(positive_pairs)
-        
-        # Calcola il numero totale di coppie negative possibili
-        total_negative_possible = 0
-        for writer1_id, writer2_id in combinations(self.writer_ids, 2):
-            writer1_images = self.writer_images[writer1_id]
-            writer2_images = self.writer_images[writer2_id]
-            total_negative_possible += len(writer1_images) * len(writer2_images)
-        
-        print(f"Need {num_negative_needed} negative pairs for 50% positive ratio")
-        print(f"Total possible negative pairs: {total_negative_possible}")
-        
-        if total_negative_possible > 0:
-            print(f"Using {num_negative_needed / total_negative_possible * 100:.2f}% of possible negative pairs")
-        
-        # ===================================================================
-        # STEP 3: Genera coppie negative
-        # ===================================================================
-        for writer1_id, writer2_id in combinations(self.writer_ids, 2):
-            if len(negative_pairs) >= num_negative_needed:
-                break
-            
-            writer1_images = self.writer_images[writer1_id]
-            writer2_images = self.writer_images[writer2_id]
-            
-            for img1 in writer1_images:
-                for img2 in writer2_images:
-                    if len(negative_pairs) >= num_negative_needed:
-                        break
-                    
-                    pair_key = tuple(sorted([img1, img2]))
-                    if pair_key not in negative_pairs_set:
-                        negative_pairs_set.add(pair_key)
-                        negative_pairs.append((img1, img2, 0.0))
-                
-                if len(negative_pairs) >= num_negative_needed:
-                    break
-        
-        print(f"Generated {len(negative_pairs)} negative pairs")
-        
-        # ===================================================================
-        # STEP 4: Combina e mescola
-        # ===================================================================
-        all_pairs = positive_pairs + negative_pairs
-        random.shuffle(all_pairs)
-        
-        return all_pairs
+        print(f"{'TRAIN' if train else 'VAL'}: {len(self.pairs)} pairs "
+              f"({num_positive} positive, {len(self.pairs)-num_positive} negative)")
     
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Carica e restituisce una coppia pre-generata."""
         img1_path, img2_path, label = self.pairs[idx]
-        
         img1 = self._load_image(img1_path)
         img2 = self._load_image(img2_path)
-        
         return img1, img2, torch.tensor(label, dtype=torch.float32)
     
     def __len__(self) -> int:
         return len(self.pairs)
+
 
 === src/evaluation/metrics.py ===
 """
@@ -1758,11 +1543,6 @@ class BaseTrainer(ABC):
         
         return metrics
     
-    @abstractmethod
-    def _get_embeddings(self, img1, img2):
-        """Get embeddings from images (implemented by subclasses)."""
-        pass
-    
     def _update_history(self, epoch: int, train_loss: float, val_loss: float):
         """Update history with losses only."""
         self.history['epoch'].append(epoch)
@@ -1841,7 +1621,7 @@ class BaseTrainer(ABC):
         print("FINAL COMPREHENSIVE VALIDATION")
         print(f"{'='*60}")
         
-        final_metrics = self.validate_comprehensive(val_dataset, num_pairs=1000)
+        final_metrics = self.validate_comprehensive(val_dataset)
         print_verification_results(final_metrics)
         
         # Save final checkpoint and metrics
