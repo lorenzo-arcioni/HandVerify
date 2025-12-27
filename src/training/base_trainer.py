@@ -131,11 +131,6 @@ class BaseTrainer(ABC):
         
         return metrics
     
-    @abstractmethod
-    def _get_embeddings(self, img1, img2):
-        """Get embeddings from images (implemented by subclasses)."""
-        pass
-    
     def _update_history(self, epoch: int, train_loss: float, val_loss: float):
         """Update history with losses only."""
         self.history['epoch'].append(epoch)
