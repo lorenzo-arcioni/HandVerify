@@ -54,7 +54,7 @@ class BCETrainer(BaseTrainer):
             labels = labels.to(self.device)
             
             self.optimizer.zero_grad()
-            outputs = self.model(img1, img2).squeeze()
+            outputs = self.model(img1, img2).squeeze(1)
             loss = self.criterion(outputs, labels)
             
             loss.backward()
@@ -74,7 +74,7 @@ class BCETrainer(BaseTrainer):
             img1, img2, labels = img1.to(self.device), img2.to(self.device), labels.to(self.device)
             
             # Forward pass
-            outputs = self.model(img1, img2).squeeze()
+            outputs = self.model(img1, img2).squeeze(1)
             
             # BCE loss
             loss = self.criterion(outputs, labels)
