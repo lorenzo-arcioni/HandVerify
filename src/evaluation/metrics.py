@@ -87,6 +87,7 @@ def compute_metrics(
     # ------------------------------------------------------------------
     # 6. FAR operating points
     # ------------------------------------------------------------------
+    # DA CHIARIRE BENE
     operating_points = {}
     for far in [0.001, 0.01]:
         idx = np.argmin(np.abs(fpr - far))
