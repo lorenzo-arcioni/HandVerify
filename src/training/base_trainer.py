@@ -17,7 +17,7 @@ import numpy as np
 from PIL import Image
 from tqdm import tqdm
 
-from ..evaluation.metrics import compute_verification_metrics, print_verification_results
+from ..evaluation.metrics import compute_metrics, print_results
 
 
 class BaseTrainer(ABC):
@@ -119,7 +119,7 @@ class BaseTrainer(ABC):
         # Decide se i score sono già similarity o vanno invertiti
         distances_are_similarity = not use_embeddings  # BCE → già similarity
 
-        metrics = compute_verification_metrics(
+        metrics = compute_metrics(
             np.array(genuine_scores),
             np.array(impostor_scores),
             distances_are_similarity=distances_are_similarity
@@ -210,7 +210,7 @@ class BaseTrainer(ABC):
         print(f"{'='*60}")
         
         final_metrics = self.validate_comprehensive(val_dataset)
-        print_verification_results(final_metrics)
+        print_results(final_metrics)
         
         # Save final checkpoint and metrics
         self.save_checkpoint(is_best=False, fold=fold)
