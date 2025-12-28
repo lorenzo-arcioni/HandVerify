@@ -89,20 +89,37 @@ def compute_metrics(
     # ------------------------------------------------------------------
     # DA CHIARIRE BENE
     operating_points = {}
-    for far in [0.001, 0.01]:
-        idx = np.argmin(np.abs(fpr - far))
-        frr = fnr[idx]
-        acc = 1 - (far + frr) / 2
 
-        operating_points[f"acc_far_{far}"] = acc
-        operating_points[f"frr_far_{far}"] = frr
-        operating_points[f"threshold_far_{far}"] = thresholds[idx]
+    for far_target in [0.001, 0.01]:
+        key_prefix = f"far_{far_target}"
+
+        # inizializza tutto a None
+        operating_points[f"{key_prefix}_effective"] = None
+        operating_points[f"frr_at_{key_prefix}"] = None
+        operating_points[f"gar_at_{key_prefix}"] = None
+        operating_points[f"threshold_at_{key_prefix}"] = None
+
+        # cerca soglie che rispettano FAR <= target
+        valid_idxs = np.where(fpr <= far_target)[0]
+        if len(valid_idxs) == 0:
+            continue
+
+        idx = valid_idxs[-1]
+
+        far_eff = fpr[idx]
+        frr = fnr[idx]
+        gar = 1.0 - frr
+
+        operating_points[f"{key_prefix}_effective"] = far_eff
+        operating_points[f"frr_at_{key_prefix}"] = frr
+        operating_points[f"gar_at_{key_prefix}"] = gar
+        operating_points[f"threshold_at_{key_prefix}"] = thresholds[idx]
 
     # ------------------------------------------------------------------
-    # 7. d-prime & decidability (ALWAYS computed on DISTANCES)
+    # 7. d-prime & decidability (computed on DISTANCES)
     # ------------------------------------------------------------------
     if distances_are_similarity:
-        # Convert similarity → distance for biometric statistics
+        # Assumes similarity scores in [0, 1], higher = more similar
         genuine_dist = 1.0 - genuine_vals
         impostor_dist = 1.0 - impostor_vals
     else:
@@ -111,12 +128,18 @@ def compute_metrics(
 
     mu_g = np.mean(genuine_dist)
     mu_i = np.mean(impostor_dist)
-    sigma_g = np.std(genuine_dist)
-    sigma_i = np.std(impostor_dist)
 
-    pooled_std = np.sqrt((sigma_g ** 2 + sigma_i ** 2) / 2)
-    d_prime = (mu_i - mu_g) / pooled_std if pooled_std > 0 else 0.0
-    decidability = d_prime * np.sqrt(2)
+    sigma_g = np.std(genuine_dist, ddof=1)
+    sigma_i = np.std(impostor_dist, ddof=1)
+
+    pooled_std = np.sqrt(0.5 * (sigma_g**2 + sigma_i**2))
+
+    if pooled_std > 0:
+        d_prime = (mu_i - mu_g) / pooled_std
+        decidability = abs(d_prime)
+    else:
+        d_prime = 0.0
+        decidability = 0.0
 
     # ------------------------------------------------------------------
     # 8. Collect metrics
@@ -179,8 +202,23 @@ def print_results(metrics: Dict[str, float], dataset_name: str = "Validation"):
     
     print(f"\n⚙️ OPERATING POINTS:")
     print(f"  EER Threshold:               {metrics['eer_threshold']:.4f}")
-    print(f"  Accuracy @ FAR=0.1%:         {metrics['acc_far_0.001']:.4f}")
-    print(f"  Accuracy @ FAR=1.0%:         {metrics['acc_far_0.01']:.4f}")
-    print(f"  Threshold @ FAR=0.1%:        {metrics['threshold_far_0.001']:.4f}")
-    print(f"  Threshold @ FAR=1.0%:        {metrics['threshold_far_0.01']:.4f}")
+
+    for far_target in [0.001, 0.01]:
+        key_prefix = f"far_{far_target}"
+
+        far_eff = metrics.get(f"{key_prefix}_effective")
+        frr = metrics.get(f"frr_at_{key_prefix}")
+        gar = metrics.get(f"gar_at_{key_prefix}")
+        thr = metrics.get(f"threshold_at_{key_prefix}")
+
+        print(f"\n  FAR Target = {far_target*100:.2f}%")
+
+        if far_eff is None:
+            print(f"    ❌ Operating point not reachable")
+        else:
+            print(f"    FAR (effective):           {far_eff*100:.4f}%")
+            print(f"    FRR @ FAR:                 {frr*100:.4f}%")
+            print(f"    GAR @ FAR:                 {gar*100:.4f}%")
+            print(f"    Threshold @ FAR:           {thr:.4f}")
+
     print(f"{'='*70}\n")
