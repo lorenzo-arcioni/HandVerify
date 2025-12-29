@@ -169,6 +169,7 @@ class BaseTrainer(ABC):
         print(f"{'='*60}\n")
         
         patience_counter = 0
+        train_dataset = train_loader.dataset
         
         for epoch in range(epochs):
             # Train
@@ -203,6 +204,11 @@ class BaseTrainer(ABC):
                 if patience_counter >= patience:
                     print("  ⚠ Early stopping triggered")
                     break
+
+            # === NEGATIVE RESAMPLING ===
+            # Notifica il dataset che l'epoca è finita
+            if hasattr(train_dataset, 'on_epoch_end'):
+                train_dataset.on_epoch_end(epoch)
         
         # Final comprehensive validation
         print(f"\n{'='*60}")
@@ -240,7 +246,7 @@ class BaseTrainer(ABC):
         """Reset model weights."""
         if hasattr(m, 'reset_parameters'):
             m.reset_parameters()
-    
+
     def save_checkpoint(self, is_best: bool = False, fold: int = None):
         """Save model checkpoint."""
         suffix = "best" if is_best else "final"
