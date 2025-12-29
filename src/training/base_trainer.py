@@ -97,7 +97,7 @@ class BaseTrainer(ABC):
         print(f"\n🔍 Computing verification metrics on {len(val_dataset)} pairs...")
         
         for idx in tqdm(range(len(val_dataset)), desc="  Evaluating pairs"):
-            img1_path, img2_path, label = val_dataset.pairs[idx]
+            img1_path, img2_path, label = val_dataset.samples[idx]
             
             # Carica le immagini
             img1 = val_dataset.transform(Image.open(img1_path).convert("L")).unsqueeze(0).to(self.device)
