@@ -103,12 +103,10 @@ class BaseTrainer(ABC):
             img2 = val_dataset.transform(Image.open(img2_path).convert("L")).unsqueeze(0).to(self.device)
             
             if use_embeddings:
-                print("USE EMBEDDINGS")
                 # Metric learning: contrastive / triplet
                 emb1, emb2 = self._get_embeddings(img1, img2)
                 score = F.cosine_similarity(emb1, emb2).item()
             else:
-                print("NOT USE EMBEDDINGS")
                 # BCE Siamese: output diretto
                 score = self.model(img1, img2).item()
             
@@ -123,7 +121,7 @@ class BaseTrainer(ABC):
         metrics = compute_metrics(
             np.array(genuine_scores),
             np.array(impostor_scores),
-            distances_are_similarity=distances_are_similarity
+            distances_are_similarity= True#distances_are_similarity
         )
         
         print(f"\n  ✓ Evaluated {len(genuine_scores)} genuine + {len(impostor_scores)} impostor pairs")

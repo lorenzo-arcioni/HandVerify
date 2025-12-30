@@ -930,7 +930,7 @@ from .base import BaseContrastiveNetwork
 class ContrastiveMobileNetV3Small(BaseContrastiveNetwork):
     """Contrastive network based on MobileNetV3-Small"""
     
-    def __init__(self, in_channels: int = 1, projection_dim: int = 128):
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128):
         mobilenet = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
         mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
         
@@ -940,13 +940,13 @@ class ContrastiveMobileNetV3Small(BaseContrastiveNetwork):
             nn.Flatten()
         )
         
-        super().__init__(encoder=encoder, feature_dim=576, projection_dim=projection_dim)
+        super().__init__(encoder=encoder, feature_dim=576, embedding_dim=embedding_dim)
 
 
 class ContrastiveMobileNetV3Large(BaseContrastiveNetwork):
     """Contrastive network based on MobileNetV3-Large"""
     
-    def __init__(self, in_channels: int = 1, projection_dim: int = 128):
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128):
         mobilenet = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT)
         mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
         
@@ -956,49 +956,49 @@ class ContrastiveMobileNetV3Large(BaseContrastiveNetwork):
             nn.Flatten()
         )
         
-        super().__init__(encoder=encoder, feature_dim=960, projection_dim=projection_dim)
+        super().__init__(encoder=encoder, feature_dim=960, embedding_dim=embedding_dim)
 
 
 class ContrastiveResNet18(BaseContrastiveNetwork):
     """Contrastive network based on ResNet18"""
     
-    def __init__(self, in_channels: int = 1, projection_dim: int = 128):
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128):
         resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
         resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
         
         encoder = nn.Sequential(*list(resnet.children())[:-1], nn.Flatten())
         
-        super().__init__(encoder=encoder, feature_dim=512, projection_dim=projection_dim)
+        super().__init__(encoder=encoder, feature_dim=512, embedding_dim=embedding_dim)
 
 
 class ContrastiveResNet34(BaseContrastiveNetwork):
     """Contrastive network based on ResNet34"""
     
-    def __init__(self, in_channels: int = 1, projection_dim: int = 128):
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128):
         resnet = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
         resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
         
         encoder = nn.Sequential(*list(resnet.children())[:-1], nn.Flatten())
         
-        super().__init__(encoder=encoder, feature_dim=512, projection_dim=projection_dim)
+        super().__init__(encoder=encoder, feature_dim=512, embedding_dim=embedding_dim)
 
 
 class ContrastiveResNet50(BaseContrastiveNetwork):
     """Contrastive network based on ResNet50"""
     
-    def __init__(self, in_channels: int = 1, projection_dim: int = 128):
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128):
         resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
         resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
         
         encoder = nn.Sequential(*list(resnet.children())[:-1], nn.Flatten())
         
-        super().__init__(encoder=encoder, feature_dim=2048, projection_dim=projection_dim)
+        super().__init__(encoder=encoder, feature_dim=2048, embedding_dim=embedding_dim)
 
 
 class ContrastiveEfficientNetB0(BaseContrastiveNetwork):
     """Contrastive network based on EfficientNet-B0"""
     
-    def __init__(self, in_channels: int = 1, projection_dim: int = 128):
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128):
         effnet = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.DEFAULT)
         effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
         
@@ -1008,13 +1008,13 @@ class ContrastiveEfficientNetB0(BaseContrastiveNetwork):
             nn.Flatten()
         )
         
-        super().__init__(encoder=encoder, feature_dim=1280, projection_dim=projection_dim)
+        super().__init__(encoder=encoder, feature_dim=1280, embedding_dim=embedding_dim)
 
 
 class ContrastiveDenseNet121(BaseContrastiveNetwork):
     """Contrastive network based on DenseNet121"""
     
-    def __init__(self, in_channels: int = 1, projection_dim: int = 128):
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128):
         densenet = models.densenet121(weights=models.DenseNet121_Weights.DEFAULT)
         densenet.features.conv0 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
         
@@ -1024,16 +1024,18 @@ class ContrastiveDenseNet121(BaseContrastiveNetwork):
             nn.Flatten()
         )
         
-        super().__init__(encoder=encoder, feature_dim=1024, projection_dim=projection_dim)
+        super().__init__(encoder=encoder, feature_dim=1024, embedding_dim=embedding_dim)
 
 === src/models/registry.py ===
 """
 Model Registry
-Central registry for all available model architectures.
+Central registry for all available model architectures (BCE, Contrastive, Triplet).
 """
 
-from typing import Dict, Type
-from .base import BaseSiameseNetwork
+from typing import Dict, Type, Union
+from .base import BaseSiameseNetwork, BaseContrastiveNetwork, BaseTripletNetwork
+
+# Import BCE Siamese backbones
 from .bce_backbones import (
     SiameseResNet18,
     SiameseResNet34,
@@ -1047,8 +1049,32 @@ from .bce_backbones import (
     SiameseRegNetY400MF,
 )
 
+# Import Contrastive backbones
+from .contrastive_backbones import (
+    ContrastiveMobileNetV3Small,
+    ContrastiveMobileNetV3Large,
+    ContrastiveResNet18,
+    ContrastiveResNet34,
+    ContrastiveResNet50,
+    ContrastiveEfficientNetB0,
+    ContrastiveDenseNet121,
+)
 
-MODEL_REGISTRY: Dict[str, Type[BaseSiameseNetwork]] = {
+# Import Triplet backbones
+from .triplet_backbones import (
+    TripletMobileNetV3Small,
+    TripletMobileNetV3Large,
+    TripletResNet18,
+    TripletResNet34,
+    TripletEfficientNetB0,
+)
+
+
+# ============================================================================
+# Model Registry organized by architecture type
+# ============================================================================
+
+BCE_MODELS: Dict[str, Type[BaseSiameseNetwork]] = {
     # ResNet family
     'resnet18': SiameseResNet18,
     'resnet34': SiameseResNet34,
@@ -1070,32 +1096,190 @@ MODEL_REGISTRY: Dict[str, Type[BaseSiameseNetwork]] = {
     'regnet_y_400mf': SiameseRegNetY400MF,
 }
 
+CONTRASTIVE_MODELS: Dict[str, Type[BaseContrastiveNetwork]] = {
+    # MobileNet family
+    'mobilenet_v3_small': ContrastiveMobileNetV3Small,
+    'mobilenet_v3_large': ContrastiveMobileNetV3Large,
+    
+    # ResNet family
+    'resnet18': ContrastiveResNet18,
+    'resnet34': ContrastiveResNet34,
+    'resnet50': ContrastiveResNet50,
+    
+    # EfficientNet family
+    'efficientnet_b0': ContrastiveEfficientNetB0,
+    
+    # DenseNet family
+    'densenet121': ContrastiveDenseNet121,
+}
 
-def get_model(model_name: str, **kwargs) -> BaseSiameseNetwork:
+TRIPLET_MODELS: Dict[str, Type[BaseTripletNetwork]] = {
+    # MobileNet family
+    'mobilenet_v3_small': TripletMobileNetV3Small,
+    'mobilenet_v3_large': TripletMobileNetV3Large,
+    
+    # ResNet family
+    'resnet18': TripletResNet18,
+    'resnet34': TripletResNet34,
+    
+    # EfficientNet family
+    'efficientnet_b0': TripletEfficientNetB0,
+}
+
+
+# ============================================================================
+# Main API Functions
+# ============================================================================
+
+def get_model(
+    model_name: str,
+    model_type: str = 'bce',
+    **kwargs
+) -> Union[BaseSiameseNetwork, BaseContrastiveNetwork, BaseTripletNetwork]:
     """
-    Get a model instance by name.
+    Get a model instance by name and type.
     
     Args:
-        model_name: Name of the model (must be in MODEL_REGISTRY)
+        model_name: Name of the backbone architecture (e.g., 'resnet18')
+        model_type: Type of model - 'bce', 'contrastive', or 'triplet'
         **kwargs: Additional arguments to pass to model constructor
+                  - in_channels: Number of input channels (default: 1)
+                  - projection_dim: For BCE models (default: 512)
+                  - embedding_dim: For Contrastive/Triplet models (default: 128)
         
     Returns:
         Instantiated model
         
     Raises:
-        ValueError: If model_name not found in registry
+        ValueError: If model_name or model_type not found in registry
+        
+    Examples:
+        >>> # BCE Siamese
+        >>> model = get_model('resnet18', model_type='bce', projection_dim=512)
+        
+        >>> # Contrastive
+        >>> model = get_model('resnet18', model_type='contrastive', embedding_dim=128)
+        
+        >>> # Triplet
+        >>> model = get_model('resnet18', model_type='triplet', embedding_dim=128)
     """
-    if model_name not in MODEL_REGISTRY:
-        available = ', '.join(MODEL_REGISTRY.keys())
-        raise ValueError(f"Model '{model_name}' not found. Available models: {available}")
+    model_type = model_type.lower()
     
-    model_class = MODEL_REGISTRY[model_name]
+    # Select registry based on model type
+    if model_type == 'bce':
+        registry = BCE_MODELS
+    elif model_type == 'contrastive':
+        registry = CONTRASTIVE_MODELS
+    elif model_type == 'triplet':
+        registry = TRIPLET_MODELS
+    else:
+        raise ValueError(
+            f"Invalid model_type '{model_type}'. "
+            f"Must be one of: 'bce', 'contrastive', 'triplet'"
+        )
+    
+    # Check if model exists in registry
+    if model_name not in registry:
+        available = ', '.join(registry.keys())
+        raise ValueError(
+            f"Model '{model_name}' not found in {model_type.upper()} registry. "
+            f"Available models: {available}"
+        )
+    
+    # Instantiate model
+    model_class = registry[model_name]
+    
+    # Handle parameter naming differences
+    if model_type == 'bce':
+        # BCE uses 'projection_dim'
+        if 'embedding_dim' in kwargs and 'projection_dim' not in kwargs:
+            kwargs['projection_dim'] = kwargs.pop('embedding_dim')
+    else:
+        # Contrastive/Triplet use 'embedding_dim' or 'projection_dim'
+        # Map projection_dim -> embedding_dim for consistency
+        if 'projection_dim' in kwargs and 'embedding_dim' not in kwargs:
+            kwargs['embedding_dim'] = kwargs.pop('projection_dim')
+    
     return model_class(**kwargs)
 
 
-def list_models() -> list:
-    """Get list of all available model names"""
-    return list(MODEL_REGISTRY.keys())
+def list_models(model_type: str = None) -> Dict[str, list]:
+    """
+    Get list of available model names.
+    
+    Args:
+        model_type: If specified, return only models of this type.
+                   If None, return all models organized by type.
+        
+    Returns:
+        Dictionary mapping model types to lists of model names,
+        or a single list if model_type is specified.
+        
+    Examples:
+        >>> # Get all models
+        >>> list_models()
+        {'bce': [...], 'contrastive': [...], 'triplet': [...]}
+        
+        >>> # Get only BCE models
+        >>> list_models('bce')
+        ['resnet18', 'resnet34', ...]
+    """
+    all_models = {
+        'bce': list(BCE_MODELS.keys()),
+        'contrastive': list(CONTRASTIVE_MODELS.keys()),
+        'triplet': list(TRIPLET_MODELS.keys()),
+    }
+    
+    if model_type is None:
+        return all_models
+    
+    model_type = model_type.lower()
+    if model_type not in all_models:
+        raise ValueError(
+            f"Invalid model_type '{model_type}'. "
+            f"Must be one of: 'bce', 'contrastive', 'triplet'"
+        )
+    
+    return all_models[model_type]
+
+
+def get_model_info(model_name: str = None) -> Dict:
+    """
+    Get information about available model architectures.
+    
+    Args:
+        model_name: If specified, return info for this model only.
+                   If None, return info for all models.
+    
+    Returns:
+        Dictionary with model availability across different types
+        
+    Examples:
+        >>> get_model_info('resnet18')
+        {'resnet18': {'bce': True, 'contrastive': True, 'triplet': True}}
+        
+        >>> get_model_info()  # All models
+    """
+    all_model_names = set(
+        list(BCE_MODELS.keys()) + 
+        list(CONTRASTIVE_MODELS.keys()) + 
+        list(TRIPLET_MODELS.keys())
+    )
+    
+    if model_name is not None:
+        if model_name not in all_model_names:
+            raise ValueError(f"Model '{model_name}' not found in any registry")
+        all_model_names = {model_name}
+    
+    info = {}
+    for name in sorted(all_model_names):
+        info[name] = {
+            'bce': name in BCE_MODELS,
+            'contrastive': name in CONTRASTIVE_MODELS,
+            'triplet': name in TRIPLET_MODELS,
+        }
+    
+    return info
 
 === src/models/bce_backbones.py ===
 """
@@ -1412,17 +1596,17 @@ class BaseContrastiveNetwork(nn.Module):
     Projects features to a lower-dimensional embedding space.
     """
     
-    def __init__(self, encoder: nn.Module, feature_dim: int, projection_dim: int = 128):
+    def __init__(self, encoder: nn.Module, feature_dim: int, embedding_dim: int = 128):
         """
         Args:
             encoder: Backbone network for feature extraction
             feature_dim: Dimension of features from encoder
-            projection_dim: Dimension of projection head output
+            embedding_dim: Dimension of projection head output
         """
         super().__init__()
         self.encoder = encoder
         self.feature_dim = feature_dim
-        self.projection_dim = projection_dim
+        self.embedding_dim = embedding_dim
         
         # Projection head (MLP)
         self.projection = nn.Sequential(
@@ -1430,7 +1614,7 @@ class BaseContrastiveNetwork(nn.Module):
             nn.BatchNorm1d(512),
             nn.ReLU(inplace=True),
             nn.Dropout(0.3),
-            nn.Linear(512, projection_dim)
+            nn.Linear(512, embedding_dim)
         )
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -1505,10 +1689,33 @@ class BaseTripletNetwork(nn.Module):
 # src/models/__init__.py
 """
 Models module
+Unified access to all model architectures (BCE, Contrastive, Triplet)
 """
 
 from .base import BaseSiameseNetwork, BaseTripletNetwork, BaseContrastiveNetwork
-from .registry import get_model, list_models, MODEL_REGISTRY
+
+from .registry import (
+    get_model,
+    list_models,
+    get_model_info,
+    BCE_MODELS,
+    CONTRASTIVE_MODELS,
+    TRIPLET_MODELS,
+)
+
+from .bce_backbones import (
+    SiameseResNet18,
+    SiameseResNet34,
+    SiameseResNet50,
+    SiameseEfficientNetB0,
+    SiameseEfficientNetB1,
+    SiameseEfficientNetV2,
+    SiameseMobileNetV3Small,
+    SiameseMobileNetV3Large,
+    SiameseDenseNet121,
+    SiameseRegNetY400MF,
+)
+
 from .triplet_backbones import (
     TripletMobileNetV3Small,
     TripletMobileNetV3Large,
@@ -1516,6 +1723,7 @@ from .triplet_backbones import (
     TripletResNet34,
     TripletEfficientNetB0,
 )
+
 from .contrastive_backbones import (
     ContrastiveMobileNetV3Small,
     ContrastiveMobileNetV3Large,
@@ -1527,17 +1735,53 @@ from .contrastive_backbones import (
 )
 
 __all__ = [
+    # ========================================================================
+    # Base classes
+    # ========================================================================
     'BaseSiameseNetwork',
     'BaseTripletNetwork',
     'BaseContrastiveNetwork',
-    'get_model',
-    'list_models',
-    'MODEL_REGISTRY',
+    
+    # ========================================================================
+    # Registry API (main interface)
+    # ========================================================================
+    'get_model',           # Main function to instantiate models
+    'list_models',         # List available models by type
+    'get_model_info',      # Get model availability info
+    
+    # ========================================================================
+    # Registry dictionaries (for advanced usage)
+    # ========================================================================
+    'BCE_MODELS',          # All BCE Siamese models
+    'CONTRASTIVE_MODELS',  # All Contrastive models
+    'TRIPLET_MODELS',      # All Triplet models
+    
+    # ========================================================================
+    # BCE Siamese models (direct import)
+    # ========================================================================
+    'SiameseResNet18',
+    'SiameseResNet34',
+    'SiameseResNet50',
+    'SiameseEfficientNetB0',
+    'SiameseEfficientNetB1',
+    'SiameseEfficientNetV2',
+    'SiameseMobileNetV3Small',
+    'SiameseMobileNetV3Large',
+    'SiameseDenseNet121',
+    'SiameseRegNetY400MF',
+    
+    # ========================================================================
+    # Triplet models (direct import)
+    # ========================================================================
     'TripletMobileNetV3Small',
     'TripletMobileNetV3Large',
     'TripletResNet18',
     'TripletResNet34',
     'TripletEfficientNetB0',
+    
+    # ========================================================================
+    # Contrastive models (direct import)
+    # ========================================================================
     'ContrastiveMobileNetV3Small',
     'ContrastiveMobileNetV3Large',
     'ContrastiveResNet18',
@@ -1649,8 +1893,7 @@ class BaseTrainer(ABC):
         impostor_scores = []
 
         # Controllo se la sottoclasse ha implementato _get_embeddings
-        use_embeddings = hasattr(self, "_get_embeddings") and callable(getattr(self, "_get_embeddings")) \
-                        and self._get_embeddings.__func__ is not BaseTrainer._get_embeddings
+        use_embeddings = hasattr(self, "_get_embeddings") and callable(getattr(self, "_get_embeddings"))
 
         print(f"\n🔍 Computing verification metrics on {len(val_dataset)} pairs...")
         
