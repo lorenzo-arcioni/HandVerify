@@ -10,7 +10,6 @@ from .registry import (
     get_model,
     list_models,
     get_model_info,
-    MODEL_REGISTRY,
     BCE_MODELS,
     CONTRASTIVE_MODELS,
     TRIPLET_MODELS,
@@ -65,7 +64,6 @@ __all__ = [
     # ========================================================================
     # Registry dictionaries (for advanced usage)
     # ========================================================================
-    'MODEL_REGISTRY',      # Backward compatibility (BCE models)
     'BCE_MODELS',          # All BCE Siamese models
     'CONTRASTIVE_MODELS',  # All Contrastive models
     'TRIPLET_MODELS',      # All Triplet models
