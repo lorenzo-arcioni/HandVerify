@@ -108,17 +108,17 @@ class BaseContrastiveNetwork(nn.Module):
     Projects features to a lower-dimensional embedding space.
     """
     
-    def __init__(self, encoder: nn.Module, feature_dim: int, projection_dim: int = 128):
+    def __init__(self, encoder: nn.Module, feature_dim: int, embedding_dim: int = 128):
         """
         Args:
             encoder: Backbone network for feature extraction
             feature_dim: Dimension of features from encoder
-            projection_dim: Dimension of projection head output
+            embedding_dim: Dimension of projection head output
         """
         super().__init__()
         self.encoder = encoder
         self.feature_dim = feature_dim
-        self.projection_dim = projection_dim
+        self.embedding_dim = embedding_dim
         
         # Projection head (MLP)
         self.projection = nn.Sequential(
@@ -126,7 +126,7 @@ class BaseContrastiveNetwork(nn.Module):
             nn.BatchNorm1d(512),
             nn.ReLU(inplace=True),
             nn.Dropout(0.3),
-            nn.Linear(512, projection_dim)
+            nn.Linear(512, embedding_dim)
         )
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
