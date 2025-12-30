@@ -73,14 +73,14 @@ class BaseTrainer(ABC):
     def validate_comprehensive(self, val_dataset) -> Dict[str, float]:
         """
         Comprehensive validation computing all verification metrics.
-        Usa tutte le coppie pre-generate dal val_dataset.
+        Uses validation pairs from val_dataset.get_validation_pair().
 
-        Se la sottoclasse implementa _get_embeddings, viene usata per calcolare le
-        metriche di Similarity (contrastive/triplet). Altrimenti, si assume BCE
-        Siamese e si usa direttamente l'output del modello.
+        If the subclass implements _get_embeddings, it's used for computing
+        similarity metrics (contrastive/triplet). Otherwise, assumes BCE
+        Siamese and uses model output directly.
         
         Args:
-            val_dataset: Validation dataset (con coppie già generate)
+            val_dataset: Validation dataset with get_validation_pair() method
         
         Returns:
             Dictionary with all metrics
@@ -90,15 +90,25 @@ class BaseTrainer(ABC):
         genuine_scores = []
         impostor_scores = []
 
-        # Controllo se la sottoclasse ha implementato _get_embeddings
+        # Check if subclass has implemented _get_embeddings
         use_embeddings = hasattr(self, "_get_embeddings") and callable(getattr(self, "_get_embeddings"))
 
-        print(f"\n🔍 Computing verification metrics on {len(val_dataset)} pairs...")
+        # Determine total number of validation pairs
+        # For TripletDataset, use validation_pairs; for others, use samples
+        if hasattr(val_dataset, 'validation_pairs'):
+            num_pairs = len(val_dataset.validation_pairs)
+        elif hasattr(val_dataset, 'samples'):
+            num_pairs = len(val_dataset.samples)
+        else:
+            raise AttributeError("Dataset must have either 'validation_pairs' or 'samples' attribute")
+
+        print(f"\n🔍 Computing verification metrics on {num_pairs} pairs...")
         
-        for idx in tqdm(range(len(val_dataset)), desc="  Evaluating pairs"):
-            img1_path, img2_path, label = val_dataset.samples[idx]
+        for idx in tqdm(range(num_pairs), desc="  Evaluating pairs"):
+            # Use the unified interface
+            img1_path, img2_path, label = val_dataset.get_validation_pair(idx)
             
-            # Carica le immagini
+            # Load images
             img1 = val_dataset.transform(Image.open(img1_path).convert("L")).unsqueeze(0).to(self.device)
             img2 = val_dataset.transform(Image.open(img2_path).convert("L")).unsqueeze(0).to(self.device)
             
@@ -107,7 +117,7 @@ class BaseTrainer(ABC):
                 emb1, emb2 = self._get_embeddings(img1, img2)
                 score = F.cosine_similarity(emb1, emb2).item()
             else:
-                # BCE Siamese: output diretto
+                # BCE Siamese: direct output
                 score = self.model(img1, img2).item()
             
             if label == 1.0:
@@ -115,13 +125,13 @@ class BaseTrainer(ABC):
             else:
                 impostor_scores.append(score)
         
-        # Decide se i score sono già similarity o vanno invertiti
-        distances_are_similarity = not use_embeddings  # BCE → già similarity
+        # Decide if scores are already similarity or need to be inverted
+        distances_are_similarity = not use_embeddings  # BCE → already similarity
 
         metrics = compute_metrics(
             np.array(genuine_scores),
             np.array(impostor_scores),
-            distances_are_similarity= True#distances_are_similarity
+            distances_are_similarity=distances_are_similarity
         )
         
         print(f"\n  ✓ Evaluated {len(genuine_scores)} genuine + {len(impostor_scores)} impostor pairs")
@@ -205,7 +215,7 @@ class BaseTrainer(ABC):
                     break
 
             # === NEGATIVE RESAMPLING ===
-            # Notifica il dataset che l'epoca è finita
+            # Notify dataset that epoch has ended
             if hasattr(train_dataset, 'on_epoch_end'):
                 train_dataset.on_epoch_end(epoch)
         

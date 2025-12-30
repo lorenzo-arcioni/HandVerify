@@ -177,3 +177,20 @@ class BaseWriterDataset(Dataset, ABC):
     def __getitem__(self, idx: int):
         """Generate a sample (must be implemented by subclasses)."""
         pass
+    
+    @abstractmethod
+    def get_validation_pair(self, idx: int) -> Tuple[str, str, float]:
+        """
+        Get a validation pair for comprehensive evaluation.
+        
+        This method provides a consistent interface for validation across all dataset types.
+        Returns pairs in format (img1_path, img2_path, label) where label is 1.0 for 
+        genuine pairs and 0.0 for impostor pairs.
+        
+        Args:
+            idx: Index of the pair to retrieve
+            
+        Returns:
+            Tuple of (img1_path, img2_path, label)
+        """
+        pass

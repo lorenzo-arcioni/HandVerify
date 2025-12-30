@@ -37,3 +37,10 @@ class ContrastiveDataset(BaseWriterDataset):
         img1 = self._load_image(img1_path)
         img2 = self._load_image(img2_path)
         return img1, img2, torch.tensor(label, dtype=torch.float32)
+    
+    def get_validation_pair(self, idx: int) -> Tuple[str, str, float]:
+        """
+        Get a validation pair from samples.
+        For Contrastive, samples already contain pairs in the correct format.
+        """
+        return self.samples[idx]
