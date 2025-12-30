@@ -108,6 +108,7 @@ class BaseTrainer(ABC):
                 emb1, emb2 = self._get_embeddings(img1, img2)
                 score = F.cosine_similarity(emb1, emb2).item()
             else:
+                print("NOT USE EMBEDDINGS")
                 # BCE Siamese: output diretto
                 score = self.model(img1, img2).item()
             
