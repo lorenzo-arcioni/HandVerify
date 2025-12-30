@@ -91,8 +91,7 @@ class BaseTrainer(ABC):
         impostor_scores = []
 
         # Controllo se la sottoclasse ha implementato _get_embeddings
-        use_embeddings = hasattr(self, "_get_embeddings") and callable(getattr(self, "_get_embeddings")) \
-                        and self._get_embeddings.__func__ is not BaseTrainer._get_embeddings
+        use_embeddings = hasattr(self, "_get_embeddings") and callable(getattr(self, "_get_embeddings"))
 
         print(f"\n🔍 Computing verification metrics on {len(val_dataset)} pairs...")
         
@@ -104,6 +103,7 @@ class BaseTrainer(ABC):
             img2 = val_dataset.transform(Image.open(img2_path).convert("L")).unsqueeze(0).to(self.device)
             
             if use_embeddings:
+                print("USE EMBEDDINGS")
                 # Metric learning: contrastive / triplet
                 emb1, emb2 = self._get_embeddings(img1, img2)
                 score = F.cosine_similarity(emb1, emb2).item()
