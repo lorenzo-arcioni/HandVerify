@@ -101,14 +101,15 @@ class ContrastiveTrainer(BaseTrainer):
         n_splits: int = 5,
         batch_size: int = 16,
         num_workers: int = 4,
-        pairs_per_writer: int = 100,
         target_size: int = 448,
+        positive_ratio: float = 0.5,
+        resample_negatives_every_n_epochs: int = 1,
         epochs: int = 50,
         patience: int = 7,
         random_state: int = 42,
     ):
         """K-Fold Cross-Validation for Contrastive."""
-        from ..data import create_contrastive_dataloaders_kfold
+        from ..data import create_contrastive_kfold_dataloaders
 
         print(f"\n{'='*70}")
         print(f"K-FOLD TRAINING: {self.model_name} ({n_splits} folds)")
@@ -122,14 +123,15 @@ class ContrastiveTrainer(BaseTrainer):
             print(f"# FOLD {fold+1}/{n_splits}")
             print(f"{'#'*70}\n")
 
-            train_loader, val_loader, train_dataset, val_dataset = create_contrastive_dataloaders_kfold(
+            train_loader, val_loader, train_dataset, val_dataset = create_contrastive_kfold_dataloaders(
                 data_root=data_root,
                 n_splits=n_splits,
                 current_fold=fold,
                 batch_size=batch_size,
                 num_workers=num_workers,
-                pairs_per_writer=pairs_per_writer,
                 target_size=target_size,
+                positive_ratio=positive_ratio,
+                resample_negatives_every_n_epochs=resample_negatives_every_n_epochs,
                 random_state=random_state
             )
 
