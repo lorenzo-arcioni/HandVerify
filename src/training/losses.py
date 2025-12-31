@@ -95,7 +95,7 @@ class TripletLoss(nn.Module):
         pos_dist = F.pairwise_distance(anchor, positive, p=2)
         neg_dist = F.pairwise_distance(anchor, negative, p=2)
         losses   = F.relu(pos_dist - neg_dist + self.margin)
-        return losses.mean()
+        return torch.mean(torch.log1p(torch.exp(pos_dist - neg_dist)))
 
 
 class CombinedLoss(nn.Module):
