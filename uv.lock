@@ -428,6 +428,15 @@ wheels = [
 ]
 
 [[package]]
+name = "graphviz"
+version = "0.21"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f8/b3/3ac91e9be6b761a4b30d66ff165e54439dcd48b83f4e20d644867215f6ca/graphviz-0.21.tar.gz", hash = "sha256:20743e7183be82aaaa8ad6c93f8893c923bd6658a04c32ee115edb3c8a835f78", size = 200434, upload-time = "2025-06-15T09:35:05.824Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/91/4c/e0ce1ef95d4000ebc1c11801f9b944fa5910ecc15b5e351865763d8657f8/graphviz-0.21-py3-none-any.whl", hash = "sha256:54f33de9f4f911d7e84e4191749cac8cc5653f815b06738c54db9a15ab8b1e42", size = 47300, upload-time = "2025-06-15T09:35:04.433Z" },
+]
+
+[[package]]
 name = "griffe"
 version = "1.15.0"
 source = { registry = "https://pypi.org/simple" }
@@ -454,6 +463,7 @@ dependencies = [
     { name = "seaborn" },
     { name = "torch" },
     { name = "torchvision" },
+    { name = "torchviz" },
     { name = "tqdm" },
 ]
 
@@ -476,6 +486,7 @@ requires-dist = [
     { name = "seaborn", specifier = ">=0.13.2" },
     { name = "torch", specifier = "==2.9.1+cpu", index = "https://download.pytorch.org/whl/cpu" },
     { name = "torchvision", specifier = "==0.24.1+cpu", index = "https://download.pytorch.org/whl/cpu" },
+    { name = "torchviz", specifier = ">=0.0.3" },
     { name = "tqdm", specifier = ">=4.67.1" },
 ]
 
@@ -1911,6 +1922,19 @@ wheels = [
     { url = "https://download.pytorch.org/whl/cpu/torchvision-0.24.1%2Bcpu-cp314-cp314-win_amd64.whl", hash = "sha256:16e8565e5a8f3de450605a494605f89a4995c99c29734e0fa0d3c5577c717e69" },
     { url = "https://download.pytorch.org/whl/cpu/torchvision-0.24.1%2Bcpu-cp314-cp314t-manylinux_2_28_x86_64.whl", hash = "sha256:ad95138606b528c0c8976e6e0b184665433505c1aa87472bd31675f71d9d81c5" },
     { url = "https://download.pytorch.org/whl/cpu/torchvision-0.24.1%2Bcpu-cp314-cp314t-win_amd64.whl", hash = "sha256:75699e64987870f419e6f4fdb6a8508c2952b0faf9482a3a105d5b2c6c76c37a" },
+]
+
+[[package]]
+name = "torchviz"
+version = "0.0.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "graphviz" },
+    { name = "torch" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5c/80/a84e0e8877630262c3f4c8d2e7fd0647c6751afeca301cfc04a1b65ac820/torchviz-0.0.3.tar.gz", hash = "sha256:2e95f2fea7a31ec9549f2d6bbf446d75aeb6a9880fcf13e7dd843fdcdb4a3725", size = 5705, upload-time = "2024-12-02T02:46:54.671Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5e/06/bea648249802b65282414caf5e7bc94fcb6e5a3e311b537845417d19edb9/torchviz-0.0.3-py3-none-any.whl", hash = "sha256:5eab98d17cbe8a54727cfa6a527681cff613430fff8fc68f52302ca5fa26cdf1", size = 5708, upload-time = "2024-12-02T02:46:52.838Z" },
 ]
 
 [[package]]
