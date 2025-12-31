@@ -131,7 +131,7 @@ class BaseTrainer(ABC):
         metrics = compute_metrics(
             np.array(genuine_scores),
             np.array(impostor_scores),
-            distances_are_similarity=distances_are_similarity
+            distances_are_similarity= True#distances_are_similarity
         )
         
         print(f"\n  ✓ Evaluated {len(genuine_scores)} genuine + {len(impostor_scores)} impostor pairs")
