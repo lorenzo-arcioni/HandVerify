@@ -1,6 +1,7 @@
 """
 Model Registry
 Central registry for all available model architectures (BCE, Contrastive, Triplet).
+Updated to support freeze_backbone_layers and dropout parameters.
 """
 
 from typing import Dict, Type, Union
@@ -105,6 +106,8 @@ TRIPLET_MODELS: Dict[str, Type[BaseTripletNetwork]] = {
 def get_model(
     model_name: str,
     model_type: str = 'bce',
+    freeze_backbone_layers: int = 2,
+    dropout: float = 0.5,
     **kwargs
 ) -> Union[BaseSiameseNetwork, BaseContrastiveNetwork, BaseTripletNetwork]:
     """
@@ -113,6 +116,9 @@ def get_model(
     Args:
         model_name: Name of the backbone architecture (e.g., 'resnet18')
         model_type: Type of model - 'bce', 'contrastive', or 'triplet'
+        freeze_backbone_layers: Number of initial encoder layers to freeze (default: 2)
+                               Set to 0 to disable freezing
+        dropout: Dropout rate for regularization (default: 0.5)
         **kwargs: Additional arguments to pass to model constructor
                   - in_channels: Number of input channels (default: 1)
                   - projection_dim: For BCE models (default: 512)
@@ -125,14 +131,17 @@ def get_model(
         ValueError: If model_name or model_type not found in registry
         
     Examples:
-        >>> # BCE Siamese
-        >>> model = get_model('resnet18', model_type='bce', projection_dim=512)
+        >>> # BCE Siamese with frozen layers
+        >>> model = get_model('resnet18', model_type='bce', 
+        ...                   freeze_backbone_layers=2, dropout=0.5)
         
-        >>> # Contrastive
-        >>> model = get_model('resnet18', model_type='contrastive', embedding_dim=128)
+        >>> # Contrastive without freezing
+        >>> model = get_model('resnet18', model_type='contrastive', 
+        ...                   freeze_backbone_layers=0, dropout=0.6)
         
-        >>> # Triplet
-        >>> model = get_model('resnet18', model_type='triplet', embedding_dim=128)
+        >>> # Triplet with 3 frozen layers
+        >>> model = get_model('resnet18', model_type='triplet', 
+        ...                   freeze_backbone_layers=3, dropout=0.5)
     """
     model_type = model_type.lower()
     
@@ -157,20 +166,22 @@ def get_model(
             f"Available models: {available}"
         )
     
-    # Instantiate model
-    model_class = registry[model_name]
-    
     # Handle parameter naming differences
     if model_type == 'bce':
         # BCE uses 'projection_dim'
         if 'embedding_dim' in kwargs and 'projection_dim' not in kwargs:
             kwargs['projection_dim'] = kwargs.pop('embedding_dim')
     else:
-        # Contrastive/Triplet use 'embedding_dim' or 'projection_dim'
-        # Map projection_dim -> embedding_dim for consistency
+        # Contrastive/Triplet use 'embedding_dim'
         if 'projection_dim' in kwargs and 'embedding_dim' not in kwargs:
             kwargs['embedding_dim'] = kwargs.pop('projection_dim')
     
+    # Add freeze and dropout parameters
+    kwargs['freeze_backbone_layers'] = freeze_backbone_layers
+    kwargs['dropout'] = dropout
+    
+    # Instantiate model
+    model_class = registry[model_name]
     return model_class(**kwargs)
 
 
