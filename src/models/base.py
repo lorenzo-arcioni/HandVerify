@@ -14,52 +14,116 @@ class BaseSiameseNetwork(nn.Module):
     All specific architectures should inherit from this class.
     """
     
-    def __init__(self, encoder: nn.Module, feature_dim: int, projection_dim: int = 512):
+    def __init__(
+        self, 
+        encoder: nn.Module, 
+        feature_dim: int, 
+        projection_dim: int = 512,
+        freeze_backbone_layers: int = 0,
+        dropout: float = 0.5
+    ):
         """
         Args:
             encoder: Backbone network for feature extraction
             feature_dim: Dimension of features from encoder
             projection_dim: Dimension of projection layer
+            freeze_backbone_layers: Number of initial encoder layers to freeze (0 = no freezing)
+            dropout: Dropout rate for regularization (default: 0.5)
         """
         super().__init__()
         self.encoder = encoder
         self.feature_dim = feature_dim
         self.projection_dim = projection_dim
+        self.freeze_backbone_layers = freeze_backbone_layers
         
-        # Classifier for similarity prediction
-        self.fc = self._build_fc_block(feature_dim * 2, projection_dim)
+        # Freeze initial layers if requested
+        if freeze_backbone_layers > 0:
+            self._freeze_encoder_layers(freeze_backbone_layers)
+        
+        # Classifier for similarity prediction (deeper with more dropout)
+        self.fc = self._build_fc_block(feature_dim * 2, projection_dim, dropout)
     
-    def _build_fc_block(self, input_dim: int, projection_dim: int) -> nn.Sequential:
+    def _freeze_encoder_layers(self, num_layers: int):
+        """
+        Freeze the first N layers of the encoder backbone.
+        This helps prevent overfitting by keeping low-level features generic.
+        
+        Args:
+            num_layers: Number of initial layers to freeze
+        """
+        frozen_count = 0
+        
+        # For sequential models, freeze by child modules
+        for i, child in enumerate(self.encoder[0].children()):
+            if frozen_count < num_layers:
+                for param in child.parameters():
+                    param.requires_grad = False
+                frozen_count += 1
+            else:
+                break
+        
+        # Count total frozen parameters
+        frozen_params = sum(p.numel() for p in self.encoder[0].parameters() if not p.requires_grad)
+        total_params = sum(p.numel() for p in self.encoder[0].parameters())
+        
+        print("Total encoder layers:", len(self.encoder[0]))
+        print(f"  ❄️  Frozen {frozen_count} encoder layers")
+        print(f"  ❄️  Frozen parameters: {frozen_params:,} / {total_params:,} "
+              f"({100*frozen_params/total_params:.1f}%)")
+    
+    def _build_fc_block(self, input_dim: int, projection_dim: int, dropout: float) -> nn.Sequential:
         """
         Builds the fully connected block for similarity classification.
+        Enhanced with more layers and higher dropout for better regularization.
         
         Args:
             input_dim: Input dimension (concatenated features)
             projection_dim: Intermediate projection dimension
+            dropout: Dropout rate
             
         Returns:
             Sequential module for classification
         """
-        half = projection_dim // 2
-        quarter = half // 2
+        # More granular layer sizes
+        layer1 = projection_dim           # 512
+        layer2 = projection_dim // 2      # 256
+        layer3 = projection_dim // 4      # 128
+        layer4 = projection_dim // 8      # 64
+        layer5 = projection_dim // 16     # 32
         
         return nn.Sequential(
-            nn.Linear(input_dim, projection_dim),
-            nn.BatchNorm1d(projection_dim),
+            # Layer 1
+            nn.Linear(input_dim, layer1),
+            nn.BatchNorm1d(layer1),
             nn.ReLU(inplace=True),
-            nn.Dropout(0.4),
-
-            nn.Linear(projection_dim, half),
-            nn.BatchNorm1d(half),
+            nn.Dropout(dropout),  # 0.5
+            
+            # Layer 2
+            nn.Linear(layer1, layer2),
+            nn.BatchNorm1d(layer2),
             nn.ReLU(inplace=True),
-            nn.Dropout(0.4),
-
-            nn.Linear(half, quarter),
-            nn.BatchNorm1d(quarter),
+            nn.Dropout(dropout),  # 0.5
+            
+            # Layer 3
+            nn.Linear(layer2, layer3),
+            nn.BatchNorm1d(layer3),
             nn.ReLU(inplace=True),
-            nn.Dropout(0.3),
-
-            nn.Linear(quarter, 1),
+            nn.Dropout(dropout * 0.9),  # 0.45
+            
+            # Layer 4 (NEW)
+            nn.Linear(layer3, layer4),
+            nn.BatchNorm1d(layer4),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout * 0.8),  # 0.4
+            
+            # Layer 5 (NEW)
+            nn.Linear(layer4, layer5),
+            nn.BatchNorm1d(layer5),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout * 0.6),  # 0.3
+            
+            # Output
+            nn.Linear(layer5, 1),
             nn.Sigmoid()
         )
     
@@ -158,7 +222,7 @@ class BaseContrastiveNetwork(nn.Module):
         frozen_params = sum(p.numel() for p in self.encoder[0].parameters() if not p.requires_grad)
         total_params = sum(p.numel() for p in self.encoder[0].parameters())
         
-        #print("Total encoder layers:", len(self.encoder[0].children()))
+        print("Total encoder layers:", len(self.encoder[0]))
         print(f"  ❄️  Frozen {frozen_count} encoder layers")
         print(f"  ❄️  Frozen parameters: {frozen_params:,} / {total_params:,} "
               f"({100*frozen_params/total_params:.1f}%)")
@@ -227,7 +291,6 @@ class BaseContrastiveNetwork(nn.Module):
         """Alias for forward"""
         return self.forward(x)
 
-
 class BaseTripletNetwork(nn.Module):
     """
     Base class for Triplet networks.
@@ -283,7 +346,7 @@ class BaseTripletNetwork(nn.Module):
         frozen_params = sum(p.numel() for p in self.encoder[0].parameters() if not p.requires_grad)
         total_params = sum(p.numel() for p in self.encoder[0].parameters())
         
-        #print("Total encoder layers:", len(self.encoder[0].children()))
+        print("Total encoder layers:", len(self.encoder[0]))
         print(f"  ❄️  Frozen {frozen_count} encoder layers")
         print(f"  ❄️  Frozen parameters: {frozen_params:,} / {total_params:,} "
               f"({100*frozen_params/total_params:.1f}%)")
