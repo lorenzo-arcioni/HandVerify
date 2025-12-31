@@ -26,7 +26,7 @@ class BCETrainer(BaseTrainer):
     def _setup_optimizer(self):
         """Setup optimizer based on model size."""
         num_params = sum(p.numel() for p in self.model.parameters())
-        lr = 3e-5 if num_params > 15e6 else 5e-5
+        lr = 5e-5 if num_params > 15e6 else 1e-4
         
         self.optimizer = torch.optim.AdamW(
             self.model.parameters(),
