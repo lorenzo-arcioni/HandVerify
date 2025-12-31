@@ -36,7 +36,7 @@ class TripletTrainer(BaseTrainer):
         self.optimizer = torch.optim.AdamW(
             self.model.parameters(),
             lr=1e-4,
-            weight_decay=5e-4,
+            weight_decay=5e-3,
             betas=(0.9, 0.999)
         )
         
