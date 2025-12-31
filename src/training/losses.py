@@ -87,9 +87,14 @@ class TripletLoss(nn.Module):
         Returns:
             Triplet loss value
         """
+
+        anchor   = F.normalize(anchor, p=2, dim=1)
+        positive = F.normalize(positive, p=2, dim=1)
+        negative = F.normalize(negative, p=2, dim=1)
+
         pos_dist = F.pairwise_distance(anchor, positive, p=2)
         neg_dist = F.pairwise_distance(anchor, negative, p=2)
-        losses = F.relu(pos_dist - neg_dist + self.margin)
+        losses   = F.relu(pos_dist - neg_dist + self.margin)
         return losses.mean()
 
 
