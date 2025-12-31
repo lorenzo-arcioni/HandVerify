@@ -272,7 +272,7 @@ class BaseTripletNetwork(nn.Module):
         """
         frozen_count = 0
         
-        for i, child in enumerate(self.encoder.children()):
+        for i, child in enumerate(self.encoder[0].children()):
             if frozen_count < num_layers:
                 for param in child.parameters():
                     param.requires_grad = False
@@ -280,9 +280,10 @@ class BaseTripletNetwork(nn.Module):
             else:
                 break
         
-        frozen_params = sum(p.numel() for p in self.encoder.parameters() if not p.requires_grad)
-        total_params = sum(p.numel() for p in self.encoder.parameters())
+        frozen_params = sum(p.numel() for p in self.encoder[0].parameters() if not p.requires_grad)
+        total_params = sum(p.numel() for p in self.encoder[0].parameters())
         
+        print("Total encoder layers:", len(self.encoder[0].children()))
         print(f"  ❄️  Frozen {frozen_count} encoder layers")
         print(f"  ❄️  Frozen parameters: {frozen_params:,} / {total_params:,} "
               f"({100*frozen_params/total_params:.1f}%)")
