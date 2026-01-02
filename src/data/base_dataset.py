@@ -41,6 +41,7 @@ class BaseWriterDataset(Dataset, ABC):
         self.target_size = target_size
         self.positive_ratio = positive_ratio
         self.resample_negatives_every_n_epochs = resample_negatives_every_n_epochs
+        self.random_seed = random_seed
         
         self.transform = (get_train_transforms(target_size) if train 
                          else get_test_transforms(target_size))

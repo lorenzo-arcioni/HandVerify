@@ -17,6 +17,7 @@ class TripletDataset:
         target_size: int = 448,
         resample_negatives_every_n_epochs: int = 1,
         positive_ratio: float = 0.5,  # For validation pairs
+        random_seed: int = 42
     ):
         print(f"\n{'='*60}")
         print(f"Initializing {'TRAIN' if train else 'VAL'} Triplet Dataset")
@@ -30,6 +31,7 @@ class TripletDataset:
         self.target_size = target_size
         self.positive_ratio = positive_ratio
         self.current_epoch = 0
+        self.random_seed = random_seed
         
         from .transforms import get_train_transforms, get_test_transforms
         self.transform = (get_train_transforms(target_size) if train 
@@ -101,13 +103,16 @@ class TripletDataset:
             for writer_id in self.writer_ids
         }
     
-    def _resample_triplets(self):
+    def _resample_triplets(self, epoch: int = 0):
         """Genera le triple campionando casualmente i negativi dal pool."""
         self.triplets = []
         
         for writer_id, anchor_path, positive_path in self.all_genuine_pairs:
+
+            epoch_rng = random.Random(self.random_seed + epoch)
+            
             # Campiona un'immagine negativa casuale da un altro writer
-            negative_path = random.choice(self.negative_pool[writer_id])
+            negative_path = epoch_rng.choice(self.negative_pool[writer_id])
             self.triplets.append((anchor_path, positive_path, negative_path))
         
         # Shuffle per randomizzare l'ordine
@@ -163,7 +168,7 @@ class TripletDataset:
         
         if (epoch + 1) % self.resample_negatives_every_n_epochs == 0:
             print(f"\n🔄 Resampling triplet negatives for next epoch...")
-            self._resample_triplets()
+            self._resample_triplets(epoch + 1)
     
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Get a triplet (anchor, positive, negative) for training."""
