@@ -278,19 +278,18 @@ class BaseTrainer(ABC):
         else:
             path = os.path.join(self.results_dir, f"{self.model_name}_final_metrics.csv")
         
-        # AGGIUNGI QUESTE RIGHE per evitare il troncamento degli array
-        pd.set_option('display.max_colwidth', None)
-        pd.set_option('display.max_columns', None)
-        
-        # Converti gli array numpy in stringhe complete
+        # Prepara i dati da salvare
         metrics_to_save = {}
         for key, value in metrics.items():
             if isinstance(value, np.ndarray):
-                # Converti array in stringa con tutti i valori
-                metrics_to_save[key] = np.array2string(value, separator=' ', max_line_width=np.inf)
+                # Disabilita il troncamento e converti in lista
+                np.set_printoptions(threshold=np.inf, linewidth=np.inf)
+                # Converti in lista per evitare troncamenti
+                metrics_to_save[key] = str(value.tolist())
             else:
                 metrics_to_save[key] = value
         
+        # Salva su CSV
         pd.DataFrame([metrics_to_save]).to_csv(path, index=False)
 
     def _init_history(self):
