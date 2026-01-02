@@ -3,6 +3,9 @@
 # ============================================================================
 
 import os
+import numpy as np
+import random
+import torch
 
 from .siamese_dataset import SiameseDataset
 from .triplet_dataset import TripletDataset
@@ -58,6 +61,11 @@ def create_dataloaders(
         train_dirs, test_dirs = train_test_split(
             writer_dirs, test_size=test_size, random_state=random_state
         )
+
+    def worker_init_fn(worker_id):
+        worker_seed = torch.initial_seed() % 2**32
+        np.random.seed(worker_seed)
+        random.seed(worker_seed)
     
     # Create datasets
     train_dataset = dataset_class(
@@ -80,6 +88,8 @@ def create_dataloaders(
         batch_size=batch_size,
         shuffle=True,
         num_workers=num_workers,
+        worker_init_fn=worker_init_fn,
+        generator=torch.Generator().manual_seed(random_state),
         pin_memory=True,
         drop_last=True
     ) if train_dataset else None
@@ -89,6 +99,8 @@ def create_dataloaders(
         batch_size=batch_size,
         shuffle=False,
         num_workers=num_workers,
+        worker_init_fn=worker_init_fn,
+        generator=torch.Generator().manual_seed(random_state),
         pin_memory=True
     ) if test_dataset else None
     

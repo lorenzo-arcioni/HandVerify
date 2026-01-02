@@ -4,3 +4,6 @@ notebooks/embedding_analysis_results
 .venv/
 docs/site
 __pycache__
+results/bce
+results/contrastive
+results/triplet

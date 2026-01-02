@@ -1038,13 +1038,11 @@ __all__ = [
 """
 Contrastive Network Backbones
 Implementation of various backbone architectures for contrastive learning.
+Updated with layer freezing support and increased regularization.
 """
 
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision import models
-
-import torch.nn as nn
 from torchvision import models
 
 from .base import BaseContrastiveNetwork
@@ -1053,7 +1051,8 @@ from .base import BaseContrastiveNetwork
 class ContrastiveMobileNetV3Small(BaseContrastiveNetwork):
     """Contrastive network based on MobileNetV3-Small"""
     
-    def __init__(self, in_channels: int = 1, embedding_dim: int = 128):
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
         mobilenet = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
         mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
         
@@ -1063,13 +1062,20 @@ class ContrastiveMobileNetV3Small(BaseContrastiveNetwork):
             nn.Flatten()
         )
         
-        super().__init__(encoder=encoder, feature_dim=576, embedding_dim=embedding_dim)
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=576, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
 
 
 class ContrastiveMobileNetV3Large(BaseContrastiveNetwork):
     """Contrastive network based on MobileNetV3-Large"""
     
-    def __init__(self, in_channels: int = 1, embedding_dim: int = 128):
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
         mobilenet = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT)
         mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
         
@@ -1079,49 +1085,77 @@ class ContrastiveMobileNetV3Large(BaseContrastiveNetwork):
             nn.Flatten()
         )
         
-        super().__init__(encoder=encoder, feature_dim=960, embedding_dim=embedding_dim)
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=960, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
 
 
 class ContrastiveResNet18(BaseContrastiveNetwork):
     """Contrastive network based on ResNet18"""
     
-    def __init__(self, in_channels: int = 1, embedding_dim: int = 128):
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
         resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
         resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
         
         encoder = nn.Sequential(*list(resnet.children())[:-1], nn.Flatten())
         
-        super().__init__(encoder=encoder, feature_dim=512, embedding_dim=embedding_dim)
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=512, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
 
 
 class ContrastiveResNet34(BaseContrastiveNetwork):
     """Contrastive network based on ResNet34"""
     
-    def __init__(self, in_channels: int = 1, embedding_dim: int = 128):
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
         resnet = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
         resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
         
         encoder = nn.Sequential(*list(resnet.children())[:-1], nn.Flatten())
         
-        super().__init__(encoder=encoder, feature_dim=512, embedding_dim=embedding_dim)
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=512, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
 
 
 class ContrastiveResNet50(BaseContrastiveNetwork):
     """Contrastive network based on ResNet50"""
     
-    def __init__(self, in_channels: int = 1, embedding_dim: int = 128):
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
         resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
         resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
         
         encoder = nn.Sequential(*list(resnet.children())[:-1], nn.Flatten())
         
-        super().__init__(encoder=encoder, feature_dim=2048, embedding_dim=embedding_dim)
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=2048, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
 
 
 class ContrastiveEfficientNetB0(BaseContrastiveNetwork):
     """Contrastive network based on EfficientNet-B0"""
     
-    def __init__(self, in_channels: int = 1, embedding_dim: int = 128):
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
         effnet = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.DEFAULT)
         effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
         
@@ -1131,13 +1165,20 @@ class ContrastiveEfficientNetB0(BaseContrastiveNetwork):
             nn.Flatten()
         )
         
-        super().__init__(encoder=encoder, feature_dim=1280, embedding_dim=embedding_dim)
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=1280, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
 
 
 class ContrastiveDenseNet121(BaseContrastiveNetwork):
     """Contrastive network based on DenseNet121"""
     
-    def __init__(self, in_channels: int = 1, embedding_dim: int = 128):
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
         densenet = models.densenet121(weights=models.DenseNet121_Weights.DEFAULT)
         densenet.features.conv0 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
         
@@ -1147,12 +1188,19 @@ class ContrastiveDenseNet121(BaseContrastiveNetwork):
             nn.Flatten()
         )
         
-        super().__init__(encoder=encoder, feature_dim=1024, embedding_dim=embedding_dim)
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=1024, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
 
 === src/models/registry.py ===
 """
 Model Registry
 Central registry for all available model architectures (BCE, Contrastive, Triplet).
+Updated to support freeze_backbone_layers and dropout parameters.
 """
 
 from typing import Dict, Type, Union
@@ -1257,6 +1305,8 @@ TRIPLET_MODELS: Dict[str, Type[BaseTripletNetwork]] = {
 def get_model(
     model_name: str,
     model_type: str = 'bce',
+    freeze_backbone_layers: int = 2,
+    dropout: float = 0.5,
     **kwargs
 ) -> Union[BaseSiameseNetwork, BaseContrastiveNetwork, BaseTripletNetwork]:
     """
@@ -1265,6 +1315,9 @@ def get_model(
     Args:
         model_name: Name of the backbone architecture (e.g., 'resnet18')
         model_type: Type of model - 'bce', 'contrastive', or 'triplet'
+        freeze_backbone_layers: Number of initial encoder layers to freeze (default: 2)
+                               Set to 0 to disable freezing
+        dropout: Dropout rate for regularization (default: 0.5)
         **kwargs: Additional arguments to pass to model constructor
                   - in_channels: Number of input channels (default: 1)
                   - projection_dim: For BCE models (default: 512)
@@ -1277,14 +1330,17 @@ def get_model(
         ValueError: If model_name or model_type not found in registry
         
     Examples:
-        >>> # BCE Siamese
-        >>> model = get_model('resnet18', model_type='bce', projection_dim=512)
+        >>> # BCE Siamese with frozen layers
+        >>> model = get_model('resnet18', model_type='bce', 
+        ...                   freeze_backbone_layers=2, dropout=0.5)
         
-        >>> # Contrastive
-        >>> model = get_model('resnet18', model_type='contrastive', embedding_dim=128)
+        >>> # Contrastive without freezing
+        >>> model = get_model('resnet18', model_type='contrastive', 
+        ...                   freeze_backbone_layers=0, dropout=0.6)
         
-        >>> # Triplet
-        >>> model = get_model('resnet18', model_type='triplet', embedding_dim=128)
+        >>> # Triplet with 3 frozen layers
+        >>> model = get_model('resnet18', model_type='triplet', 
+        ...                   freeze_backbone_layers=3, dropout=0.5)
     """
     model_type = model_type.lower()
     
@@ -1309,20 +1365,22 @@ def get_model(
             f"Available models: {available}"
         )
     
-    # Instantiate model
-    model_class = registry[model_name]
-    
     # Handle parameter naming differences
     if model_type == 'bce':
         # BCE uses 'projection_dim'
         if 'embedding_dim' in kwargs and 'projection_dim' not in kwargs:
             kwargs['projection_dim'] = kwargs.pop('embedding_dim')
     else:
-        # Contrastive/Triplet use 'embedding_dim' or 'projection_dim'
-        # Map projection_dim -> embedding_dim for consistency
+        # Contrastive/Triplet use 'embedding_dim'
         if 'projection_dim' in kwargs and 'embedding_dim' not in kwargs:
             kwargs['embedding_dim'] = kwargs.pop('projection_dim')
     
+    # Add freeze and dropout parameters
+    kwargs['freeze_backbone_layers'] = freeze_backbone_layers
+    kwargs['dropout'] = dropout
+    
+    # Instantiate model
+    model_class = registry[model_name]
     return model_class(**kwargs)
 
 
@@ -1408,6 +1466,7 @@ def get_model_info(model_name: str = None) -> Dict:
 """
 Siamese Network Backbones
 Implementation of various backbone architectures for handwriting verification.
+Updated with layer freezing support and increased regularization.
 """
 
 import torch.nn as nn
@@ -1418,117 +1477,187 @@ from .base import BaseSiameseNetwork
 class SiameseResNet18(BaseSiameseNetwork):
     """Siamese network based on ResNet18"""
     
-    def __init__(self, in_channels: int = 1, projection_dim: int = 512):
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512, 
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
         resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
         resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
         encoder = nn.Sequential(*list(resnet.children())[:-1])
         
-        super().__init__(encoder=encoder, feature_dim=512, projection_dim=projection_dim)
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=512, 
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
 
 
 class SiameseResNet34(BaseSiameseNetwork):
     """Siamese network based on ResNet34"""
     
-    def __init__(self, in_channels: int = 1, projection_dim: int = 512):
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
         resnet = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
         resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
         encoder = nn.Sequential(*list(resnet.children())[:-1])
         
-        super().__init__(encoder=encoder, feature_dim=512, projection_dim=projection_dim)
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=512, 
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
 
 
 class SiameseResNet50(BaseSiameseNetwork):
     """Siamese network based on ResNet50"""
     
-    def __init__(self, in_channels: int = 1, projection_dim: int = 512):
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
         resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
         resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
         encoder = nn.Sequential(*list(resnet.children())[:-1])
         
-        super().__init__(encoder=encoder, feature_dim=2048, projection_dim=projection_dim)
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=2048, 
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
 
 
 class SiameseEfficientNetB0(BaseSiameseNetwork):
     """Siamese network based on EfficientNet-B0"""
     
-    def __init__(self, in_channels: int = 1, projection_dim: int = 512):
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
         effnet = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.DEFAULT)
         effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
         encoder = nn.Sequential(effnet.features, nn.AdaptiveAvgPool2d(1))
         
-        super().__init__(encoder=encoder, feature_dim=1280, projection_dim=projection_dim)
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=1280, 
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
 
 
 class SiameseEfficientNetB1(BaseSiameseNetwork):
     """Siamese network based on EfficientNet-B1"""
     
-    def __init__(self, in_channels: int = 1, projection_dim: int = 512):
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
         effnet = models.efficientnet_b1(weights=models.EfficientNet_B1_Weights.DEFAULT)
         effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
         encoder = nn.Sequential(effnet.features, nn.AdaptiveAvgPool2d(1))
         
-        super().__init__(encoder=encoder, feature_dim=1280, projection_dim=projection_dim)
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=1280, 
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
 
 
 class SiameseEfficientNetV2(BaseSiameseNetwork):
     """Siamese network based on EfficientNetV2-S"""
     
-    def __init__(self, in_channels: int = 1, projection_dim: int = 512):
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
         backbone = models.efficientnet_v2_s(weights=models.EfficientNet_V2_S_Weights.DEFAULT)
         backbone.features[0][0] = nn.Conv2d(in_channels, 24, kernel_size=3, stride=2, padding=1, bias=False)
         encoder = nn.Sequential(backbone.features, nn.AdaptiveAvgPool2d(1))
         
-        super().__init__(encoder=encoder, feature_dim=1280, projection_dim=projection_dim)
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=1280, 
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
 
 
 class SiameseMobileNetV3Small(BaseSiameseNetwork):
     """Siamese network based on MobileNetV3-Small"""
     
-    def __init__(self, in_channels: int = 1, projection_dim: int = 512):
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
         mobilenet = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
         mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
         encoder = nn.Sequential(mobilenet.features, nn.AdaptiveAvgPool2d(1))
         
-        super().__init__(encoder=encoder, feature_dim=576, projection_dim=projection_dim)
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=576, 
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
 
 
 class SiameseMobileNetV3Large(BaseSiameseNetwork):
     """Siamese network based on MobileNetV3-Large"""
     
-    def __init__(self, in_channels: int = 1, projection_dim: int = 512):
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
         mobilenet = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT)
         mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
         encoder = nn.Sequential(mobilenet.features, nn.AdaptiveAvgPool2d(1))
         
-        super().__init__(encoder=encoder, feature_dim=960, projection_dim=projection_dim)
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=960, 
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
 
 
 class SiameseDenseNet121(BaseSiameseNetwork):
     """Siamese network based on DenseNet121"""
     
-    def __init__(self, in_channels: int = 1, projection_dim: int = 512):
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
         densenet = models.densenet121(weights=models.DenseNet121_Weights.DEFAULT)
         densenet.features.conv0 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
         encoder = nn.Sequential(densenet.features, nn.AdaptiveAvgPool2d(1))
         
-        super().__init__(encoder=encoder, feature_dim=1024, projection_dim=projection_dim)
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=1024, 
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
 
 
 class SiameseRegNetY400MF(BaseSiameseNetwork):
     """Siamese network based on RegNet-Y-400MF"""
     
-    def __init__(self, in_channels: int = 1, projection_dim: int = 512):
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
         regnet = models.regnet_y_400mf(weights=models.RegNet_Y_400MF_Weights.DEFAULT)
         regnet.stem[0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
         encoder = nn.Sequential(*list(regnet.children())[:-1], nn.AdaptiveAvgPool2d(1))
         
-        super().__init__(encoder=encoder, feature_dim=440, projection_dim=projection_dim)
-
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=440, 
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
 
 === src/models/triplet_backbones.py ===
 """
 Triplet Network Backbones
 Implementation of various backbone architectures for triplet learning.
+Updated with layer freezing support and increased regularization.
 """
 
 import torch.nn as nn
@@ -1537,10 +1666,12 @@ from torchvision import models
 
 from .base import BaseTripletNetwork
 
+
 class TripletMobileNetV3Small(BaseTripletNetwork):
     """Triplet network based on MobileNetV3-Small"""
     
-    def __init__(self, in_channels: int = 1, embedding_dim: int = 128):
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
         mobilenet = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
         mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
         
@@ -1550,13 +1681,20 @@ class TripletMobileNetV3Small(BaseTripletNetwork):
             nn.Flatten()
         )
         
-        super().__init__(encoder=encoder, feature_dim=576, embedding_dim=embedding_dim)
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=576, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
 
 
 class TripletMobileNetV3Large(BaseTripletNetwork):
     """Triplet network based on MobileNetV3-Large"""
     
-    def __init__(self, in_channels: int = 1, embedding_dim: int = 128):
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
         mobilenet = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT)
         mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
         
@@ -1566,37 +1704,58 @@ class TripletMobileNetV3Large(BaseTripletNetwork):
             nn.Flatten()
         )
         
-        super().__init__(encoder=encoder, feature_dim=960, embedding_dim=embedding_dim)
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=960, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
 
 
 class TripletResNet18(BaseTripletNetwork):
     """Triplet network based on ResNet18"""
     
-    def __init__(self, in_channels: int = 1, embedding_dim: int = 128):
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
         resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
         resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
         
         encoder = nn.Sequential(*list(resnet.children())[:-1], nn.Flatten())
         
-        super().__init__(encoder=encoder, feature_dim=512, embedding_dim=embedding_dim)
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=512, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
 
 
 class TripletResNet34(BaseTripletNetwork):
     """Triplet network based on ResNet34"""
     
-    def __init__(self, in_channels: int = 1, embedding_dim: int = 128):
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
         resnet = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
         resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
         
         encoder = nn.Sequential(*list(resnet.children())[:-1], nn.Flatten())
         
-        super().__init__(encoder=encoder, feature_dim=512, embedding_dim=embedding_dim)
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=512, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
 
 
 class TripletEfficientNetB0(BaseTripletNetwork):
     """Triplet network based on EfficientNet-B0"""
     
-    def __init__(self, in_channels: int = 1, embedding_dim: int = 128):
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
         effnet = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.DEFAULT)
         effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
         
@@ -1606,7 +1765,13 @@ class TripletEfficientNetB0(BaseTripletNetwork):
             nn.Flatten()
         )
         
-        super().__init__(encoder=encoder, feature_dim=1280, embedding_dim=embedding_dim)
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=1280, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
 
 === src/models/base.py ===
 """
@@ -1625,52 +1790,116 @@ class BaseSiameseNetwork(nn.Module):
     All specific architectures should inherit from this class.
     """
     
-    def __init__(self, encoder: nn.Module, feature_dim: int, projection_dim: int = 512):
+    def __init__(
+        self, 
+        encoder: nn.Module, 
+        feature_dim: int, 
+        projection_dim: int = 512,
+        freeze_backbone_layers: int = 0,
+        dropout: float = 0.5
+    ):
         """
         Args:
             encoder: Backbone network for feature extraction
             feature_dim: Dimension of features from encoder
             projection_dim: Dimension of projection layer
+            freeze_backbone_layers: Number of initial encoder layers to freeze (0 = no freezing)
+            dropout: Dropout rate for regularization (default: 0.5)
         """
         super().__init__()
         self.encoder = encoder
         self.feature_dim = feature_dim
         self.projection_dim = projection_dim
+        self.freeze_backbone_layers = freeze_backbone_layers
         
-        # Classifier for similarity prediction
-        self.fc = self._build_fc_block(feature_dim * 2, projection_dim)
+        # Freeze initial layers if requested
+        if freeze_backbone_layers > 0:
+            self._freeze_encoder_layers(freeze_backbone_layers)
+        
+        # Classifier for similarity prediction (deeper with more dropout)
+        self.fc = self._build_fc_block(feature_dim * 2, projection_dim, dropout)
     
-    def _build_fc_block(self, input_dim: int, projection_dim: int) -> nn.Sequential:
+    def _freeze_encoder_layers(self, num_layers: int):
+        """
+        Freeze the first N layers of the encoder backbone.
+        This helps prevent overfitting by keeping low-level features generic.
+        
+        Args:
+            num_layers: Number of initial layers to freeze
+        """
+        frozen_count = 0
+        
+        # For sequential models, freeze by child modules
+        for i, child in enumerate(self.encoder[0].children()):
+            if frozen_count < num_layers:
+                for param in child.parameters():
+                    param.requires_grad = False
+                frozen_count += 1
+            else:
+                break
+        
+        # Count total frozen parameters
+        frozen_params = sum(p.numel() for p in self.encoder[0].parameters() if not p.requires_grad)
+        total_params = sum(p.numel() for p in self.encoder[0].parameters())
+        
+        print("Total encoder layers:", len(self.encoder[0]))
+        print(f"  ❄️  Frozen {frozen_count} encoder layers")
+        print(f"  ❄️  Frozen parameters: {frozen_params:,} / {total_params:,} "
+              f"({100*frozen_params/total_params:.1f}%)")
+    
+    def _build_fc_block(self, input_dim: int, projection_dim: int, dropout: float) -> nn.Sequential:
         """
         Builds the fully connected block for similarity classification.
+        Enhanced with more layers and higher dropout for better regularization.
         
         Args:
             input_dim: Input dimension (concatenated features)
             projection_dim: Intermediate projection dimension
+            dropout: Dropout rate
             
         Returns:
             Sequential module for classification
         """
-        half = projection_dim // 2
-        quarter = half // 2
+        # More granular layer sizes
+        layer1 = projection_dim           # 512
+        layer2 = projection_dim // 2      # 256
+        layer3 = projection_dim // 4      # 128
+        layer4 = projection_dim // 8      # 64
+        layer5 = projection_dim // 16     # 32
         
         return nn.Sequential(
-            nn.Linear(input_dim, projection_dim),
-            nn.BatchNorm1d(projection_dim),
+            # Layer 1
+            nn.Linear(input_dim, layer1),
+            nn.BatchNorm1d(layer1),
             nn.ReLU(inplace=True),
-            nn.Dropout(0.4),
-
-            nn.Linear(projection_dim, half),
-            nn.BatchNorm1d(half),
+            nn.Dropout(dropout),  # 0.5
+            
+            # Layer 2
+            nn.Linear(layer1, layer2),
+            nn.BatchNorm1d(layer2),
             nn.ReLU(inplace=True),
-            nn.Dropout(0.4),
-
-            nn.Linear(half, quarter),
-            nn.BatchNorm1d(quarter),
+            nn.Dropout(dropout),  # 0.5
+            
+            # Layer 3
+            nn.Linear(layer2, layer3),
+            nn.BatchNorm1d(layer3),
             nn.ReLU(inplace=True),
-            nn.Dropout(0.3),
-
-            nn.Linear(quarter, 1),
+            nn.Dropout(dropout * 0.9),  # 0.45
+            
+            # Layer 4 (NEW)
+            nn.Linear(layer3, layer4),
+            nn.BatchNorm1d(layer4),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout * 0.8),  # 0.4
+            
+            # Layer 5 (NEW)
+            nn.Linear(layer4, layer5),
+            nn.BatchNorm1d(layer5),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout * 0.6),  # 0.3
+            
+            # Output
+            nn.Linear(layer5, 1),
             nn.Sigmoid()
         )
     
@@ -1717,27 +1946,101 @@ class BaseContrastiveNetwork(nn.Module):
     """
     Base class for Contrastive Learning networks.
     Projects features to a lower-dimensional embedding space.
+    Enhanced with deeper projection head and stronger regularization.
     """
     
-    def __init__(self, encoder: nn.Module, feature_dim: int, embedding_dim: int = 128):
+    def __init__(
+        self, 
+        encoder: nn.Module, 
+        feature_dim: int, 
+        embedding_dim: int = 128,
+        freeze_backbone_layers: int = 0,
+        dropout: float = 0.5
+    ):
         """
         Args:
             encoder: Backbone network for feature extraction
             feature_dim: Dimension of features from encoder
             embedding_dim: Dimension of projection head output
+            freeze_backbone_layers: Number of initial encoder layers to freeze (0 = no freezing)
+            dropout: Dropout rate for regularization (default: 0.5)
         """
         super().__init__()
         self.encoder = encoder
         self.feature_dim = feature_dim
         self.embedding_dim = embedding_dim
+        self.freeze_backbone_layers = freeze_backbone_layers
         
-        # Projection head (MLP)
-        self.projection = nn.Sequential(
-            nn.Linear(feature_dim, 512),
-            nn.BatchNorm1d(512),
+        # Freeze initial layers if requested
+        if freeze_backbone_layers > 0:
+            self._freeze_encoder_layers(freeze_backbone_layers)
+        
+        # Projection head (deeper MLP with more regularization)
+        self.projection = self._build_projection_head(feature_dim, embedding_dim, dropout)
+    
+    def _freeze_encoder_layers(self, num_layers: int):
+        """
+        Freeze the first N layers of the encoder backbone.
+        
+        Args:
+            num_layers: Number of initial layers to freeze
+        """
+        frozen_count = 0
+        
+        for i, child in enumerate(self.encoder[0].children()):
+            if frozen_count < num_layers:
+                for param in child.parameters():
+                    param.requires_grad = False
+                frozen_count += 1
+            else:
+                break
+        
+        frozen_params = sum(p.numel() for p in self.encoder[0].parameters() if not p.requires_grad)
+        total_params = sum(p.numel() for p in self.encoder[0].parameters())
+        
+        print("Total encoder layers:", len(self.encoder[0]))
+        print(f"  ❄️  Frozen {frozen_count} encoder layers")
+        print(f"  ❄️  Frozen parameters: {frozen_params:,} / {total_params:,} "
+              f"({100*frozen_params/total_params:.1f}%)")
+    
+    def _build_projection_head(self, feature_dim: int, embedding_dim: int, dropout: float) -> nn.Sequential:
+        """
+        Build deeper projection head with stronger regularization.
+        
+        Args:
+            feature_dim: Input feature dimension
+            embedding_dim: Output embedding dimension
+            dropout: Dropout rate
+            
+        Returns:
+            Sequential projection head
+        """
+        # Intermediate dimensions
+        hidden1 = 1024
+        hidden2 = 512
+        hidden3 = 256
+        
+        return nn.Sequential(
+            # Layer 1
+            nn.Linear(feature_dim, hidden1),
+            nn.BatchNorm1d(hidden1),
             nn.ReLU(inplace=True),
-            nn.Dropout(0.3),
-            nn.Linear(512, embedding_dim)
+            nn.Dropout(dropout),  # 0.5
+            
+            # Layer 2
+            nn.Linear(hidden1, hidden2),
+            nn.BatchNorm1d(hidden2),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout),  # 0.5
+            
+            # Layer 3 (NEW)
+            nn.Linear(hidden2, hidden3),
+            nn.BatchNorm1d(hidden3),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout * 0.8),  # 0.4
+            
+            # Output
+            nn.Linear(hidden3, embedding_dim)
         )
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -1765,27 +2068,103 @@ class BaseContrastiveNetwork(nn.Module):
         return self.forward(x)
 
 class BaseTripletNetwork(nn.Module):
-    """Base class for Triplet networks"""
+    """
+    Base class for Triplet networks.
+    Enhanced with deeper projection head and stronger regularization.
+    """
     
-    def __init__(self, encoder: nn.Module, feature_dim: int, embedding_dim: int = 128):
+    def __init__(
+        self, 
+        encoder: nn.Module, 
+        feature_dim: int, 
+        embedding_dim: int = 128,
+        freeze_backbone_layers: int = 0,
+        dropout: float = 0.5
+    ):
         """
         Args:
             encoder: Backbone network for feature extraction
             feature_dim: Dimension of features from encoder
             embedding_dim: Dimension of final embedding
+            freeze_backbone_layers: Number of initial encoder layers to freeze (0 = no freezing)
+            dropout: Dropout rate for regularization (default: 0.5)
         """
         super().__init__()
         self.encoder = encoder
         self.feature_dim = feature_dim
         self.embedding_dim = embedding_dim
+        self.freeze_backbone_layers = freeze_backbone_layers
         
-        # Projection head
-        self.fc = nn.Sequential(
-            nn.Linear(feature_dim, 512),
-            nn.BatchNorm1d(512),
+        # Freeze initial layers if requested
+        if freeze_backbone_layers > 0:
+            self._freeze_encoder_layers(freeze_backbone_layers)
+        
+        # Projection head (deeper with more regularization)
+        self.fc = self._build_projection_head(feature_dim, embedding_dim, dropout)
+    
+    def _freeze_encoder_layers(self, num_layers: int):
+        """
+        Freeze the first N layers of the encoder backbone.
+        
+        Args:
+            num_layers: Number of initial layers to freeze
+        """
+        frozen_count = 0
+        
+        for i, child in enumerate(self.encoder[0].children()):
+            if frozen_count < num_layers:
+                for param in child.parameters():
+                    param.requires_grad = False
+                frozen_count += 1
+            else:
+                break
+        
+        frozen_params = sum(p.numel() for p in self.encoder[0].parameters() if not p.requires_grad)
+        total_params = sum(p.numel() for p in self.encoder[0].parameters())
+        
+        print("Total encoder layers:", len(self.encoder[0]))
+        print(f"  ❄️  Frozen {frozen_count} encoder layers")
+        print(f"  ❄️  Frozen parameters: {frozen_params:,} / {total_params:,} "
+              f"({100*frozen_params/total_params:.1f}%)")
+    
+    def _build_projection_head(self, feature_dim: int, embedding_dim: int, dropout: float) -> nn.Sequential:
+        """
+        Build deeper projection head with stronger regularization.
+        
+        Args:
+            feature_dim: Input feature dimension
+            embedding_dim: Output embedding dimension
+            dropout: Dropout rate
+            
+        Returns:
+            Sequential projection head
+        """
+        # Intermediate dimensions
+        hidden1 = 1024
+        hidden2 = 512
+        hidden3 = 256
+        
+        return nn.Sequential(
+            # Layer 1
+            nn.Linear(feature_dim, hidden1),
+            nn.BatchNorm1d(hidden1),
             nn.ReLU(inplace=True),
-            nn.Dropout(0.3),
-            nn.Linear(512, embedding_dim)
+            nn.Dropout(dropout),  # 0.5
+            
+            # Layer 2
+            nn.Linear(hidden1, hidden2),
+            nn.BatchNorm1d(hidden2),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout),  # 0.5
+            
+            # Layer 3 (NEW)
+            nn.Linear(hidden2, hidden3),
+            nn.BatchNorm1d(hidden3),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout * 0.8),  # 0.4
+            
+            # Output
+            nn.Linear(hidden3, embedding_dim)
         )
     
     def forward(self, x):
@@ -2203,7 +2582,20 @@ class BaseTrainer(ABC):
         else:
             path = os.path.join(self.results_dir, f"{self.model_name}_final_metrics.csv")
         
-        pd.DataFrame([metrics]).to_csv(path, index=False)
+        # AGGIUNGI QUESTE RIGHE per evitare il troncamento degli array
+        pd.set_option('display.max_colwidth', None)
+        pd.set_option('display.max_columns', None)
+        
+        # Converti gli array numpy in stringhe complete
+        metrics_to_save = {}
+        for key, value in metrics.items():
+            if isinstance(value, np.ndarray):
+                # Converti array in stringa con tutti i valori
+                metrics_to_save[key] = np.array2string(value, separator=' ', max_line_width=np.inf)
+            else:
+                metrics_to_save[key] = value
+        
+        pd.DataFrame([metrics_to_save]).to_csv(path, index=False)
 
     def _init_history(self):
         """Initialize empty history dict."""
@@ -2438,7 +2830,7 @@ class BCETrainer(BaseTrainer):
     def _setup_optimizer(self):
         """Setup optimizer based on model size."""
         num_params = sum(p.numel() for p in self.model.parameters())
-        lr = 3e-5 if num_params > 15e6 else 5e-5
+        lr = 5e-5 if num_params > 15e6 else 1e-4
         
         self.optimizer = torch.optim.AdamW(
             self.model.parameters(),

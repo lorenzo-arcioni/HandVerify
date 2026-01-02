@@ -25,6 +25,7 @@ class BaseWriterDataset(Dataset, ABC):
         target_size: int = 448,
         positive_ratio: float = 0.5,
         resample_negatives_every_n_epochs: int = 1,
+        random_seed: int = 42
     ):
         """
         Args:
@@ -45,7 +46,7 @@ class BaseWriterDataset(Dataset, ABC):
                          else get_test_transforms(target_size))
         
         self.writer_images = self._load_writer_images()
-        self.writer_ids = list(self.writer_images.keys())
+        self.writer_ids = sorted(list(self.writer_images.keys()))
         
         # Genera tutte le genuine (rimangono fisse)
         self.all_genuine_pairs = self._generate_all_genuine_pairs()
@@ -116,7 +117,7 @@ class BaseWriterDataset(Dataset, ABC):
         
         return impostor_pairs
     
-    def _resample_negatives(self):
+    def _resample_negatives(self, epoch: int = 0):
         """
         Ricampiona casualmente un subset di impostors dal pool completo.
         Mantiene il positive_ratio desiderato.
@@ -125,8 +126,10 @@ class BaseWriterDataset(Dataset, ABC):
             # Se abbiamo meno impostors disponibili di quelli necessari, usali tutti
             self.current_impostor_pairs = self.all_impostor_pairs.copy()
         else:
+            epoch_rng = random.Random(self.random_seed + epoch)
+
             # Campiona random un subset
-            self.current_impostor_pairs = random.sample(
+            self.current_impostor_pairs = epoch_rng.sample(
                 self.all_impostor_pairs, 
                 self.num_impostors_needed
             )
@@ -168,7 +171,7 @@ class BaseWriterDataset(Dataset, ABC):
         
         if (epoch + 1) % self.resample_negatives_every_n_epochs == 0:
             print(f"\n🔄 Resampling negatives for next epoch...")
-            self._resample_negatives()
+            self._resample_negatives(epoch + 1)
     
     def __len__(self) -> int:
         return len(self.samples)

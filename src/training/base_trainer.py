@@ -278,7 +278,20 @@ class BaseTrainer(ABC):
         else:
             path = os.path.join(self.results_dir, f"{self.model_name}_final_metrics.csv")
         
-        pd.DataFrame([metrics]).to_csv(path, index=False)
+        # AGGIUNGI QUESTE RIGHE per evitare il troncamento degli array
+        pd.set_option('display.max_colwidth', None)
+        pd.set_option('display.max_columns', None)
+        
+        # Converti gli array numpy in stringhe complete
+        metrics_to_save = {}
+        for key, value in metrics.items():
+            if isinstance(value, np.ndarray):
+                # Converti array in stringa con tutti i valori
+                metrics_to_save[key] = np.array2string(value, separator=' ', max_line_width=np.inf)
+            else:
+                metrics_to_save[key] = value
+        
+        pd.DataFrame([metrics_to_save]).to_csv(path, index=False)
 
     def _init_history(self):
         """Initialize empty history dict."""
