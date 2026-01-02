@@ -33,17 +33,22 @@ class ContrastiveTrainer(BaseTrainer):
 
     def _setup_optimizer(self):
         """Setup optimizer for contrastive learning."""
+        num_params = sum(p.numel() for p in self.model.parameters())
+        lr = 5e-5 if num_params > 15e6 else 1e-4
+        
         self.optimizer = torch.optim.AdamW(
             self.model.parameters(),
-            lr=1e-4,
+            lr=lr,
             weight_decay=1e-4,
-            betas=(0.9, 0.999)
+            betas=(0.9, 0.999),
+            eps=1e-8
         )
 
-        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer,
-            T_max=50,
-            eta_min=1e-6
+            mode='min',
+            factor=0.5,
+            patience=2
         )
 
     def train_epoch(self, train_loader: DataLoader) -> float:
