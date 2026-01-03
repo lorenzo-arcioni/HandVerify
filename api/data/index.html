@@ -914,6 +914,28 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#data.base_dataset.BaseWriterDataset.get_validation_pair" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_validation_pair
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data.base_dataset.BaseWriterDataset.on_epoch_end" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        on_epoch_end
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -949,10 +971,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#data.siamese_dataset.SiameseDataset.__getitem__" class="md-nav__link">
+  <a href="#data.siamese_dataset.SiameseDataset.get_validation_pair" class="md-nav__link">
     <span class="md-ellipsis">
       
-        __getitem__
+        get_validation_pair
       
     </span>
   </a>
@@ -1004,6 +1026,28 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#data.triplet_dataset.TripletDataset.get_validation_pair" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_validation_pair
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data.triplet_dataset.TripletDataset.on_epoch_end" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        on_epoch_end
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1039,10 +1083,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#data.contrastive_dataset.ContrastiveDataset.__getitem__" class="md-nav__link">
+  <a href="#data.contrastive_dataset.ContrastiveDataset.get_validation_pair" class="md-nav__link">
     <span class="md-ellipsis">
       
-        __getitem__
+        get_validation_pair
       
     </span>
   </a>
@@ -1259,6 +1303,28 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#data.base_dataset.BaseWriterDataset.get_validation_pair" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_validation_pair
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data.base_dataset.BaseWriterDataset.on_epoch_end" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        on_epoch_end
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1294,10 +1360,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#data.siamese_dataset.SiameseDataset.__getitem__" class="md-nav__link">
+  <a href="#data.siamese_dataset.SiameseDataset.get_validation_pair" class="md-nav__link">
     <span class="md-ellipsis">
       
-        __getitem__
+        get_validation_pair
       
     </span>
   </a>
@@ -1349,6 +1415,28 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#data.triplet_dataset.TripletDataset.get_validation_pair" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_validation_pair
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data.triplet_dataset.TripletDataset.on_epoch_end" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        on_epoch_end
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1384,10 +1472,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#data.contrastive_dataset.ContrastiveDataset.__getitem__" class="md-nav__link">
+  <a href="#data.contrastive_dataset.ContrastiveDataset.get_validation_pair" class="md-nav__link">
     <span class="md-ellipsis">
       
-        __getitem__
+        get_validation_pair
       
     </span>
   </a>
@@ -1478,9 +1566,6 @@ Provides common functionality for all dataset types.</p>
 
 
 
-        <p>Base class for writer verification datasets.
-Handles common operations like loading writer directories and transforms.</p>
-
 
 
 
@@ -1490,10 +1575,528 @@ Handles common operations like loading writer directories and transforms.</p>
 
               <details class="mkdocstrings-source">
                 <summary>Source code in <code>data/base_dataset.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">18</span>
-<span class="normal">19</span>
-<span class="normal">20</span>
-<span class="normal">21</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 20</span>
+<span class="normal"> 21</span>
+<span class="normal"> 22</span>
+<span class="normal"> 23</span>
+<span class="normal"> 24</span>
+<span class="normal"> 25</span>
+<span class="normal"> 26</span>
+<span class="normal"> 27</span>
+<span class="normal"> 28</span>
+<span class="normal"> 29</span>
+<span class="normal"> 30</span>
+<span class="normal"> 31</span>
+<span class="normal"> 32</span>
+<span class="normal"> 33</span>
+<span class="normal"> 34</span>
+<span class="normal"> 35</span>
+<span class="normal"> 36</span>
+<span class="normal"> 37</span>
+<span class="normal"> 38</span>
+<span class="normal"> 39</span>
+<span class="normal"> 40</span>
+<span class="normal"> 41</span>
+<span class="normal"> 42</span>
+<span class="normal"> 43</span>
+<span class="normal"> 44</span>
+<span class="normal"> 45</span>
+<span class="normal"> 46</span>
+<span class="normal"> 47</span>
+<span class="normal"> 48</span>
+<span class="normal"> 49</span>
+<span class="normal"> 50</span>
+<span class="normal"> 51</span>
+<span class="normal"> 52</span>
+<span class="normal"> 53</span>
+<span class="normal"> 54</span>
+<span class="normal"> 55</span>
+<span class="normal"> 56</span>
+<span class="normal"> 57</span>
+<span class="normal"> 58</span>
+<span class="normal"> 59</span>
+<span class="normal"> 60</span>
+<span class="normal"> 61</span>
+<span class="normal"> 62</span>
+<span class="normal"> 63</span>
+<span class="normal"> 64</span>
+<span class="normal"> 65</span>
+<span class="normal"> 66</span>
+<span class="normal"> 67</span>
+<span class="normal"> 68</span>
+<span class="normal"> 69</span>
+<span class="normal"> 70</span>
+<span class="normal"> 71</span>
+<span class="normal"> 72</span>
+<span class="normal"> 73</span>
+<span class="normal"> 74</span>
+<span class="normal"> 75</span>
+<span class="normal"> 76</span>
+<span class="normal"> 77</span>
+<span class="normal"> 78</span>
+<span class="normal"> 79</span>
+<span class="normal"> 80</span>
+<span class="normal"> 81</span>
+<span class="normal"> 82</span>
+<span class="normal"> 83</span>
+<span class="normal"> 84</span>
+<span class="normal"> 85</span>
+<span class="normal"> 86</span>
+<span class="normal"> 87</span>
+<span class="normal"> 88</span>
+<span class="normal"> 89</span>
+<span class="normal"> 90</span>
+<span class="normal"> 91</span>
+<span class="normal"> 92</span>
+<span class="normal"> 93</span>
+<span class="normal"> 94</span>
+<span class="normal"> 95</span>
+<span class="normal"> 96</span>
+<span class="normal"> 97</span>
+<span class="normal"> 98</span>
+<span class="normal"> 99</span>
+<span class="normal">100</span>
+<span class="normal">101</span>
+<span class="normal">102</span>
+<span class="normal">103</span>
+<span class="normal">104</span>
+<span class="normal">105</span>
+<span class="normal">106</span>
+<span class="normal">107</span>
+<span class="normal">108</span>
+<span class="normal">109</span>
+<span class="normal">110</span>
+<span class="normal">111</span>
+<span class="normal">112</span>
+<span class="normal">113</span>
+<span class="normal">114</span>
+<span class="normal">115</span>
+<span class="normal">116</span>
+<span class="normal">117</span>
+<span class="normal">118</span>
+<span class="normal">119</span>
+<span class="normal">120</span>
+<span class="normal">121</span>
+<span class="normal">122</span>
+<span class="normal">123</span>
+<span class="normal">124</span>
+<span class="normal">125</span>
+<span class="normal">126</span>
+<span class="normal">127</span>
+<span class="normal">128</span>
+<span class="normal">129</span>
+<span class="normal">130</span>
+<span class="normal">131</span>
+<span class="normal">132</span>
+<span class="normal">133</span>
+<span class="normal">134</span>
+<span class="normal">135</span>
+<span class="normal">136</span>
+<span class="normal">137</span>
+<span class="normal">138</span>
+<span class="normal">139</span>
+<span class="normal">140</span>
+<span class="normal">141</span>
+<span class="normal">142</span>
+<span class="normal">143</span>
+<span class="normal">144</span>
+<span class="normal">145</span>
+<span class="normal">146</span>
+<span class="normal">147</span>
+<span class="normal">148</span>
+<span class="normal">149</span>
+<span class="normal">150</span>
+<span class="normal">151</span>
+<span class="normal">152</span>
+<span class="normal">153</span>
+<span class="normal">154</span>
+<span class="normal">155</span>
+<span class="normal">156</span>
+<span class="normal">157</span>
+<span class="normal">158</span>
+<span class="normal">159</span>
+<span class="normal">160</span>
+<span class="normal">161</span>
+<span class="normal">162</span>
+<span class="normal">163</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span>
+<span class="normal">167</span>
+<span class="normal">168</span>
+<span class="normal">169</span>
+<span class="normal">170</span>
+<span class="normal">171</span>
+<span class="normal">172</span>
+<span class="normal">173</span>
+<span class="normal">174</span>
+<span class="normal">175</span>
+<span class="normal">176</span>
+<span class="normal">177</span>
+<span class="normal">178</span>
+<span class="normal">179</span>
+<span class="normal">180</span>
+<span class="normal">181</span>
+<span class="normal">182</span>
+<span class="normal">183</span>
+<span class="normal">184</span>
+<span class="normal">185</span>
+<span class="normal">186</span>
+<span class="normal">187</span>
+<span class="normal">188</span>
+<span class="normal">189</span>
+<span class="normal">190</span>
+<span class="normal">191</span>
+<span class="normal">192</span>
+<span class="normal">193</span>
+<span class="normal">194</span>
+<span class="normal">195</span>
+<span class="normal">196</span>
+<span class="normal">197</span>
+<span class="normal">198</span>
+<span class="normal">199</span>
+<span class="normal">200</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">BaseWriterDataset</span><span class="p">(</span><span class="n">Dataset</span><span class="p">,</span> <span class="n">ABC</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">writer_dirs</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+        <span class="n">train</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">target_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">448</span><span class="p">,</span>
+        <span class="n">positive_ratio</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.5</span><span class="p">,</span>
+        <span class="n">resample_negatives_every_n_epochs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="n">random_seed</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">42</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Args:</span>
+<span class="sd">            writer_dirs: Lista di directory degli writers</span>
+<span class="sd">            train: Se True, applica augmentation</span>
+<span class="sd">            target_size: Dimensione target delle immagini</span>
+<span class="sd">            positive_ratio: Rapporto genuine/(genuine+impostors)</span>
+<span class="sd">            resample_negatives_every_n_epochs: Ogni quante epoche ricampionare i negativi</span>
+<span class="sd">                                               (0 = mai, 1 = ogni epoca, N = ogni N epoche)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">writer_dirs</span> <span class="o">=</span> <span class="n">writer_dirs</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">train</span> <span class="o">=</span> <span class="n">train</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">target_size</span> <span class="o">=</span> <span class="n">target_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">positive_ratio</span> <span class="o">=</span> <span class="n">positive_ratio</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">resample_negatives_every_n_epochs</span> <span class="o">=</span> <span class="n">resample_negatives_every_n_epochs</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">random_seed</span> <span class="o">=</span> <span class="n">random_seed</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">transform</span> <span class="o">=</span> <span class="p">(</span><span class="n">get_train_transforms</span><span class="p">(</span><span class="n">target_size</span><span class="p">)</span> <span class="k">if</span> <span class="n">train</span> 
+                         <span class="k">else</span> <span class="n">get_test_transforms</span><span class="p">(</span><span class="n">target_size</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_writer_images</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">writer_ids</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span>
+
+        <span class="c1"># Genera tutte le genuine (rimangono fisse)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">all_genuine_pairs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_generate_all_genuine_pairs</span><span class="p">()</span>
+
+        <span class="c1"># Genera TUTTE le possibili impostors (pool completo)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">all_impostor_pairs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_generate_all_impostor_pairs</span><span class="p">()</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Generated </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">all_genuine_pairs</span><span class="p">)</span><span class="si">}</span><span class="s2"> genuine pairs (fixed)&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Generated </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">all_impostor_pairs</span><span class="p">)</span><span class="si">}</span><span class="s2"> total impostor pairs (pool)&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Numero di impostors necessari per mantenere il positive_ratio</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">num_impostors_needed</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span>
+            <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">all_genuine_pairs</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">positive_ratio</span><span class="p">)</span> <span class="o">/</span> <span class="n">positive_ratio</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Campiona i negativi iniziali</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_impostor_pairs</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_epoch</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_resample_negatives</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_load_writer_images</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Load image paths for each writer.&quot;&quot;&quot;</span>
+        <span class="n">writer_images</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="k">for</span> <span class="n">writer_dir</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">writer_dirs</span><span class="p">:</span>
+            <span class="n">writer_id</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">writer_dir</span><span class="p">)</span><span class="o">.</span><span class="n">name</span>
+            <span class="n">images</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">writer_dir</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span> 
+                <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="n">writer_dir</span><span class="p">)</span> 
+                <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">endswith</span><span class="p">((</span><span class="s1">&#39;.png&#39;</span><span class="p">,</span> <span class="s1">&#39;.jpg&#39;</span><span class="p">,</span> <span class="s1">&#39;.jpeg&#39;</span><span class="p">))</span>
+            <span class="p">]</span>
+            <span class="n">writer_images</span><span class="p">[</span><span class="n">writer_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">images</span>
+
+        <span class="k">return</span> <span class="n">writer_images</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_load_image</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Load and transform a single image.&quot;&quot;&quot;</span>
+        <span class="n">img</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="s2">&quot;L&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">img</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_generate_all_genuine_pairs</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Genera TUTTE le coppie genuine possibili (stesso writer).</span>
+<span class="sd">        Returns: Lista di (writer_id, img1_path, img2_path)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">multi_image_writers</span> <span class="o">=</span> <span class="p">[</span><span class="n">w</span> <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">writer_ids</span> 
+                              <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="p">[</span><span class="n">w</span><span class="p">])</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">]</span>
+
+        <span class="n">genuine_pairs</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">writer_id</span> <span class="ow">in</span> <span class="n">multi_image_writers</span><span class="p">:</span>
+            <span class="n">images</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="p">[</span><span class="n">writer_id</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">img1</span><span class="p">,</span> <span class="n">img2</span> <span class="ow">in</span> <span class="n">combinations</span><span class="p">(</span><span class="n">images</span><span class="p">,</span> <span class="mi">2</span><span class="p">):</span>
+                <span class="n">genuine_pairs</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">writer_id</span><span class="p">,</span> <span class="n">img1</span><span class="p">,</span> <span class="n">img2</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="n">genuine_pairs</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_generate_all_impostor_pairs</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Genera TUTTE le coppie impostors possibili (writers diversi).</span>
+<span class="sd">        Returns: Lista di (img1_path, img2_path)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">impostor_pairs</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">w1</span><span class="p">,</span> <span class="n">w2</span> <span class="ow">in</span> <span class="n">combinations</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_ids</span><span class="p">,</span> <span class="mi">2</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">img1</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="p">[</span><span class="n">w1</span><span class="p">]:</span>
+                <span class="k">for</span> <span class="n">img2</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="p">[</span><span class="n">w2</span><span class="p">]:</span>
+                    <span class="n">impostor_pairs</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">img1</span><span class="p">,</span> <span class="n">img2</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="n">impostor_pairs</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_resample_negatives</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">epoch</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Ricampiona casualmente un subset di impostors dal pool completo.</span>
+<span class="sd">        Mantiene il positive_ratio desiderato.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">all_impostor_pairs</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_impostors_needed</span><span class="p">:</span>
+            <span class="c1"># Se abbiamo meno impostors disponibili di quelli necessari, usali tutti</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">current_impostor_pairs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">all_impostor_pairs</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">epoch_rng</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">Random</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">random_seed</span> <span class="o">+</span> <span class="n">epoch</span><span class="p">)</span>
+
+            <span class="c1"># Campiona random un subset</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">current_impostor_pairs</span> <span class="o">=</span> <span class="n">epoch_rng</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">all_impostor_pairs</span><span class="p">,</span> 
+                <span class="bp">self</span><span class="o">.</span><span class="n">num_impostors_needed</span>
+            <span class="p">)</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Sampled </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current_impostor_pairs</span><span class="p">)</span><span class="si">}</span><span class="s2"> impostors from pool of </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">all_impostor_pairs</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Crea il dataset completo per questa epoca</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_create_current_samples</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_create_current_samples</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Crea il dataset attuale combinando genuine fisse + impostors campionati.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Genuine (sempre tutte)</span>
+        <span class="n">genuine_samples</span> <span class="o">=</span> <span class="p">[(</span><span class="n">img1</span><span class="p">,</span> <span class="n">img2</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">img1</span><span class="p">,</span> <span class="n">img2</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">all_genuine_pairs</span><span class="p">]</span>
+
+        <span class="c1"># Impostors (campionati)</span>
+        <span class="n">impostor_samples</span> <span class="o">=</span> <span class="p">[(</span><span class="n">img1</span><span class="p">,</span> <span class="n">img2</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span> <span class="k">for</span> <span class="n">img1</span><span class="p">,</span> <span class="n">img2</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_impostor_pairs</span><span class="p">]</span>
+
+        <span class="c1"># Combina e shuffla</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">samples</span> <span class="o">=</span> <span class="n">genuine_samples</span> <span class="o">+</span> <span class="n">impostor_samples</span>
+        <span class="n">random</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">samples</span><span class="p">)</span>
+
+        <span class="n">actual_ratio</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">genuine_samples</span><span class="p">)</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">samples</span><span class="p">)</span> <span class="o">*</span> <span class="mi">100</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Created epoch dataset: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">genuine_samples</span><span class="p">)</span><span class="si">}</span><span class="s2"> genuine + </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">impostor_samples</span><span class="p">)</span><span class="si">}</span><span class="s2"> impostors&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Actual positive ratio: </span><span class="si">{</span><span class="n">actual_ratio</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">%&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_epoch_end</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">epoch</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Chiamata alla fine di ogni epoca dal trainer.</span>
+<span class="sd">        Ricampiona i negativi se necessario.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            epoch: Numero dell&#39;epoca appena completata (0-indexed)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">resample_negatives_every_n_epochs</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="c1"># Disabilitato</span>
+            <span class="k">return</span>
+
+        <span class="k">if</span> <span class="p">(</span><span class="n">epoch</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">resample_negatives_every_n_epochs</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">🔄 Resampling negatives for next epoch...&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_resample_negatives</span><span class="p">(</span><span class="n">epoch</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">samples</span><span class="p">)</span>
+
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate a sample (must be implemented by subclasses).&quot;&quot;&quot;</span>
+        <span class="k">pass</span>
+
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_validation_pair</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get a validation pair for comprehensive evaluation.</span>
+
+<span class="sd">        This method provides a consistent interface for validation across all dataset types.</span>
+<span class="sd">        Returns pairs in format (img1_path, img2_path, label) where label is 1.0 for </span>
+<span class="sd">        genuine pairs and 0.0 for impostor pairs.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            idx: Index of the pair to retrieve</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            Tuple of (img1_path, img2_path, label)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">pass</span>
+</code></pre></div></td></tr></table></div>
+              </details>
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="data.base_dataset.BaseWriterDataset.__getitem__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="fm">__getitem__</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-abstractmethod"><code>abstractmethod</code></small>
+  </span>
+
+<a href="#data.base_dataset.BaseWriterDataset.__getitem__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Generate a sample (must be implemented by subclasses).</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>data/base_dataset.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">180</span>
+<span class="normal">181</span>
+<span class="normal">182</span>
+<span class="normal">183</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@abstractmethod</span>
+<span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Generate a sample (must be implemented by subclasses).&quot;&quot;&quot;</span>
+    <span class="k">pass</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="data.base_dataset.BaseWriterDataset.__init__" class="doc doc-heading">
+            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">writer_dirs</span><span class="p">,</span> <span class="n">train</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">target_size</span><span class="o">=</span><span class="mi">448</span><span class="p">,</span> <span class="n">positive_ratio</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">resample_negatives_every_n_epochs</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">random_seed</span><span class="o">=</span><span class="mi">42</span><span class="p">)</span></code>
+
+<a href="#data.base_dataset.BaseWriterDataset.__init__" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>writer_dirs</code>
+            </td>
+            <td>
+                  <code><span title="typing.List">List</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Lista di directory degli writers</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>train</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Se True, applica augmentation</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>target_size</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Dimensione target delle immagini</p>
+              </div>
+            </td>
+            <td>
+                  <code>448</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>positive_ratio</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Rapporto genuine/(genuine+impostors)</p>
+              </div>
+            </td>
+            <td>
+                  <code>0.5</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>resample_negatives_every_n_epochs</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Ogni quante epoche ricampionare i negativi
+                               (0 = mai, 1 = ogni epoca, N = ogni N epoche)</p>
+              </div>
+            </td>
+            <td>
+                  <code>1</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>data/base_dataset.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">21</span>
 <span class="normal">22</span>
 <span class="normal">23</span>
 <span class="normal">24</span>
@@ -1541,135 +2144,55 @@ Handles common operations like loading writer directories and transforms.</p>
 <span class="normal">66</span>
 <span class="normal">67</span>
 <span class="normal">68</span>
-<span class="normal">69</span>
-<span class="normal">70</span>
-<span class="normal">71</span>
-<span class="normal">72</span>
-<span class="normal">73</span>
-<span class="normal">74</span>
-<span class="normal">75</span>
-<span class="normal">76</span>
-<span class="normal">77</span>
-<span class="normal">78</span>
-<span class="normal">79</span>
-<span class="normal">80</span>
-<span class="normal">81</span>
-<span class="normal">82</span>
-<span class="normal">83</span>
-<span class="normal">84</span>
-<span class="normal">85</span>
-<span class="normal">86</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">BaseWriterDataset</span><span class="p">(</span><span class="n">Dataset</span><span class="p">,</span> <span class="n">ABC</span><span class="p">):</span>
+<span class="normal">69</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+    <span class="bp">self</span><span class="p">,</span>
+    <span class="n">writer_dirs</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+    <span class="n">train</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">target_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">448</span><span class="p">,</span>
+    <span class="n">positive_ratio</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.5</span><span class="p">,</span>
+    <span class="n">resample_negatives_every_n_epochs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="n">random_seed</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">42</span>
+<span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Base class for writer verification datasets.</span>
-<span class="sd">    Handles common operations like loading writer directories and transforms.</span>
+<span class="sd">    Args:</span>
+<span class="sd">        writer_dirs: Lista di directory degli writers</span>
+<span class="sd">        train: Se True, applica augmentation</span>
+<span class="sd">        target_size: Dimensione target delle immagini</span>
+<span class="sd">        positive_ratio: Rapporto genuine/(genuine+impostors)</span>
+<span class="sd">        resample_negatives_every_n_epochs: Ogni quante epoche ricampionare i negativi</span>
+<span class="sd">                                           (0 = mai, 1 = ogni epoca, N = ogni N epoche)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">writer_dirs</span> <span class="o">=</span> <span class="n">writer_dirs</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">train</span> <span class="o">=</span> <span class="n">train</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">target_size</span> <span class="o">=</span> <span class="n">target_size</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">positive_ratio</span> <span class="o">=</span> <span class="n">positive_ratio</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">resample_negatives_every_n_epochs</span> <span class="o">=</span> <span class="n">resample_negatives_every_n_epochs</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">random_seed</span> <span class="o">=</span> <span class="n">random_seed</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span>
-        <span class="n">writer_dirs</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
-        <span class="n">train</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-        <span class="n">samples_per_writer</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span><span class="p">,</span>
-        <span class="n">target_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">448</span><span class="p">,</span>
-        <span class="n">min_images_per_writer</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
-    <span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Args:</span>
-<span class="sd">            writer_dirs: List of directories, each containing images from one writer</span>
-<span class="sd">            train: Whether this is training set (applies augmentation if True)</span>
-<span class="sd">            samples_per_writer: Number of samples to generate per writer</span>
-<span class="sd">            target_size: Target image size for resizing</span>
-<span class="sd">            min_images_per_writer: Minimum images required per writer</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">writer_dirs</span> <span class="o">=</span> <span class="n">writer_dirs</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">train</span> <span class="o">=</span> <span class="n">train</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">target_size</span> <span class="o">=</span> <span class="n">target_size</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">samples_per_writer</span> <span class="o">=</span> <span class="n">samples_per_writer</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">min_images_per_writer</span> <span class="o">=</span> <span class="n">min_images_per_writer</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">transform</span> <span class="o">=</span> <span class="p">(</span><span class="n">get_train_transforms</span><span class="p">(</span><span class="n">target_size</span><span class="p">)</span> <span class="k">if</span> <span class="n">train</span> 
+                     <span class="k">else</span> <span class="n">get_test_transforms</span><span class="p">(</span><span class="n">target_size</span><span class="p">))</span>
 
-        <span class="c1"># Define transforms</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">transform</span> <span class="o">=</span> <span class="p">(</span><span class="n">get_train_transforms</span><span class="p">(</span><span class="n">target_size</span><span class="p">)</span> <span class="k">if</span> <span class="n">train</span> 
-                         <span class="k">else</span> <span class="n">get_test_transforms</span><span class="p">(</span><span class="n">target_size</span><span class="p">))</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_writer_images</span><span class="p">()</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">writer_ids</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span>
 
-        <span class="c1"># Load writer images</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_writer_images</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">writer_ids</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">num_samples</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_ids</span><span class="p">)</span> <span class="o">*</span> <span class="n">samples_per_writer</span>
+    <span class="c1"># Genera tutte le genuine (rimangono fisse)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">all_genuine_pairs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_generate_all_genuine_pairs</span><span class="p">()</span>
 
-        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="s1">&#39;TRAIN&#39;</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">train</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s1">&#39;VAL&#39;</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_ids</span><span class="p">)</span><span class="si">}</span><span class="s2"> writers, &quot;</span>
-              <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">num_samples</span><span class="si">}</span><span class="s2"> samples&quot;</span><span class="p">)</span>
+    <span class="c1"># Genera TUTTE le possibili impostors (pool completo)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">all_impostor_pairs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_generate_all_impostor_pairs</span><span class="p">()</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_load_writer_images</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Load image paths for each writer.&quot;&quot;&quot;</span>
-        <span class="n">writer_images</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Generated </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">all_genuine_pairs</span><span class="p">)</span><span class="si">}</span><span class="s2"> genuine pairs (fixed)&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Generated </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">all_impostor_pairs</span><span class="p">)</span><span class="si">}</span><span class="s2"> total impostor pairs (pool)&quot;</span><span class="p">)</span>
 
-        <span class="k">for</span> <span class="n">writer_dir</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">writer_dirs</span><span class="p">:</span>
-            <span class="n">writer_id</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">writer_dir</span><span class="p">)</span><span class="o">.</span><span class="n">name</span>
-            <span class="n">images</span> <span class="o">=</span> <span class="p">[</span>
-                <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">writer_dir</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span> 
-                <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="n">writer_dir</span><span class="p">)</span> 
-                <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">endswith</span><span class="p">((</span><span class="s1">&#39;.png&#39;</span><span class="p">,</span> <span class="s1">&#39;.jpg&#39;</span><span class="p">,</span> <span class="s1">&#39;.jpeg&#39;</span><span class="p">))</span>
-            <span class="p">]</span>
+    <span class="c1"># Numero di impostors necessari per mantenere il positive_ratio</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">num_impostors_needed</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span>
+        <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">all_genuine_pairs</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">positive_ratio</span><span class="p">)</span> <span class="o">/</span> <span class="n">positive_ratio</span>
+    <span class="p">)</span>
 
-            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">images</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">min_images_per_writer</span><span class="p">:</span>
-                <span class="n">writer_images</span><span class="p">[</span><span class="n">writer_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">images</span>
-
-        <span class="k">return</span> <span class="n">writer_images</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="nf">_load_image</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Load and transform a single image.&quot;&quot;&quot;</span>
-        <span class="n">img</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="s2">&quot;L&quot;</span><span class="p">)</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">img</span><span class="p">)</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_samples</span>
-
-    <span class="nd">@abstractmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate a sample (must be implemented by subclasses).&quot;&quot;&quot;</span>
-        <span class="k">pass</span>
-</code></pre></div></td></tr></table></div>
-              </details>
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="data.base_dataset.BaseWriterDataset.__getitem__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="fm">__getitem__</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span></code>
-
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-abstractmethod"><code>abstractmethod</code></small>
-  </span>
-
-<a href="#data.base_dataset.BaseWriterDataset.__getitem__" class="headerlink" title="Permanent link">&para;</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Generate a sample (must be implemented by subclasses).</p>
-
-
-            <details class="mkdocstrings-source">
-              <summary>Source code in <code>data/base_dataset.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">83</span>
-<span class="normal">84</span>
-<span class="normal">85</span>
-<span class="normal">86</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@abstractmethod</span>
-<span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Generate a sample (must be implemented by subclasses).&quot;&quot;&quot;</span>
-    <span class="k">pass</span>
+    <span class="c1"># Campiona i negativi iniziali</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">current_impostor_pairs</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">current_epoch</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_resample_negatives</span><span class="p">()</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -1679,14 +2202,22 @@ Handles common operations like loading writer directories and transforms.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="data.base_dataset.BaseWriterDataset.__init__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="fm">__init__</span><span class="p">(</span><span class="n">writer_dirs</span><span class="p">,</span> <span class="n">train</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">samples_per_writer</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">target_size</span><span class="o">=</span><span class="mi">448</span><span class="p">,</span> <span class="n">min_images_per_writer</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span></code>
+<h4 id="data.base_dataset.BaseWriterDataset.get_validation_pair" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">get_validation_pair</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span></code>
 
-<a href="#data.base_dataset.BaseWriterDataset.__init__" class="headerlink" title="Permanent link">&para;</a></h4>
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-abstractmethod"><code>abstractmethod</code></small>
+  </span>
+
+<a href="#data.base_dataset.BaseWriterDataset.get_validation_pair" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
 
+        <p>Get a validation pair for comprehensive evaluation.</p>
+<p>This method provides a consistent interface for validation across all dataset types.
+Returns pairs in format (img1_path, img2_path, label) where label is 1.0 for 
+genuine pairs and 0.0 for impostor pairs.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1702,82 +2233,41 @@ Handles common operations like loading writer directories and transforms.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                <code>writer_dirs</code>
+                <code>idx</code>
             </td>
             <td>
-                  <code><span title="typing.List">List</span>[<span title="str">str</span>]</code>
+                  <code><span title="int">int</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>List of directories, each containing images from one writer</p>
+                <p>Index of the pair to retrieve</p>
               </div>
             </td>
             <td>
                 <em>required</em>
             </td>
           </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
           <tr class="doc-section-item">
             <td>
-                <code>train</code>
-            </td>
-            <td>
-                  <code><span title="bool">bool</span></code>
+                  <code><span title="typing.Tuple">Tuple</span>[<span title="str">str</span>, <span title="str">str</span>, <span title="float">float</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Whether this is training set (applies augmentation if True)</p>
+                <p>Tuple of (img1_path, img2_path, label)</p>
               </div>
-            </td>
-            <td>
-                  <code>True</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>samples_per_writer</code>
-            </td>
-            <td>
-                  <code><span title="int">int</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Number of samples to generate per writer</p>
-              </div>
-            </td>
-            <td>
-                  <code>100</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>target_size</code>
-            </td>
-            <td>
-                  <code><span title="int">int</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Target image size for resizing</p>
-              </div>
-            </td>
-            <td>
-                  <code>448</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>min_images_per_writer</code>
-            </td>
-            <td>
-                  <code><span title="int">int</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Minimum images required per writer</p>
-              </div>
-            </td>
-            <td>
-                  <code>2</code>
             </td>
           </tr>
       </tbody>
@@ -1786,71 +2276,120 @@ Handles common operations like loading writer directories and transforms.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>data/base_dataset.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">24</span>
-<span class="normal">25</span>
-<span class="normal">26</span>
-<span class="normal">27</span>
-<span class="normal">28</span>
-<span class="normal">29</span>
-<span class="normal">30</span>
-<span class="normal">31</span>
-<span class="normal">32</span>
-<span class="normal">33</span>
-<span class="normal">34</span>
-<span class="normal">35</span>
-<span class="normal">36</span>
-<span class="normal">37</span>
-<span class="normal">38</span>
-<span class="normal">39</span>
-<span class="normal">40</span>
-<span class="normal">41</span>
-<span class="normal">42</span>
-<span class="normal">43</span>
-<span class="normal">44</span>
-<span class="normal">45</span>
-<span class="normal">46</span>
-<span class="normal">47</span>
-<span class="normal">48</span>
-<span class="normal">49</span>
-<span class="normal">50</span>
-<span class="normal">51</span>
-<span class="normal">52</span>
-<span class="normal">53</span>
-<span class="normal">54</span>
-<span class="normal">55</span>
-<span class="normal">56</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
-    <span class="bp">self</span><span class="p">,</span>
-    <span class="n">writer_dirs</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
-    <span class="n">train</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-    <span class="n">samples_per_writer</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span><span class="p">,</span>
-    <span class="n">target_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">448</span><span class="p">,</span>
-    <span class="n">min_images_per_writer</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
-<span class="p">):</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">185</span>
+<span class="normal">186</span>
+<span class="normal">187</span>
+<span class="normal">188</span>
+<span class="normal">189</span>
+<span class="normal">190</span>
+<span class="normal">191</span>
+<span class="normal">192</span>
+<span class="normal">193</span>
+<span class="normal">194</span>
+<span class="normal">195</span>
+<span class="normal">196</span>
+<span class="normal">197</span>
+<span class="normal">198</span>
+<span class="normal">199</span>
+<span class="normal">200</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@abstractmethod</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_validation_pair</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Get a validation pair for comprehensive evaluation.</span>
+
+<span class="sd">    This method provides a consistent interface for validation across all dataset types.</span>
+<span class="sd">    Returns pairs in format (img1_path, img2_path, label) where label is 1.0 for </span>
+<span class="sd">    genuine pairs and 0.0 for impostor pairs.</span>
+
 <span class="sd">    Args:</span>
-<span class="sd">        writer_dirs: List of directories, each containing images from one writer</span>
-<span class="sd">        train: Whether this is training set (applies augmentation if True)</span>
-<span class="sd">        samples_per_writer: Number of samples to generate per writer</span>
-<span class="sd">        target_size: Target image size for resizing</span>
-<span class="sd">        min_images_per_writer: Minimum images required per writer</span>
+<span class="sd">        idx: Index of the pair to retrieve</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Tuple of (img1_path, img2_path, label)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">writer_dirs</span> <span class="o">=</span> <span class="n">writer_dirs</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">train</span> <span class="o">=</span> <span class="n">train</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">target_size</span> <span class="o">=</span> <span class="n">target_size</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">samples_per_writer</span> <span class="o">=</span> <span class="n">samples_per_writer</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">min_images_per_writer</span> <span class="o">=</span> <span class="n">min_images_per_writer</span>
+    <span class="k">pass</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
 
-    <span class="c1"># Define transforms</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">transform</span> <span class="o">=</span> <span class="p">(</span><span class="n">get_train_transforms</span><span class="p">(</span><span class="n">target_size</span><span class="p">)</span> <span class="k">if</span> <span class="n">train</span> 
-                     <span class="k">else</span> <span class="n">get_test_transforms</span><span class="p">(</span><span class="n">target_size</span><span class="p">))</span>
+</div>
 
-    <span class="c1"># Load writer images</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_writer_images</span><span class="p">()</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">writer_ids</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">num_samples</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_ids</span><span class="p">)</span> <span class="o">*</span> <span class="n">samples_per_writer</span>
+<div class="doc doc-object doc-function">
 
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="s1">&#39;TRAIN&#39;</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">train</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s1">&#39;VAL&#39;</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_ids</span><span class="p">)</span><span class="si">}</span><span class="s2"> writers, &quot;</span>
-          <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">num_samples</span><span class="si">}</span><span class="s2"> samples&quot;</span><span class="p">)</span>
+
+<h4 id="data.base_dataset.BaseWriterDataset.on_epoch_end" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">on_epoch_end</span><span class="p">(</span><span class="n">epoch</span><span class="p">)</span></code>
+
+<a href="#data.base_dataset.BaseWriterDataset.on_epoch_end" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Chiamata alla fine di ogni epoca dal trainer.
+Ricampiona i negativi se necessario.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>epoch</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Numero dell'epoca appena completata (0-indexed)</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>data/base_dataset.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">161</span>
+<span class="normal">162</span>
+<span class="normal">163</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span>
+<span class="normal">167</span>
+<span class="normal">168</span>
+<span class="normal">169</span>
+<span class="normal">170</span>
+<span class="normal">171</span>
+<span class="normal">172</span>
+<span class="normal">173</span>
+<span class="normal">174</span>
+<span class="normal">175</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">on_epoch_end</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">epoch</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Chiamata alla fine di ogni epoca dal trainer.</span>
+<span class="sd">    Ricampiona i negativi se necessario.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        epoch: Numero dell&#39;epoca appena completata (0-indexed)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">resample_negatives_every_n_epochs</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="c1"># Disabilitato</span>
+        <span class="k">return</span>
+
+    <span class="k">if</span> <span class="p">(</span><span class="n">epoch</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">resample_negatives_every_n_epochs</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">🔄 Resampling negatives for next epoch...&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_resample_negatives</span><span class="p">(</span><span class="n">epoch</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -1933,7 +2472,14 @@ Handles common operations like loading writer directories and transforms.</p>
 
               <details class="mkdocstrings-source">
                 <summary>Source code in <code>data/siamese_dataset.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">15</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 8</span>
+<span class="normal"> 9</span>
+<span class="normal">10</span>
+<span class="normal">11</span>
+<span class="normal">12</span>
+<span class="normal">13</span>
+<span class="normal">14</span>
+<span class="normal">15</span>
 <span class="normal">16</span>
 <span class="normal">17</span>
 <span class="normal">18</span>
@@ -1963,16 +2509,7 @@ Handles common operations like loading writer directories and transforms.</p>
 <span class="normal">42</span>
 <span class="normal">43</span>
 <span class="normal">44</span>
-<span class="normal">45</span>
-<span class="normal">46</span>
-<span class="normal">47</span>
-<span class="normal">48</span>
-<span class="normal">49</span>
-<span class="normal">50</span>
-<span class="normal">51</span>
-<span class="normal">52</span>
-<span class="normal">53</span>
-<span class="normal">54</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">SiameseDataset</span><span class="p">(</span><span class="n">BaseWriterDataset</span><span class="p">):</span>
+<span class="normal">45</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">SiameseDataset</span><span class="p">(</span><span class="n">BaseWriterDataset</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Dataset for Siamese network training (positive/negative pairs).&quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
@@ -1980,38 +2517,36 @@ Handles common operations like loading writer directories and transforms.</p>
         <span class="n">writer_dirs</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
         <span class="n">train</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
         <span class="n">positive_ratio</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.5</span><span class="p">,</span>
-        <span class="n">samples_per_writer</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span><span class="p">,</span>
         <span class="n">target_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">448</span><span class="p">,</span>
+        <span class="n">resample_negatives_every_n_epochs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
     <span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">positive_ratio</span> <span class="o">=</span> <span class="n">positive_ratio</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="si">{</span><span class="s1">&#39;=&#39;</span><span class="o">*</span><span class="mi">60</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Initializing </span><span class="si">{</span><span class="s1">&#39;TRAIN&#39;</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">train</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s1">&#39;VAL&#39;</span><span class="si">}</span><span class="s2"> Siamese Dataset&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="s1">&#39;=&#39;</span><span class="o">*</span><span class="mi">60</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Writers: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">writer_dirs</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Positive ratio: </span><span class="si">{</span><span class="n">positive_ratio</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Resample negatives every: </span><span class="si">{</span><span class="n">resample_negatives_every_n_epochs</span><span class="si">}</span><span class="s2"> epoch(s)&quot;</span><span class="p">)</span>
+
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
             <span class="n">writer_dirs</span><span class="o">=</span><span class="n">writer_dirs</span><span class="p">,</span>
             <span class="n">train</span><span class="o">=</span><span class="n">train</span><span class="p">,</span>
-            <span class="n">samples_per_writer</span><span class="o">=</span><span class="n">samples_per_writer</span><span class="p">,</span>
             <span class="n">target_size</span><span class="o">=</span><span class="n">target_size</span><span class="p">,</span>
-            <span class="n">min_images_per_writer</span><span class="o">=</span><span class="mi">2</span>
+            <span class="n">positive_ratio</span><span class="o">=</span><span class="n">positive_ratio</span><span class="p">,</span>
+            <span class="n">resample_negatives_every_n_epochs</span><span class="o">=</span><span class="n">resample_negatives_every_n_epochs</span>
         <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate a pair with label.&quot;&quot;&quot;</span>
-        <span class="n">is_positive</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">()</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">positive_ratio</span>
-
-        <span class="k">if</span> <span class="n">is_positive</span><span class="p">:</span>
-            <span class="c1"># Same writer</span>
-            <span class="n">writer_id</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_ids</span><span class="p">)</span>
-            <span class="n">img1_path</span><span class="p">,</span> <span class="n">img2_path</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="p">[</span><span class="n">writer_id</span><span class="p">],</span> <span class="mi">2</span><span class="p">)</span>
-            <span class="n">label</span> <span class="o">=</span> <span class="mf">1.0</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="c1"># Different writers</span>
-            <span class="n">writer1</span><span class="p">,</span> <span class="n">writer2</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_ids</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
-            <span class="n">img1_path</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="p">[</span><span class="n">writer1</span><span class="p">])</span>
-            <span class="n">img2_path</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="p">[</span><span class="n">writer2</span><span class="p">])</span>
-            <span class="n">label</span> <span class="o">=</span> <span class="mf">0.0</span>
-
+        <span class="n">img1_path</span><span class="p">,</span> <span class="n">img2_path</span><span class="p">,</span> <span class="n">label</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">samples</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
         <span class="n">img1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_image</span><span class="p">(</span><span class="n">img1_path</span><span class="p">)</span>
         <span class="n">img2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_image</span><span class="p">(</span><span class="n">img2_path</span><span class="p">)</span>
-
         <span class="k">return</span> <span class="n">img1</span><span class="p">,</span> <span class="n">img2</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_validation_pair</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get a validation pair from samples.</span>
+<span class="sd">        For Siamese, samples already contain pairs in the correct format.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">samples</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
 </code></pre></div></td></tr></table></div>
               </details>
 
@@ -2031,58 +2566,31 @@ Handles common operations like loading writer directories and transforms.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="data.siamese_dataset.SiameseDataset.__getitem__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="fm">__getitem__</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span></code>
+<h4 id="data.siamese_dataset.SiameseDataset.get_validation_pair" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">get_validation_pair</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span></code>
 
-<a href="#data.siamese_dataset.SiameseDataset.__getitem__" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#data.siamese_dataset.SiameseDataset.get_validation_pair" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
 
-        <p>Generate a pair with label.</p>
+        <p>Get a validation pair from samples.
+For Siamese, samples already contain pairs in the correct format.</p>
 
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>data/siamese_dataset.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">35</span>
-<span class="normal">36</span>
-<span class="normal">37</span>
-<span class="normal">38</span>
-<span class="normal">39</span>
-<span class="normal">40</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">40</span>
 <span class="normal">41</span>
 <span class="normal">42</span>
 <span class="normal">43</span>
 <span class="normal">44</span>
-<span class="normal">45</span>
-<span class="normal">46</span>
-<span class="normal">47</span>
-<span class="normal">48</span>
-<span class="normal">49</span>
-<span class="normal">50</span>
-<span class="normal">51</span>
-<span class="normal">52</span>
-<span class="normal">53</span>
-<span class="normal">54</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Generate a pair with label.&quot;&quot;&quot;</span>
-    <span class="n">is_positive</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">()</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">positive_ratio</span>
-
-    <span class="k">if</span> <span class="n">is_positive</span><span class="p">:</span>
-        <span class="c1"># Same writer</span>
-        <span class="n">writer_id</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_ids</span><span class="p">)</span>
-        <span class="n">img1_path</span><span class="p">,</span> <span class="n">img2_path</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="p">[</span><span class="n">writer_id</span><span class="p">],</span> <span class="mi">2</span><span class="p">)</span>
-        <span class="n">label</span> <span class="o">=</span> <span class="mf">1.0</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="c1"># Different writers</span>
-        <span class="n">writer1</span><span class="p">,</span> <span class="n">writer2</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_ids</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
-        <span class="n">img1_path</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="p">[</span><span class="n">writer1</span><span class="p">])</span>
-        <span class="n">img2_path</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="p">[</span><span class="n">writer2</span><span class="p">])</span>
-        <span class="n">label</span> <span class="o">=</span> <span class="mf">0.0</span>
-
-    <span class="n">img1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_image</span><span class="p">(</span><span class="n">img1_path</span><span class="p">)</span>
-    <span class="n">img2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_image</span><span class="p">(</span><span class="n">img2_path</span><span class="p">)</span>
-
-    <span class="k">return</span> <span class="n">img1</span><span class="p">,</span> <span class="n">img2</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+<span class="normal">45</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_validation_pair</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Get a validation pair from samples.</span>
+<span class="sd">    For Siamese, samples already contain pairs in the correct format.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">samples</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -2149,8 +2657,6 @@ Handles common operations like loading writer directories and transforms.</p>
 
 
     <div class="doc doc-contents ">
-            <p class="doc doc-class-bases">
-              Bases: <code><a class="autorefs autorefs-internal" title="BaseWriterDataset (data.base_dataset.BaseWriterDataset)" href="#data.base_dataset.BaseWriterDataset">BaseWriterDataset</a></code></p>
 
 
 
@@ -2165,83 +2671,381 @@ Handles common operations like loading writer directories and transforms.</p>
 
               <details class="mkdocstrings-source">
                 <summary>Source code in <code>data/triplet_dataset.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">14</span>
-<span class="normal">15</span>
-<span class="normal">16</span>
-<span class="normal">17</span>
-<span class="normal">18</span>
-<span class="normal">19</span>
-<span class="normal">20</span>
-<span class="normal">21</span>
-<span class="normal">22</span>
-<span class="normal">23</span>
-<span class="normal">24</span>
-<span class="normal">25</span>
-<span class="normal">26</span>
-<span class="normal">27</span>
-<span class="normal">28</span>
-<span class="normal">29</span>
-<span class="normal">30</span>
-<span class="normal">31</span>
-<span class="normal">32</span>
-<span class="normal">33</span>
-<span class="normal">34</span>
-<span class="normal">35</span>
-<span class="normal">36</span>
-<span class="normal">37</span>
-<span class="normal">38</span>
-<span class="normal">39</span>
-<span class="normal">40</span>
-<span class="normal">41</span>
-<span class="normal">42</span>
-<span class="normal">43</span>
-<span class="normal">44</span>
-<span class="normal">45</span>
-<span class="normal">46</span>
-<span class="normal">47</span>
-<span class="normal">48</span>
-<span class="normal">49</span>
-<span class="normal">50</span>
-<span class="normal">51</span>
-<span class="normal">52</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">TripletDataset</span><span class="p">(</span><span class="n">BaseWriterDataset</span><span class="p">):</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 10</span>
+<span class="normal"> 11</span>
+<span class="normal"> 12</span>
+<span class="normal"> 13</span>
+<span class="normal"> 14</span>
+<span class="normal"> 15</span>
+<span class="normal"> 16</span>
+<span class="normal"> 17</span>
+<span class="normal"> 18</span>
+<span class="normal"> 19</span>
+<span class="normal"> 20</span>
+<span class="normal"> 21</span>
+<span class="normal"> 22</span>
+<span class="normal"> 23</span>
+<span class="normal"> 24</span>
+<span class="normal"> 25</span>
+<span class="normal"> 26</span>
+<span class="normal"> 27</span>
+<span class="normal"> 28</span>
+<span class="normal"> 29</span>
+<span class="normal"> 30</span>
+<span class="normal"> 31</span>
+<span class="normal"> 32</span>
+<span class="normal"> 33</span>
+<span class="normal"> 34</span>
+<span class="normal"> 35</span>
+<span class="normal"> 36</span>
+<span class="normal"> 37</span>
+<span class="normal"> 38</span>
+<span class="normal"> 39</span>
+<span class="normal"> 40</span>
+<span class="normal"> 41</span>
+<span class="normal"> 42</span>
+<span class="normal"> 43</span>
+<span class="normal"> 44</span>
+<span class="normal"> 45</span>
+<span class="normal"> 46</span>
+<span class="normal"> 47</span>
+<span class="normal"> 48</span>
+<span class="normal"> 49</span>
+<span class="normal"> 50</span>
+<span class="normal"> 51</span>
+<span class="normal"> 52</span>
+<span class="normal"> 53</span>
+<span class="normal"> 54</span>
+<span class="normal"> 55</span>
+<span class="normal"> 56</span>
+<span class="normal"> 57</span>
+<span class="normal"> 58</span>
+<span class="normal"> 59</span>
+<span class="normal"> 60</span>
+<span class="normal"> 61</span>
+<span class="normal"> 62</span>
+<span class="normal"> 63</span>
+<span class="normal"> 64</span>
+<span class="normal"> 65</span>
+<span class="normal"> 66</span>
+<span class="normal"> 67</span>
+<span class="normal"> 68</span>
+<span class="normal"> 69</span>
+<span class="normal"> 70</span>
+<span class="normal"> 71</span>
+<span class="normal"> 72</span>
+<span class="normal"> 73</span>
+<span class="normal"> 74</span>
+<span class="normal"> 75</span>
+<span class="normal"> 76</span>
+<span class="normal"> 77</span>
+<span class="normal"> 78</span>
+<span class="normal"> 79</span>
+<span class="normal"> 80</span>
+<span class="normal"> 81</span>
+<span class="normal"> 82</span>
+<span class="normal"> 83</span>
+<span class="normal"> 84</span>
+<span class="normal"> 85</span>
+<span class="normal"> 86</span>
+<span class="normal"> 87</span>
+<span class="normal"> 88</span>
+<span class="normal"> 89</span>
+<span class="normal"> 90</span>
+<span class="normal"> 91</span>
+<span class="normal"> 92</span>
+<span class="normal"> 93</span>
+<span class="normal"> 94</span>
+<span class="normal"> 95</span>
+<span class="normal"> 96</span>
+<span class="normal"> 97</span>
+<span class="normal"> 98</span>
+<span class="normal"> 99</span>
+<span class="normal">100</span>
+<span class="normal">101</span>
+<span class="normal">102</span>
+<span class="normal">103</span>
+<span class="normal">104</span>
+<span class="normal">105</span>
+<span class="normal">106</span>
+<span class="normal">107</span>
+<span class="normal">108</span>
+<span class="normal">109</span>
+<span class="normal">110</span>
+<span class="normal">111</span>
+<span class="normal">112</span>
+<span class="normal">113</span>
+<span class="normal">114</span>
+<span class="normal">115</span>
+<span class="normal">116</span>
+<span class="normal">117</span>
+<span class="normal">118</span>
+<span class="normal">119</span>
+<span class="normal">120</span>
+<span class="normal">121</span>
+<span class="normal">122</span>
+<span class="normal">123</span>
+<span class="normal">124</span>
+<span class="normal">125</span>
+<span class="normal">126</span>
+<span class="normal">127</span>
+<span class="normal">128</span>
+<span class="normal">129</span>
+<span class="normal">130</span>
+<span class="normal">131</span>
+<span class="normal">132</span>
+<span class="normal">133</span>
+<span class="normal">134</span>
+<span class="normal">135</span>
+<span class="normal">136</span>
+<span class="normal">137</span>
+<span class="normal">138</span>
+<span class="normal">139</span>
+<span class="normal">140</span>
+<span class="normal">141</span>
+<span class="normal">142</span>
+<span class="normal">143</span>
+<span class="normal">144</span>
+<span class="normal">145</span>
+<span class="normal">146</span>
+<span class="normal">147</span>
+<span class="normal">148</span>
+<span class="normal">149</span>
+<span class="normal">150</span>
+<span class="normal">151</span>
+<span class="normal">152</span>
+<span class="normal">153</span>
+<span class="normal">154</span>
+<span class="normal">155</span>
+<span class="normal">156</span>
+<span class="normal">157</span>
+<span class="normal">158</span>
+<span class="normal">159</span>
+<span class="normal">160</span>
+<span class="normal">161</span>
+<span class="normal">162</span>
+<span class="normal">163</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span>
+<span class="normal">167</span>
+<span class="normal">168</span>
+<span class="normal">169</span>
+<span class="normal">170</span>
+<span class="normal">171</span>
+<span class="normal">172</span>
+<span class="normal">173</span>
+<span class="normal">174</span>
+<span class="normal">175</span>
+<span class="normal">176</span>
+<span class="normal">177</span>
+<span class="normal">178</span>
+<span class="normal">179</span>
+<span class="normal">180</span>
+<span class="normal">181</span>
+<span class="normal">182</span>
+<span class="normal">183</span>
+<span class="normal">184</span>
+<span class="normal">185</span>
+<span class="normal">186</span>
+<span class="normal">187</span>
+<span class="normal">188</span>
+<span class="normal">189</span>
+<span class="normal">190</span>
+<span class="normal">191</span>
+<span class="normal">192</span>
+<span class="normal">193</span>
+<span class="normal">194</span>
+<span class="normal">195</span>
+<span class="normal">196</span>
+<span class="normal">197</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">TripletDataset</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Dataset for Triplet network training.&quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">writer_dirs</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
         <span class="n">train</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-        <span class="n">samples_per_writer</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span><span class="p">,</span>
         <span class="n">target_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">448</span><span class="p">,</span>
+        <span class="n">resample_negatives_every_n_epochs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="n">positive_ratio</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.5</span><span class="p">,</span>  <span class="c1"># For validation pairs</span>
+        <span class="n">random_seed</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">42</span>
     <span class="p">):</span>
-        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
-            <span class="n">writer_dirs</span><span class="o">=</span><span class="n">writer_dirs</span><span class="p">,</span>
-            <span class="n">train</span><span class="o">=</span><span class="n">train</span><span class="p">,</span>
-            <span class="n">samples_per_writer</span><span class="o">=</span><span class="n">samples_per_writer</span><span class="p">,</span>
-            <span class="n">target_size</span><span class="o">=</span><span class="n">target_size</span><span class="p">,</span>
-            <span class="n">min_images_per_writer</span><span class="o">=</span><span class="mi">2</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="si">{</span><span class="s1">&#39;=&#39;</span><span class="o">*</span><span class="mi">60</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Initializing </span><span class="si">{</span><span class="s1">&#39;TRAIN&#39;</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">train</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s1">&#39;VAL&#39;</span><span class="si">}</span><span class="s2"> Triplet Dataset&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="s1">&#39;=&#39;</span><span class="o">*</span><span class="mi">60</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Writers: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">writer_dirs</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Resample negatives every: </span><span class="si">{</span><span class="n">resample_negatives_every_n_epochs</span><span class="si">}</span><span class="s2"> epoch(s)&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">resample_negatives_every_n_epochs</span> <span class="o">=</span> <span class="n">resample_negatives_every_n_epochs</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">writer_dirs</span> <span class="o">=</span> <span class="n">writer_dirs</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">train</span> <span class="o">=</span> <span class="n">train</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">target_size</span> <span class="o">=</span> <span class="n">target_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">positive_ratio</span> <span class="o">=</span> <span class="n">positive_ratio</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_epoch</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">random_seed</span> <span class="o">=</span> <span class="n">random_seed</span>
+
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.transforms</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_train_transforms</span><span class="p">,</span> <span class="n">get_test_transforms</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">transform</span> <span class="o">=</span> <span class="p">(</span><span class="n">get_train_transforms</span><span class="p">(</span><span class="n">target_size</span><span class="p">)</span> <span class="k">if</span> <span class="n">train</span> 
+                         <span class="k">else</span> <span class="n">get_test_transforms</span><span class="p">(</span><span class="n">target_size</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_writer_images</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">writer_ids</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+
+        <span class="c1"># Genera tutte le genuine pairs (base per le triple E per validation)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">all_genuine_pairs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_generate_all_genuine_pairs</span><span class="p">()</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Generated </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">all_genuine_pairs</span><span class="p">)</span><span class="si">}</span><span class="s2"> genuine pairs (base for triplets)&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Pool di immagini negative per writer</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_create_negative_pool</span><span class="p">()</span>
+
+        <span class="c1"># Genera le triple iniziali per training</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_resample_triplets</span><span class="p">()</span>
+
+        <span class="c1"># Crea validation pairs (FIXED, non cambiano ad ogni epoca)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_create_validation_pairs</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_load_writer_images</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Load image paths for each writer.&quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+
+        <span class="n">writer_images</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">writer_dir</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">writer_dirs</span><span class="p">:</span>
+            <span class="n">writer_id</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">writer_dir</span><span class="p">)</span><span class="o">.</span><span class="n">name</span>
+            <span class="n">images</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">writer_dir</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span> 
+                <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="n">writer_dir</span><span class="p">)</span> 
+                <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">endswith</span><span class="p">((</span><span class="s1">&#39;.png&#39;</span><span class="p">,</span> <span class="s1">&#39;.jpg&#39;</span><span class="p">,</span> <span class="s1">&#39;.jpeg&#39;</span><span class="p">))</span>
+            <span class="p">]</span>
+            <span class="n">writer_images</span><span class="p">[</span><span class="n">writer_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">images</span>
+        <span class="k">return</span> <span class="n">writer_images</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_load_image</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Load and transform a single image.&quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">PIL</span><span class="w"> </span><span class="kn">import</span> <span class="n">Image</span>
+        <span class="n">img</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="s2">&quot;L&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">img</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_generate_all_genuine_pairs</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Genera TUTTE le coppie genuine possibili (stesso writer).</span>
+<span class="sd">        Returns: Lista di (writer_id, img1_path, img2_path)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">multi_image_writers</span> <span class="o">=</span> <span class="p">[</span><span class="n">w</span> <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">writer_ids</span> 
+                              <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="p">[</span><span class="n">w</span><span class="p">])</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">]</span>
+
+        <span class="n">genuine_pairs</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">writer_id</span> <span class="ow">in</span> <span class="n">multi_image_writers</span><span class="p">:</span>
+            <span class="n">images</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="p">[</span><span class="n">writer_id</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">img1</span><span class="p">,</span> <span class="n">img2</span> <span class="ow">in</span> <span class="n">combinations</span><span class="p">(</span><span class="n">images</span><span class="p">,</span> <span class="mi">2</span><span class="p">):</span>
+                <span class="n">genuine_pairs</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">writer_id</span><span class="p">,</span> <span class="n">img1</span><span class="p">,</span> <span class="n">img2</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="n">genuine_pairs</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_create_negative_pool</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Crea un pool di immagini negative per ogni writer.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">negative_pool</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">writer_id</span><span class="p">:</span> <span class="p">[</span>
+                <span class="n">img</span>
+                <span class="k">for</span> <span class="n">other_id</span><span class="p">,</span> <span class="n">images</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">other_id</span> <span class="o">!=</span> <span class="n">writer_id</span>
+                <span class="k">for</span> <span class="n">img</span> <span class="ow">in</span> <span class="n">images</span>
+            <span class="p">]</span>
+            <span class="k">for</span> <span class="n">writer_id</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">writer_ids</span>
+        <span class="p">}</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_resample_triplets</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">epoch</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Genera le triple campionando casualmente i negativi dal pool.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">triplets</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">writer_id</span><span class="p">,</span> <span class="n">anchor_path</span><span class="p">,</span> <span class="n">positive_path</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">all_genuine_pairs</span><span class="p">:</span>
+
+            <span class="n">epoch_rng</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">Random</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">random_seed</span> <span class="o">+</span> <span class="n">epoch</span><span class="p">)</span>
+
+            <span class="c1"># Campiona un&#39;immagine negativa casuale da un altro writer</span>
+            <span class="n">negative_path</span> <span class="o">=</span> <span class="n">epoch_rng</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">negative_pool</span><span class="p">[</span><span class="n">writer_id</span><span class="p">])</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">triplets</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">anchor_path</span><span class="p">,</span> <span class="n">positive_path</span><span class="p">,</span> <span class="n">negative_path</span><span class="p">))</span>
+
+        <span class="c1"># Shuffle per randomizzare l&#39;ordine</span>
+        <span class="n">random</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">triplets</span><span class="p">)</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Generated </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">triplets</span><span class="p">)</span><span class="si">}</span><span class="s2"> triplets&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_create_validation_pairs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Crea pairs (img1, img2, label) per validation comprehensive.</span>
+<span class="sd">        Usa tutte le genuine + campiona impostors per mantenere positive_ratio.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Genuine pairs (tutte)</span>
+        <span class="n">genuine_samples</span> <span class="o">=</span> <span class="p">[(</span><span class="n">img1</span><span class="p">,</span> <span class="n">img2</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">img1</span><span class="p">,</span> <span class="n">img2</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">all_genuine_pairs</span><span class="p">]</span>
+
+        <span class="c1"># Genera tutte le possibili impostor pairs</span>
+        <span class="n">all_impostor_pairs</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">w1</span><span class="p">,</span> <span class="n">w2</span> <span class="ow">in</span> <span class="n">combinations</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_ids</span><span class="p">,</span> <span class="mi">2</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">img1</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="p">[</span><span class="n">w1</span><span class="p">]:</span>
+                <span class="k">for</span> <span class="n">img2</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="p">[</span><span class="n">w2</span><span class="p">]:</span>
+                    <span class="n">all_impostor_pairs</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">img1</span><span class="p">,</span> <span class="n">img2</span><span class="p">))</span>
+
+        <span class="c1"># Calcola quanti impostors servono per mantenere positive_ratio</span>
+        <span class="n">num_impostors_needed</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span>
+            <span class="nb">len</span><span class="p">(</span><span class="n">genuine_samples</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">positive_ratio</span><span class="p">)</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">positive_ratio</span>
         <span class="p">)</span>
+
+        <span class="c1"># Campiona impostors</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">all_impostor_pairs</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">num_impostors_needed</span><span class="p">:</span>
+            <span class="n">impostor_samples</span> <span class="o">=</span> <span class="p">[(</span><span class="n">img1</span><span class="p">,</span> <span class="n">img2</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span> <span class="k">for</span> <span class="n">img1</span><span class="p">,</span> <span class="n">img2</span> <span class="ow">in</span> <span class="n">all_impostor_pairs</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">sampled_impostors</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">all_impostor_pairs</span><span class="p">,</span> <span class="n">num_impostors_needed</span><span class="p">)</span>
+            <span class="n">impostor_samples</span> <span class="o">=</span> <span class="p">[(</span><span class="n">img1</span><span class="p">,</span> <span class="n">img2</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span> <span class="k">for</span> <span class="n">img1</span><span class="p">,</span> <span class="n">img2</span> <span class="ow">in</span> <span class="n">sampled_impostors</span><span class="p">]</span>
+
+        <span class="c1"># Combina e shuffla</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">validation_pairs</span> <span class="o">=</span> <span class="n">genuine_samples</span> <span class="o">+</span> <span class="n">impostor_samples</span>
+        <span class="n">random</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">validation_pairs</span><span class="p">)</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Created </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">validation_pairs</span><span class="p">)</span><span class="si">}</span><span class="s2"> validation pairs &quot;</span>
+              <span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">genuine_samples</span><span class="p">)</span><span class="si">}</span><span class="s2"> genuine + </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">impostor_samples</span><span class="p">)</span><span class="si">}</span><span class="s2"> impostor)&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_epoch_end</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">epoch</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Chiamata alla fine di ogni epoca dal trainer.</span>
+<span class="sd">        Ricampiona i negativi se necessario.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            epoch: Numero dell&#39;epoca appena completata (0-indexed)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">resample_negatives_every_n_epochs</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="c1"># Disabilitato</span>
+            <span class="k">return</span>
+
+        <span class="k">if</span> <span class="p">(</span><span class="n">epoch</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">resample_negatives_every_n_epochs</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">🔄 Resampling triplet negatives for next epoch...&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_resample_triplets</span><span class="p">(</span><span class="n">epoch</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate a triplet (anchor, positive, negative).&quot;&quot;&quot;</span>
-        <span class="c1"># Anchor writer</span>
-        <span class="n">anchor_writer</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_ids</span><span class="p">)</span>
-
-        <span class="c1"># Anchor and positive from same writer</span>
-        <span class="n">anchor_path</span><span class="p">,</span> <span class="n">positive_path</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="p">[</span><span class="n">anchor_writer</span><span class="p">],</span> <span class="mi">2</span>
-        <span class="p">)</span>
-
-        <span class="c1"># Negative from different writer</span>
-        <span class="n">negative_writer</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span>
-            <span class="p">[</span><span class="n">w</span> <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">writer_ids</span> <span class="k">if</span> <span class="n">w</span> <span class="o">!=</span> <span class="n">anchor_writer</span><span class="p">]</span>
-        <span class="p">)</span>
-        <span class="n">negative_path</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="p">[</span><span class="n">negative_writer</span><span class="p">])</span>
-
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get a triplet (anchor, positive, negative) for training.&quot;&quot;&quot;</span>
+        <span class="n">anchor_path</span><span class="p">,</span> <span class="n">positive_path</span><span class="p">,</span> <span class="n">negative_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">triplets</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
         <span class="n">anchor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_image</span><span class="p">(</span><span class="n">anchor_path</span><span class="p">)</span>
         <span class="n">positive</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_image</span><span class="p">(</span><span class="n">positive_path</span><span class="p">)</span>
         <span class="n">negative</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_image</span><span class="p">(</span><span class="n">negative_path</span><span class="p">)</span>
-
         <span class="k">return</span> <span class="n">anchor</span><span class="p">,</span> <span class="n">positive</span><span class="p">,</span> <span class="n">negative</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">triplets</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_validation_pair</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get a validation pair for comprehensive evaluation.</span>
+
+<span class="sd">        For TripletDataset, this returns pairs from validation_pairs which are</span>
+<span class="sd">        created once during initialization and remain fixed.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            idx: Index of the validation pair</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            Tuple of (img1_path, img2_path, label)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">validation_pairs</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
 </code></pre></div></td></tr></table></div>
               </details>
 
@@ -2269,52 +3073,212 @@ Handles common operations like loading writer directories and transforms.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Generate a triplet (anchor, positive, negative).</p>
+        <p>Get a triplet (anchor, positive, negative) for training.</p>
 
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>data/triplet_dataset.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">32</span>
-<span class="normal">33</span>
-<span class="normal">34</span>
-<span class="normal">35</span>
-<span class="normal">36</span>
-<span class="normal">37</span>
-<span class="normal">38</span>
-<span class="normal">39</span>
-<span class="normal">40</span>
-<span class="normal">41</span>
-<span class="normal">42</span>
-<span class="normal">43</span>
-<span class="normal">44</span>
-<span class="normal">45</span>
-<span class="normal">46</span>
-<span class="normal">47</span>
-<span class="normal">48</span>
-<span class="normal">49</span>
-<span class="normal">50</span>
-<span class="normal">51</span>
-<span class="normal">52</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Generate a triplet (anchor, positive, negative).&quot;&quot;&quot;</span>
-    <span class="c1"># Anchor writer</span>
-    <span class="n">anchor_writer</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_ids</span><span class="p">)</span>
-
-    <span class="c1"># Anchor and positive from same writer</span>
-    <span class="n">anchor_path</span><span class="p">,</span> <span class="n">positive_path</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="p">[</span><span class="n">anchor_writer</span><span class="p">],</span> <span class="mi">2</span>
-    <span class="p">)</span>
-
-    <span class="c1"># Negative from different writer</span>
-    <span class="n">negative_writer</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span>
-        <span class="p">[</span><span class="n">w</span> <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">writer_ids</span> <span class="k">if</span> <span class="n">w</span> <span class="o">!=</span> <span class="n">anchor_writer</span><span class="p">]</span>
-    <span class="p">)</span>
-    <span class="n">negative_path</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="p">[</span><span class="n">negative_writer</span><span class="p">])</span>
-
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">173</span>
+<span class="normal">174</span>
+<span class="normal">175</span>
+<span class="normal">176</span>
+<span class="normal">177</span>
+<span class="normal">178</span>
+<span class="normal">179</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get a triplet (anchor, positive, negative) for training.&quot;&quot;&quot;</span>
+    <span class="n">anchor_path</span><span class="p">,</span> <span class="n">positive_path</span><span class="p">,</span> <span class="n">negative_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">triplets</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
     <span class="n">anchor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_image</span><span class="p">(</span><span class="n">anchor_path</span><span class="p">)</span>
     <span class="n">positive</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_image</span><span class="p">(</span><span class="n">positive_path</span><span class="p">)</span>
     <span class="n">negative</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_image</span><span class="p">(</span><span class="n">negative_path</span><span class="p">)</span>
-
     <span class="k">return</span> <span class="n">anchor</span><span class="p">,</span> <span class="n">positive</span><span class="p">,</span> <span class="n">negative</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="data.triplet_dataset.TripletDataset.get_validation_pair" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">get_validation_pair</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span></code>
+
+<a href="#data.triplet_dataset.TripletDataset.get_validation_pair" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Get a validation pair for comprehensive evaluation.</p>
+<p>For TripletDataset, this returns pairs from validation_pairs which are
+created once during initialization and remain fixed.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>idx</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Index of the validation pair</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.Tuple">Tuple</span>[<span title="str">str</span>, <span title="str">str</span>, <span title="float">float</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Tuple of (img1_path, img2_path, label)</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>data/triplet_dataset.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">184</span>
+<span class="normal">185</span>
+<span class="normal">186</span>
+<span class="normal">187</span>
+<span class="normal">188</span>
+<span class="normal">189</span>
+<span class="normal">190</span>
+<span class="normal">191</span>
+<span class="normal">192</span>
+<span class="normal">193</span>
+<span class="normal">194</span>
+<span class="normal">195</span>
+<span class="normal">196</span>
+<span class="normal">197</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_validation_pair</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Get a validation pair for comprehensive evaluation.</span>
+
+<span class="sd">    For TripletDataset, this returns pairs from validation_pairs which are</span>
+<span class="sd">    created once during initialization and remain fixed.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        idx: Index of the validation pair</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Tuple of (img1_path, img2_path, label)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">validation_pairs</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="data.triplet_dataset.TripletDataset.on_epoch_end" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">on_epoch_end</span><span class="p">(</span><span class="n">epoch</span><span class="p">)</span></code>
+
+<a href="#data.triplet_dataset.TripletDataset.on_epoch_end" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Chiamata alla fine di ogni epoca dal trainer.
+Ricampiona i negativi se necessario.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>epoch</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Numero dell'epoca appena completata (0-indexed)</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>data/triplet_dataset.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">157</span>
+<span class="normal">158</span>
+<span class="normal">159</span>
+<span class="normal">160</span>
+<span class="normal">161</span>
+<span class="normal">162</span>
+<span class="normal">163</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span>
+<span class="normal">167</span>
+<span class="normal">168</span>
+<span class="normal">169</span>
+<span class="normal">170</span>
+<span class="normal">171</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">on_epoch_end</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">epoch</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Chiamata alla fine di ogni epoca dal trainer.</span>
+<span class="sd">    Ricampiona i negativi se necessario.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        epoch: Numero dell&#39;epoca appena completata (0-indexed)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">resample_negatives_every_n_epochs</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="c1"># Disabilitato</span>
+        <span class="k">return</span>
+
+    <span class="k">if</span> <span class="p">(</span><span class="n">epoch</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">resample_negatives_every_n_epochs</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">🔄 Resampling triplet negatives for next epoch...&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_resample_triplets</span><span class="p">(</span><span class="n">epoch</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -2349,8 +3313,6 @@ Handles common operations like loading writer directories and transforms.</p>
 <a href="#data.contrastive_dataset" class="headerlink" title="Permanent link">&para;</a></h2>
 
     <div class="doc doc-contents first">
-
-        <p>Contrastive Dataset - Similar to Siamese but 50/50 ratio</p>
 
 
 
@@ -2388,7 +3350,7 @@ Handles common operations like loading writer directories and transforms.</p>
 
 
 
-        <p>Dataset for Contrastive Learning (balanced positive/negative samples).</p>
+        <p>Dataset for Contrastive Learning (balanced 50/50 positive/negative).</p>
 
 
 
@@ -2399,7 +3361,11 @@ Handles common operations like loading writer directories and transforms.</p>
 
               <details class="mkdocstrings-source">
                 <summary>Source code in <code>data/contrastive_dataset.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">13</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 9</span>
+<span class="normal">10</span>
+<span class="normal">11</span>
+<span class="normal">12</span>
+<span class="normal">13</span>
 <span class="normal">14</span>
 <span class="normal">15</span>
 <span class="normal">16</span>
@@ -2432,44 +3398,44 @@ Handles common operations like loading writer directories and transforms.</p>
 <span class="normal">43</span>
 <span class="normal">44</span>
 <span class="normal">45</span>
-<span class="normal">46</span>
-<span class="normal">47</span>
-<span class="normal">48</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">ContrastiveDataset</span><span class="p">(</span><span class="n">BaseWriterDataset</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Dataset for Contrastive Learning (balanced positive/negative samples).&quot;&quot;&quot;</span>
+<span class="normal">46</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">ContrastiveDataset</span><span class="p">(</span><span class="n">BaseWriterDataset</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Dataset for Contrastive Learning (balanced 50/50 positive/negative).&quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">writer_dirs</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
         <span class="n">train</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-        <span class="n">samples_per_writer</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span><span class="p">,</span>
         <span class="n">target_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">448</span><span class="p">,</span>
+        <span class="n">positive_ratio</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.5</span><span class="p">,</span>
+        <span class="n">resample_negatives_every_n_epochs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
     <span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="si">{</span><span class="s1">&#39;=&#39;</span><span class="o">*</span><span class="mi">60</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Initializing </span><span class="si">{</span><span class="s1">&#39;TRAIN&#39;</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">train</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s1">&#39;VAL&#39;</span><span class="si">}</span><span class="s2"> Contrastive Dataset&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="s1">&#39;=&#39;</span><span class="o">*</span><span class="mi">60</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Writers: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">writer_dirs</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Positive ratio: </span><span class="si">{</span><span class="n">positive_ratio</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Resample negatives every: </span><span class="si">{</span><span class="n">resample_negatives_every_n_epochs</span><span class="si">}</span><span class="s2"> epoch(s)&quot;</span><span class="p">)</span>
+
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
             <span class="n">writer_dirs</span><span class="o">=</span><span class="n">writer_dirs</span><span class="p">,</span>
             <span class="n">train</span><span class="o">=</span><span class="n">train</span><span class="p">,</span>
-            <span class="n">samples_per_writer</span><span class="o">=</span><span class="n">samples_per_writer</span><span class="p">,</span>
             <span class="n">target_size</span><span class="o">=</span><span class="n">target_size</span><span class="p">,</span>
-            <span class="n">min_images_per_writer</span><span class="o">=</span><span class="mi">2</span>
+            <span class="n">positive_ratio</span><span class="o">=</span><span class="n">positive_ratio</span><span class="p">,</span>
+            <span class="n">resample_negatives_every_n_epochs</span><span class="o">=</span><span class="n">resample_negatives_every_n_epochs</span>
         <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate a pair with label (50/50 positive/negative).&quot;&quot;&quot;</span>
-        <span class="n">is_positive</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">()</span> <span class="o">&lt;</span> <span class="mf">0.5</span>
-
-        <span class="k">if</span> <span class="n">is_positive</span><span class="p">:</span>
-            <span class="n">writer_id</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_ids</span><span class="p">)</span>
-            <span class="n">img1_path</span><span class="p">,</span> <span class="n">img2_path</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="p">[</span><span class="n">writer_id</span><span class="p">],</span> <span class="mi">2</span><span class="p">)</span>
-            <span class="n">label</span> <span class="o">=</span> <span class="mf">1.0</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">writer1</span><span class="p">,</span> <span class="n">writer2</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_ids</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
-            <span class="n">img1_path</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="p">[</span><span class="n">writer1</span><span class="p">])</span>
-            <span class="n">img2_path</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="p">[</span><span class="n">writer2</span><span class="p">])</span>
-            <span class="n">label</span> <span class="o">=</span> <span class="mf">0.0</span>
-
+        <span class="n">img1_path</span><span class="p">,</span> <span class="n">img2_path</span><span class="p">,</span> <span class="n">label</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">samples</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
         <span class="n">img1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_image</span><span class="p">(</span><span class="n">img1_path</span><span class="p">)</span>
         <span class="n">img2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_image</span><span class="p">(</span><span class="n">img2_path</span><span class="p">)</span>
-
         <span class="k">return</span> <span class="n">img1</span><span class="p">,</span> <span class="n">img2</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_validation_pair</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get a validation pair from samples.</span>
+<span class="sd">        For Contrastive, samples already contain pairs in the correct format.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">samples</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
 </code></pre></div></td></tr></table></div>
               </details>
 
@@ -2489,54 +3455,31 @@ Handles common operations like loading writer directories and transforms.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="data.contrastive_dataset.ContrastiveDataset.__getitem__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="fm">__getitem__</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span></code>
+<h4 id="data.contrastive_dataset.ContrastiveDataset.get_validation_pair" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">get_validation_pair</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span></code>
 
-<a href="#data.contrastive_dataset.ContrastiveDataset.__getitem__" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#data.contrastive_dataset.ContrastiveDataset.get_validation_pair" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
 
-        <p>Generate a pair with label (50/50 positive/negative).</p>
+        <p>Get a validation pair from samples.
+For Contrastive, samples already contain pairs in the correct format.</p>
 
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>data/contrastive_dataset.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">31</span>
-<span class="normal">32</span>
-<span class="normal">33</span>
-<span class="normal">34</span>
-<span class="normal">35</span>
-<span class="normal">36</span>
-<span class="normal">37</span>
-<span class="normal">38</span>
-<span class="normal">39</span>
-<span class="normal">40</span>
-<span class="normal">41</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">41</span>
 <span class="normal">42</span>
 <span class="normal">43</span>
 <span class="normal">44</span>
 <span class="normal">45</span>
-<span class="normal">46</span>
-<span class="normal">47</span>
-<span class="normal">48</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Generate a pair with label (50/50 positive/negative).&quot;&quot;&quot;</span>
-    <span class="n">is_positive</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">()</span> <span class="o">&lt;</span> <span class="mf">0.5</span>
-
-    <span class="k">if</span> <span class="n">is_positive</span><span class="p">:</span>
-        <span class="n">writer_id</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_ids</span><span class="p">)</span>
-        <span class="n">img1_path</span><span class="p">,</span> <span class="n">img2_path</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="p">[</span><span class="n">writer_id</span><span class="p">],</span> <span class="mi">2</span><span class="p">)</span>
-        <span class="n">label</span> <span class="o">=</span> <span class="mf">1.0</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="n">writer1</span><span class="p">,</span> <span class="n">writer2</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_ids</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
-        <span class="n">img1_path</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="p">[</span><span class="n">writer1</span><span class="p">])</span>
-        <span class="n">img2_path</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">writer_images</span><span class="p">[</span><span class="n">writer2</span><span class="p">])</span>
-        <span class="n">label</span> <span class="o">=</span> <span class="mf">0.0</span>
-
-    <span class="n">img1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_image</span><span class="p">(</span><span class="n">img1_path</span><span class="p">)</span>
-    <span class="n">img2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_image</span><span class="p">(</span><span class="n">img2_path</span><span class="p">)</span>
-
-    <span class="k">return</span> <span class="n">img1</span><span class="p">,</span> <span class="n">img2</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+<span class="normal">46</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_validation_pair</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Get a validation pair from samples.</span>
+<span class="sd">    For Contrastive, samples already contain pairs in the correct format.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">samples</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>

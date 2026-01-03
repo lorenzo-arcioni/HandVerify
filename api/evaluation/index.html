@@ -965,10 +965,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#evaluation.metrics.compute_classification_metrics" class="md-nav__link">
+  <a href="#evaluation.metrics.compute_metrics" class="md-nav__link">
     <span class="md-ellipsis">
       
-        compute_classification_metrics
+        compute_metrics
       
     </span>
   </a>
@@ -976,32 +976,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#evaluation.metrics.compute_eer" class="md-nav__link">
+  <a href="#evaluation.metrics.print_results" class="md-nav__link">
     <span class="md-ellipsis">
       
-        compute_eer
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#evaluation.metrics.compute_verification_metrics" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        compute_verification_metrics
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#evaluation.metrics.print_verification_results" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        print_verification_results
+        print_results
       
     </span>
   </a>
@@ -1096,10 +1074,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#evaluation.metrics.compute_classification_metrics" class="md-nav__link">
+  <a href="#evaluation.metrics.compute_metrics" class="md-nav__link">
     <span class="md-ellipsis">
       
-        compute_classification_metrics
+        compute_metrics
       
     </span>
   </a>
@@ -1107,32 +1085,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#evaluation.metrics.compute_eer" class="md-nav__link">
+  <a href="#evaluation.metrics.print_results" class="md-nav__link">
     <span class="md-ellipsis">
       
-        compute_eer
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#evaluation.metrics.compute_verification_metrics" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        compute_verification_metrics
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#evaluation.metrics.print_verification_results" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        print_verification_results
+        print_results
       
     </span>
   </a>
@@ -1205,15 +1161,15 @@ Comprehensive metrics including classification and biometric verification.</p>
 <div class="doc doc-object doc-function">
 
 
-<h3 id="evaluation.metrics.compute_classification_metrics" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">compute_classification_metrics</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_scores</span><span class="p">,</span> <span class="n">threshold</span><span class="p">)</span></code>
+<h3 id="evaluation.metrics.compute_metrics" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">compute_metrics</span><span class="p">(</span><span class="n">genuine_vals</span><span class="p">,</span> <span class="n">impostor_vals</span><span class="p">,</span> <span class="n">distances_are_similarity</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
 
-<a href="#evaluation.metrics.compute_classification_metrics" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#evaluation.metrics.compute_metrics" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
     <div class="doc doc-contents ">
 
-        <p>Compute classification metrics at a given threshold.</p>
+        <p>Compute comprehensive verification metrics for biometric verification systems.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1229,14 +1185,16 @@ Comprehensive metrics including classification and biometric verification.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                <code>y_true</code>
+                <code>genuine_vals</code>
             </td>
             <td>
                   <code><span title="numpy.ndarray">ndarray</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>True labels (1 for genuine, 0 for impostor)</p>
+                <p>Genuine pair values.
+- If distances_are_similarity=False → distances (lower = more similar)
+- If distances_are_similarity=True  → similarity scores (higher = more similar)</p>
               </div>
             </td>
             <td>
@@ -1245,14 +1203,14 @@ Comprehensive metrics including classification and biometric verification.</p>
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>y_scores</code>
+                <code>impostor_vals</code>
             </td>
             <td>
                   <code><span title="numpy.ndarray">ndarray</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Similarity scores (higher = more similar)</p>
+                <p>Impostor pair values (same convention as genuine_vals)</p>
               </div>
             </td>
             <td>
@@ -1261,18 +1219,19 @@ Comprehensive metrics including classification and biometric verification.</p>
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>threshold</code>
+                <code>distances_are_similarity</code>
             </td>
             <td>
-                  <code><span title="float">float</span></code>
+                  <code><span title="bool">bool</span></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Decision threshold</p>
+                <p>True  → values are similarity scores (e.g. BCE, cosine similarity)
+False → values are distances (e.g. Euclidean, contrastive, triplet)</p>
               </div>
             </td>
             <td>
-                <em>required</em>
+                  <code>False</code>
             </td>
           </tr>
       </tbody>
@@ -1294,7 +1253,9 @@ Comprehensive metrics including classification and biometric verification.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Dictionary with accuracy, precision, recall, F1</p>
+                <p>Dict[str, float]:
+Contains ROC/AUC, EER, classification metrics, FAR/FRR operating points,
+d-prime, decidability index, and raw distributions.</p>
               </div>
             </td>
           </tr>
@@ -1304,215 +1265,52 @@ Comprehensive metrics including classification and biometric verification.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>evaluation/metrics.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">32</span>
-<span class="normal">33</span>
-<span class="normal">34</span>
-<span class="normal">35</span>
-<span class="normal">36</span>
-<span class="normal">37</span>
-<span class="normal">38</span>
-<span class="normal">39</span>
-<span class="normal">40</span>
-<span class="normal">41</span>
-<span class="normal">42</span>
-<span class="normal">43</span>
-<span class="normal">44</span>
-<span class="normal">45</span>
-<span class="normal">46</span>
-<span class="normal">47</span>
-<span class="normal">48</span>
-<span class="normal">49</span>
-<span class="normal">50</span>
-<span class="normal">51</span>
-<span class="normal">52</span>
-<span class="normal">53</span>
-<span class="normal">54</span>
-<span class="normal">55</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_classification_metrics</span><span class="p">(</span>
-    <span class="n">y_true</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
-    <span class="n">y_scores</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
-    <span class="n">threshold</span><span class="p">:</span> <span class="nb">float</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Compute classification metrics at a given threshold.</span>
-
-<span class="sd">    Args:</span>
-<span class="sd">        y_true: True labels (1 for genuine, 0 for impostor)</span>
-<span class="sd">        y_scores: Similarity scores (higher = more similar)</span>
-<span class="sd">        threshold: Decision threshold</span>
-
-<span class="sd">    Returns:</span>
-<span class="sd">        Dictionary with accuracy, precision, recall, F1</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">y_pred</span> <span class="o">=</span> <span class="p">(</span><span class="n">y_scores</span> <span class="o">&gt;=</span> <span class="n">threshold</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span>
-
-    <span class="k">return</span> <span class="p">{</span>
-        <span class="s1">&#39;accuracy&#39;</span><span class="p">:</span> <span class="n">accuracy_score</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">),</span>
-        <span class="s1">&#39;precision&#39;</span><span class="p">:</span> <span class="n">precision_score</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">,</span> <span class="n">zero_division</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span>
-        <span class="s1">&#39;recall&#39;</span><span class="p">:</span> <span class="n">recall_score</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">,</span> <span class="n">zero_division</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span>
-        <span class="s1">&#39;f1&#39;</span><span class="p">:</span> <span class="n">f1_score</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">,</span> <span class="n">zero_division</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span>
-    <span class="p">}</span>
-</code></pre></div></td></tr></table></div>
-            </details>
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="evaluation.metrics.compute_eer" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">compute_eer</span><span class="p">(</span><span class="n">fpr</span><span class="p">,</span> <span class="n">tpr</span><span class="p">,</span> <span class="n">thresholds</span><span class="p">)</span></code>
-
-<a href="#evaluation.metrics.compute_eer" class="headerlink" title="Permanent link">&para;</a></h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Compute Equal Error Rate from ROC curve.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>fpr</code>
-            </td>
-            <td>
-                  <code><span title="numpy.ndarray">ndarray</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>False Positive Rates</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>tpr</code>
-            </td>
-            <td>
-                  <code><span title="numpy.ndarray">ndarray</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>True Positive Rates  </p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>thresholds</code>
-            </td>
-            <td>
-                  <code><span title="numpy.ndarray">ndarray</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Decision thresholds</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    <p><span class="doc-section-title">Returns:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="typing.Tuple">Tuple</span>[<span title="float">float</span>, <span title="float">float</span>]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>(EER value, threshold at EER)</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-            <details class="mkdocstrings-source">
-              <summary>Source code in <code>evaluation/metrics.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">14</span>
-<span class="normal">15</span>
-<span class="normal">16</span>
-<span class="normal">17</span>
-<span class="normal">18</span>
-<span class="normal">19</span>
-<span class="normal">20</span>
-<span class="normal">21</span>
-<span class="normal">22</span>
-<span class="normal">23</span>
-<span class="normal">24</span>
-<span class="normal">25</span>
-<span class="normal">26</span>
-<span class="normal">27</span>
-<span class="normal">28</span>
-<span class="normal">29</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_eer</span><span class="p">(</span><span class="n">fpr</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">tpr</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">thresholds</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Compute Equal Error Rate from ROC curve.</span>
-
-<span class="sd">    Args:</span>
-<span class="sd">        fpr: False Positive Rates</span>
-<span class="sd">        tpr: True Positive Rates  </span>
-<span class="sd">        thresholds: Decision thresholds</span>
-
-<span class="sd">    Returns:</span>
-<span class="sd">        (EER value, threshold at EER)</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">fnr</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">tpr</span>
-    <span class="n">eer_idx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argmin</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">fpr</span> <span class="o">-</span> <span class="n">fnr</span><span class="p">))</span>
-    <span class="n">eer</span> <span class="o">=</span> <span class="p">(</span><span class="n">fpr</span><span class="p">[</span><span class="n">eer_idx</span><span class="p">]</span> <span class="o">+</span> <span class="n">fnr</span><span class="p">[</span><span class="n">eer_idx</span><span class="p">])</span> <span class="o">/</span> <span class="mi">2</span>
-    <span class="k">return</span> <span class="n">eer</span><span class="p">,</span> <span class="n">thresholds</span><span class="p">[</span><span class="n">eer_idx</span><span class="p">]</span>
-</code></pre></div></td></tr></table></div>
-            </details>
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="evaluation.metrics.compute_verification_metrics" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">compute_verification_metrics</span><span class="p">(</span><span class="n">genuine_dists</span><span class="p">,</span> <span class="n">impostor_dists</span><span class="p">)</span></code>
-
-<a href="#evaluation.metrics.compute_verification_metrics" class="headerlink" title="Permanent link">&para;</a></h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Compute comprehensive verification metrics from distance distributions.</p>
-
-
-            <details class="mkdocstrings-source">
-              <summary>Source code in <code>evaluation/metrics.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 58</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 13</span>
+<span class="normal"> 14</span>
+<span class="normal"> 15</span>
+<span class="normal"> 16</span>
+<span class="normal"> 17</span>
+<span class="normal"> 18</span>
+<span class="normal"> 19</span>
+<span class="normal"> 20</span>
+<span class="normal"> 21</span>
+<span class="normal"> 22</span>
+<span class="normal"> 23</span>
+<span class="normal"> 24</span>
+<span class="normal"> 25</span>
+<span class="normal"> 26</span>
+<span class="normal"> 27</span>
+<span class="normal"> 28</span>
+<span class="normal"> 29</span>
+<span class="normal"> 30</span>
+<span class="normal"> 31</span>
+<span class="normal"> 32</span>
+<span class="normal"> 33</span>
+<span class="normal"> 34</span>
+<span class="normal"> 35</span>
+<span class="normal"> 36</span>
+<span class="normal"> 37</span>
+<span class="normal"> 38</span>
+<span class="normal"> 39</span>
+<span class="normal"> 40</span>
+<span class="normal"> 41</span>
+<span class="normal"> 42</span>
+<span class="normal"> 43</span>
+<span class="normal"> 44</span>
+<span class="normal"> 45</span>
+<span class="normal"> 46</span>
+<span class="normal"> 47</span>
+<span class="normal"> 48</span>
+<span class="normal"> 49</span>
+<span class="normal"> 50</span>
+<span class="normal"> 51</span>
+<span class="normal"> 52</span>
+<span class="normal"> 53</span>
+<span class="normal"> 54</span>
+<span class="normal"> 55</span>
+<span class="normal"> 56</span>
+<span class="normal"> 57</span>
+<span class="normal"> 58</span>
 <span class="normal"> 59</span>
 <span class="normal"> 60</span>
 <span class="normal"> 61</span>
@@ -1586,104 +1384,9 @@ Comprehensive metrics including classification and biometric verification.</p>
 <span class="normal">129</span>
 <span class="normal">130</span>
 <span class="normal">131</span>
-<span class="normal">132</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_verification_metrics</span><span class="p">(</span>
-    <span class="n">genuine_dists</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
-    <span class="n">impostor_dists</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Compute comprehensive verification metrics from distance distributions.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="c1"># Convert distances to similarity scores (lower distance = higher similarity)</span>
-    <span class="n">y_true</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">genuine_dists</span><span class="p">)</span> <span class="o">+</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">impostor_dists</span><span class="p">))</span>
-    <span class="n">y_scores</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="o">-</span><span class="n">genuine_dists</span><span class="p">,</span> <span class="o">-</span><span class="n">impostor_dists</span><span class="p">])</span>  <span class="c1"># ✅ FIX: usa concatenate</span>
-
-    <span class="c1"># ROC Curve</span>
-    <span class="n">fpr</span><span class="p">,</span> <span class="n">tpr</span><span class="p">,</span> <span class="n">thresholds</span> <span class="o">=</span> <span class="n">roc_curve</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_scores</span><span class="p">)</span>
-    <span class="n">thresholds</span> <span class="o">=</span> <span class="o">-</span><span class="n">thresholds</span>  <span class="c1"># Convert back to distances</span>
-
-    <span class="c1"># Primary biometric metrics</span>
-    <span class="n">metrics</span> <span class="o">=</span> <span class="p">{</span>
-        <span class="s1">&#39;auc&#39;</span><span class="p">:</span> <span class="n">auc</span><span class="p">(</span><span class="n">fpr</span><span class="p">,</span> <span class="n">tpr</span><span class="p">),</span>
-    <span class="p">}</span>
-
-    <span class="c1"># Equal Error Rate</span>
-    <span class="n">eer</span><span class="p">,</span> <span class="n">eer_threshold</span> <span class="o">=</span> <span class="n">compute_eer</span><span class="p">(</span><span class="n">fpr</span><span class="p">,</span> <span class="n">tpr</span><span class="p">,</span> <span class="n">thresholds</span><span class="p">)</span>
-    <span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;eer&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">eer</span>
-    <span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;eer_threshold&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">eer_threshold</span>
-
-    <span class="c1"># Classification metrics at EER threshold</span>
-    <span class="n">eer_sim_threshold</span> <span class="o">=</span> <span class="o">-</span><span class="n">eer_threshold</span>  <span class="c1"># Convert to similarity</span>
-    <span class="n">eer_classification</span> <span class="o">=</span> <span class="n">compute_classification_metrics</span><span class="p">(</span>
-        <span class="n">y_true</span><span class="p">,</span>
-        <span class="n">y_scores</span><span class="p">,</span>  <span class="c1"># ✅ Già è similarity scores</span>
-        <span class="n">eer_sim_threshold</span>
-    <span class="p">)</span>
-
-    <span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;accuracy&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">eer_classification</span><span class="p">[</span><span class="s1">&#39;accuracy&#39;</span><span class="p">]</span>
-    <span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;precision&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">eer_classification</span><span class="p">[</span><span class="s1">&#39;precision&#39;</span><span class="p">]</span>
-    <span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;recall&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">eer_classification</span><span class="p">[</span><span class="s1">&#39;recall&#39;</span><span class="p">]</span>
-    <span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;f1&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">eer_classification</span><span class="p">[</span><span class="s1">&#39;f1&#39;</span><span class="p">]</span>
-
-    <span class="c1"># Accuracy at specific FAR operating points</span>
-    <span class="n">fnr</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">tpr</span>
-    <span class="k">for</span> <span class="n">target_far</span> <span class="ow">in</span> <span class="p">[</span><span class="mf">0.001</span><span class="p">,</span> <span class="mf">0.01</span><span class="p">]:</span>
-        <span class="n">idx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argmin</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">fpr</span> <span class="o">-</span> <span class="n">target_far</span><span class="p">))</span>
-        <span class="n">frr_at_far</span> <span class="o">=</span> <span class="n">fnr</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
-        <span class="n">accuracy</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">-</span> <span class="p">((</span><span class="n">fpr</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span> <span class="o">+</span> <span class="n">frr_at_far</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span>
-
-        <span class="n">metrics</span><span class="p">[</span><span class="sa">f</span><span class="s1">&#39;acc_far_</span><span class="si">{</span><span class="n">target_far</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">accuracy</span>
-        <span class="n">metrics</span><span class="p">[</span><span class="sa">f</span><span class="s1">&#39;frr_far_</span><span class="si">{</span><span class="n">target_far</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">frr_at_far</span>
-        <span class="n">metrics</span><span class="p">[</span><span class="sa">f</span><span class="s1">&#39;threshold_far_</span><span class="si">{</span><span class="n">target_far</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">thresholds</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
-
-    <span class="c1"># D-prime (discriminability index)</span>
-    <span class="n">mu_genuine</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">genuine_dists</span><span class="p">)</span>
-    <span class="n">mu_impostor</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">impostor_dists</span><span class="p">)</span>
-    <span class="n">sigma_genuine</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">genuine_dists</span><span class="p">)</span>
-    <span class="n">sigma_impostor</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">impostor_dists</span><span class="p">)</span>
-
-    <span class="n">pooled_std</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">((</span><span class="n">sigma_genuine</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">sigma_impostor</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span>
-    <span class="n">d_prime</span> <span class="o">=</span> <span class="p">(</span><span class="n">mu_impostor</span> <span class="o">-</span> <span class="n">mu_genuine</span><span class="p">)</span> <span class="o">/</span> <span class="n">pooled_std</span> <span class="k">if</span> <span class="n">pooled_std</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">0</span>
-
-    <span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;d_prime&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">d_prime</span>
-    <span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;decidability&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">d_prime</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
-
-    <span class="c1"># Distribution statistics</span>
-    <span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;mu_genuine&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mu_genuine</span>
-    <span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;mu_impostor&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mu_impostor</span>
-    <span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;sigma_genuine&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">sigma_genuine</span>
-    <span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;sigma_impostor&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">sigma_impostor</span>
-
-    <span class="c1"># Store raw distributions for plotting</span>
-    <span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;genuine_dists&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">genuine_dists</span>
-    <span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;impostor_dists&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">impostor_dists</span>
-    <span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;fpr&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">fpr</span>
-    <span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;tpr&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">tpr</span>
-    <span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;thresholds&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">thresholds</span>
-
-    <span class="k">return</span> <span class="n">metrics</span>
-</code></pre></div></td></tr></table></div>
-            </details>
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="evaluation.metrics.print_verification_results" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">print_verification_results</span><span class="p">(</span><span class="n">metrics</span><span class="p">,</span> <span class="n">dataset_name</span><span class="o">=</span><span class="s1">&#39;Validation&#39;</span><span class="p">)</span></code>
-
-<a href="#evaluation.metrics.print_verification_results" class="headerlink" title="Permanent link">&para;</a></h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Print formatted verification results.</p>
-
-
-            <details class="mkdocstrings-source">
-              <summary>Source code in <code>evaluation/metrics.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">134</span>
+<span class="normal">132</span>
+<span class="normal">133</span>
+<span class="normal">134</span>
 <span class="normal">135</span>
 <span class="normal">136</span>
 <span class="normal">137</span>
@@ -1712,7 +1415,254 @@ Comprehensive metrics including classification and biometric verification.</p>
 <span class="normal">160</span>
 <span class="normal">161</span>
 <span class="normal">162</span>
-<span class="normal">163</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">print_verification_results</span><span class="p">(</span><span class="n">metrics</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">],</span> <span class="n">dataset_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;Validation&quot;</span><span class="p">):</span>
+<span class="normal">163</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span>
+<span class="normal">167</span>
+<span class="normal">168</span>
+<span class="normal">169</span>
+<span class="normal">170</span>
+<span class="normal">171</span>
+<span class="normal">172</span>
+<span class="normal">173</span>
+<span class="normal">174</span>
+<span class="normal">175</span>
+<span class="normal">176</span>
+<span class="normal">177</span>
+<span class="normal">178</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">compute_metrics</span><span class="p">(</span>
+    <span class="n">genuine_vals</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">impostor_vals</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">distances_are_similarity</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Compute comprehensive verification metrics for biometric verification systems.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        genuine_vals (np.ndarray):</span>
+<span class="sd">            Genuine pair values.</span>
+<span class="sd">            - If distances_are_similarity=False → distances (lower = more similar)</span>
+<span class="sd">            - If distances_are_similarity=True  → similarity scores (higher = more similar)</span>
+
+<span class="sd">        impostor_vals (np.ndarray):</span>
+<span class="sd">            Impostor pair values (same convention as genuine_vals)</span>
+
+<span class="sd">        distances_are_similarity (bool):</span>
+<span class="sd">            True  → values are similarity scores (e.g. BCE, cosine similarity)</span>
+<span class="sd">            False → values are distances (e.g. Euclidean, contrastive, triplet)</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Dict[str, float]:</span>
+<span class="sd">            Contains ROC/AUC, EER, classification metrics, FAR/FRR operating points,</span>
+<span class="sd">            d-prime, decidability index, and raw distributions.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># 1. Ground truth</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="n">y_true</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+        <span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">genuine_vals</span><span class="p">)</span> <span class="o">+</span>
+        <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">impostor_vals</span><span class="p">)</span>
+    <span class="p">)</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># 2. Convert EVERYTHING to similarity scores for ROC &amp; classification</span>
+    <span class="c1">#    (higher score = more genuine)</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="k">if</span> <span class="n">distances_are_similarity</span><span class="p">:</span>
+        <span class="n">genuine_scores</span> <span class="o">=</span> <span class="n">genuine_vals</span>
+        <span class="n">impostor_scores</span> <span class="o">=</span> <span class="n">impostor_vals</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">genuine_scores</span> <span class="o">=</span> <span class="o">-</span><span class="n">genuine_vals</span>
+        <span class="n">impostor_scores</span> <span class="o">=</span> <span class="o">-</span><span class="n">impostor_vals</span>
+
+    <span class="n">y_scores</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">genuine_scores</span><span class="p">,</span> <span class="n">impostor_scores</span><span class="p">])</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># 3. ROC / AUC</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="n">fpr</span><span class="p">,</span> <span class="n">tpr</span><span class="p">,</span> <span class="n">thresholds</span> <span class="o">=</span> <span class="n">roc_curve</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_scores</span><span class="p">)</span>
+    <span class="n">roc_auc</span> <span class="o">=</span> <span class="n">auc</span><span class="p">(</span><span class="n">fpr</span><span class="p">,</span> <span class="n">tpr</span><span class="p">)</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># 4. Equal Error Rate (EER)</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="n">fnr</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">tpr</span>
+    <span class="n">eer_idx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argmin</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">fpr</span> <span class="o">-</span> <span class="n">fnr</span><span class="p">))</span>
+    <span class="n">eer</span> <span class="o">=</span> <span class="p">(</span><span class="n">fpr</span><span class="p">[</span><span class="n">eer_idx</span><span class="p">]</span> <span class="o">+</span> <span class="n">fnr</span><span class="p">[</span><span class="n">eer_idx</span><span class="p">])</span> <span class="o">/</span> <span class="mi">2</span>
+    <span class="n">eer_threshold</span> <span class="o">=</span> <span class="n">thresholds</span><span class="p">[</span><span class="n">eer_idx</span><span class="p">]</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># 5. Classification metrics @ EER threshold</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="n">y_pred</span> <span class="o">=</span> <span class="p">(</span><span class="n">y_scores</span> <span class="o">&gt;=</span> <span class="n">eer_threshold</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span>
+
+    <span class="n">cls_metrics</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;accuracy&quot;</span><span class="p">:</span> <span class="n">accuracy_score</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">),</span>
+        <span class="s2">&quot;precision&quot;</span><span class="p">:</span> <span class="n">precision_score</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">,</span> <span class="n">zero_division</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span>
+        <span class="s2">&quot;recall&quot;</span><span class="p">:</span> <span class="n">recall_score</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">,</span> <span class="n">zero_division</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span>
+        <span class="s2">&quot;f1&quot;</span><span class="p">:</span> <span class="n">f1_score</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">,</span> <span class="n">zero_division</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span>
+    <span class="p">}</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># 6. FAR operating points</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># DA CHIARIRE BENE</span>
+    <span class="n">operating_points</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="k">for</span> <span class="n">far_target</span> <span class="ow">in</span> <span class="p">[</span><span class="mf">0.001</span><span class="p">,</span> <span class="mf">0.01</span><span class="p">]:</span>
+        <span class="n">key_prefix</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;far_</span><span class="si">{</span><span class="n">far_target</span><span class="si">}</span><span class="s2">&quot;</span>
+
+        <span class="c1"># inizializza tutto a None</span>
+        <span class="n">operating_points</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">key_prefix</span><span class="si">}</span><span class="s2">_effective&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">operating_points</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;frr_at_</span><span class="si">{</span><span class="n">key_prefix</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">operating_points</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;gar_at_</span><span class="si">{</span><span class="n">key_prefix</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">operating_points</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;threshold_at_</span><span class="si">{</span><span class="n">key_prefix</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="c1"># cerca soglie che rispettano FAR &lt;= target</span>
+        <span class="n">valid_idxs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">fpr</span> <span class="o">&lt;=</span> <span class="n">far_target</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">valid_idxs</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">continue</span>
+
+        <span class="n">idx</span> <span class="o">=</span> <span class="n">valid_idxs</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+        <span class="n">far_eff</span> <span class="o">=</span> <span class="n">fpr</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+        <span class="n">frr</span> <span class="o">=</span> <span class="n">fnr</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+        <span class="n">gar</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">-</span> <span class="n">frr</span>
+
+        <span class="n">operating_points</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">key_prefix</span><span class="si">}</span><span class="s2">_effective&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">far_eff</span>
+        <span class="n">operating_points</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;frr_at_</span><span class="si">{</span><span class="n">key_prefix</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">frr</span>
+        <span class="n">operating_points</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;gar_at_</span><span class="si">{</span><span class="n">key_prefix</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">gar</span>
+        <span class="n">operating_points</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;threshold_at_</span><span class="si">{</span><span class="n">key_prefix</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">thresholds</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># 7. d-prime &amp; decidability (computed on DISTANCES)</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="k">if</span> <span class="n">distances_are_similarity</span><span class="p">:</span>
+        <span class="c1"># Assumes similarity scores in [0, 1], higher = more similar</span>
+        <span class="n">genuine_dist</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">-</span> <span class="n">genuine_vals</span>
+        <span class="n">impostor_dist</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">-</span> <span class="n">impostor_vals</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">genuine_dist</span> <span class="o">=</span> <span class="n">genuine_vals</span>
+        <span class="n">impostor_dist</span> <span class="o">=</span> <span class="n">impostor_vals</span>
+
+    <span class="n">mu_g</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">genuine_dist</span><span class="p">)</span>
+    <span class="n">mu_i</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">impostor_dist</span><span class="p">)</span>
+
+    <span class="n">sigma_g</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">genuine_dist</span><span class="p">,</span> <span class="n">ddof</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">sigma_i</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">impostor_dist</span><span class="p">,</span> <span class="n">ddof</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="n">pooled_std</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mf">0.5</span> <span class="o">*</span> <span class="p">(</span><span class="n">sigma_g</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">sigma_i</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">pooled_std</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">d_prime</span> <span class="o">=</span> <span class="p">(</span><span class="n">mu_i</span> <span class="o">-</span> <span class="n">mu_g</span><span class="p">)</span> <span class="o">/</span> <span class="n">pooled_std</span>
+        <span class="n">decidability</span> <span class="o">=</span> <span class="nb">abs</span><span class="p">(</span><span class="n">d_prime</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">d_prime</span> <span class="o">=</span> <span class="mf">0.0</span>
+        <span class="n">decidability</span> <span class="o">=</span> <span class="mf">0.0</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># 8. Collect metrics</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="n">metrics</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="c1"># Primary</span>
+        <span class="s2">&quot;auc&quot;</span><span class="p">:</span> <span class="n">roc_auc</span><span class="p">,</span>
+        <span class="s2">&quot;eer&quot;</span><span class="p">:</span> <span class="n">eer</span><span class="p">,</span>
+        <span class="s2">&quot;eer_threshold&quot;</span><span class="p">:</span> <span class="n">eer_threshold</span><span class="p">,</span>
+
+        <span class="c1"># Classification</span>
+        <span class="o">**</span><span class="n">cls_metrics</span><span class="p">,</span>
+
+        <span class="c1"># Discriminability</span>
+        <span class="s2">&quot;d_prime&quot;</span><span class="p">:</span> <span class="n">d_prime</span><span class="p">,</span>
+        <span class="s2">&quot;decidability&quot;</span><span class="p">:</span> <span class="n">decidability</span><span class="p">,</span>
+
+        <span class="c1"># Distance statistics</span>
+        <span class="s2">&quot;mu_genuine&quot;</span><span class="p">:</span> <span class="n">mu_g</span><span class="p">,</span>
+        <span class="s2">&quot;mu_impostor&quot;</span><span class="p">:</span> <span class="n">mu_i</span><span class="p">,</span>
+        <span class="s2">&quot;sigma_genuine&quot;</span><span class="p">:</span> <span class="n">sigma_g</span><span class="p">,</span>
+        <span class="s2">&quot;sigma_impostor&quot;</span><span class="p">:</span> <span class="n">sigma_i</span><span class="p">,</span>
+
+        <span class="c1"># ROC curves</span>
+        <span class="s2">&quot;fpr&quot;</span><span class="p">:</span> <span class="n">fpr</span><span class="p">,</span>
+        <span class="s2">&quot;tpr&quot;</span><span class="p">:</span> <span class="n">tpr</span><span class="p">,</span>
+        <span class="s2">&quot;thresholds&quot;</span><span class="p">:</span> <span class="n">thresholds</span><span class="p">,</span>
+
+        <span class="c1"># Raw distributions (for plots)</span>
+        <span class="s2">&quot;genuine_vals&quot;</span><span class="p">:</span> <span class="n">genuine_vals</span><span class="p">,</span>
+        <span class="s2">&quot;impostor_vals&quot;</span><span class="p">:</span> <span class="n">impostor_vals</span><span class="p">,</span>
+    <span class="p">}</span>
+
+    <span class="n">metrics</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">operating_points</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">metrics</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="evaluation.metrics.print_results" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">print_results</span><span class="p">(</span><span class="n">metrics</span><span class="p">,</span> <span class="n">dataset_name</span><span class="o">=</span><span class="s1">&#39;Validation&#39;</span><span class="p">)</span></code>
+
+<a href="#evaluation.metrics.print_results" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Print formatted verification results.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>evaluation/metrics.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">180</span>
+<span class="normal">181</span>
+<span class="normal">182</span>
+<span class="normal">183</span>
+<span class="normal">184</span>
+<span class="normal">185</span>
+<span class="normal">186</span>
+<span class="normal">187</span>
+<span class="normal">188</span>
+<span class="normal">189</span>
+<span class="normal">190</span>
+<span class="normal">191</span>
+<span class="normal">192</span>
+<span class="normal">193</span>
+<span class="normal">194</span>
+<span class="normal">195</span>
+<span class="normal">196</span>
+<span class="normal">197</span>
+<span class="normal">198</span>
+<span class="normal">199</span>
+<span class="normal">200</span>
+<span class="normal">201</span>
+<span class="normal">202</span>
+<span class="normal">203</span>
+<span class="normal">204</span>
+<span class="normal">205</span>
+<span class="normal">206</span>
+<span class="normal">207</span>
+<span class="normal">208</span>
+<span class="normal">209</span>
+<span class="normal">210</span>
+<span class="normal">211</span>
+<span class="normal">212</span>
+<span class="normal">213</span>
+<span class="normal">214</span>
+<span class="normal">215</span>
+<span class="normal">216</span>
+<span class="normal">217</span>
+<span class="normal">218</span>
+<span class="normal">219</span>
+<span class="normal">220</span>
+<span class="normal">221</span>
+<span class="normal">222</span>
+<span class="normal">223</span>
+<span class="normal">224</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">print_results</span><span class="p">(</span><span class="n">metrics</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">],</span> <span class="n">dataset_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;Validation&quot;</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Print formatted verification results.&quot;&quot;&quot;</span>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="si">{</span><span class="s1">&#39;=&#39;</span><span class="o">*</span><span class="mi">70</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;VERIFICATION METRICS: </span><span class="si">{</span><span class="n">dataset_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
@@ -1720,9 +1670,9 @@ Comprehensive metrics including classification and biometric verification.</p>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;📊 PRIMARY METRICS:&quot;</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  EER (Equal Error Rate):     </span><span class="si">{</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;eer&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;eer&#39;</span><span class="p">]</span><span class="o">*</span><span class="mi">100</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">%)&quot;</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  AUC-ROC:                     </span><span class="si">{</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;auc&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Accuracy @ EER threshold:    </span><span class="si">{</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;accuracy&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">🎯 CLASSIFICATION METRICS (@ EER threshold):&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Accuracy @ EER threshold:    </span><span class="si">{</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;accuracy&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Precision:                   </span><span class="si">{</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;precision&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Recall:                      </span><span class="si">{</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;recall&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  F1-Score:                    </span><span class="si">{</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;f1&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
@@ -1737,10 +1687,25 @@ Comprehensive metrics including classification and biometric verification.</p>
 
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">⚙️ OPERATING POINTS:&quot;</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  EER Threshold:               </span><span class="si">{</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;eer_threshold&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Accuracy @ FAR=0.1%:         </span><span class="si">{</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;acc_far_0.001&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Accuracy @ FAR=1.0%:         </span><span class="si">{</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;acc_far_0.01&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Threshold @ FAR=0.1%:        </span><span class="si">{</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;threshold_far_0.001&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Threshold @ FAR=1.0%:        </span><span class="si">{</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;threshold_far_0.01&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">far_target</span> <span class="ow">in</span> <span class="p">[</span><span class="mf">0.001</span><span class="p">,</span> <span class="mf">0.01</span><span class="p">]:</span>
+        <span class="n">key_prefix</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;far_</span><span class="si">{</span><span class="n">far_target</span><span class="si">}</span><span class="s2">&quot;</span>
+
+        <span class="n">far_eff</span> <span class="o">=</span> <span class="n">metrics</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">key_prefix</span><span class="si">}</span><span class="s2">_effective&quot;</span><span class="p">)</span>
+        <span class="n">frr</span> <span class="o">=</span> <span class="n">metrics</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;frr_at_</span><span class="si">{</span><span class="n">key_prefix</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">gar</span> <span class="o">=</span> <span class="n">metrics</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;gar_at_</span><span class="si">{</span><span class="n">key_prefix</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">thr</span> <span class="o">=</span> <span class="n">metrics</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;threshold_at_</span><span class="si">{</span><span class="n">key_prefix</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">  FAR Target = </span><span class="si">{</span><span class="n">far_target</span><span class="o">*</span><span class="mi">100</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">%&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">far_eff</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    ❌ Operating point not reachable&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    FAR (effective):           </span><span class="si">{</span><span class="n">far_eff</span><span class="o">*</span><span class="mi">100</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">%&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    FRR @ FAR:                 </span><span class="si">{</span><span class="n">frr</span><span class="o">*</span><span class="mi">100</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">%&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    GAR @ FAR:                 </span><span class="si">{</span><span class="n">gar</span><span class="o">*</span><span class="mi">100</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">%&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    Threshold @ FAR:           </span><span class="si">{</span><span class="n">thr</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="s1">&#39;=&#39;</span><span class="o">*</span><span class="mi">70</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
