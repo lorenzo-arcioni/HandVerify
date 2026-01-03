@@ -8,7 +8,6 @@ import numpy as np
 from .base_trainer import BaseTrainer
 from .losses import BCELoss
 
-
 class BCETrainer(BaseTrainer):
     """Trainer for Siamese networks using BCE loss."""
     

@@ -41,7 +41,6 @@ from .triplet_backbones import (
     TripletEfficientNetB0,
 )
 
-
 # ============================================================================
 # Model Registry organized by architecture type
 # ============================================================================

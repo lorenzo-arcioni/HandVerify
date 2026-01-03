@@ -65,7 +65,20 @@ class TripletResNet18(BaseTripletNetwork):
         resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
         resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
         
-        encoder = nn.Sequential(*list(resnet.children())[:-1], nn.Flatten())
+        encoder = nn.Sequential(
+            nn.Sequential(
+                resnet.conv1,
+                resnet.bn1,
+                resnet.relu,
+                resnet.maxpool,
+                resnet.layer1,
+                resnet.layer2,
+                resnet.layer3,
+                resnet.layer4,
+                resnet.avgpool
+            ),
+            nn.Flatten()
+        )
         
         super().__init__(
             encoder=encoder, 
@@ -84,7 +97,20 @@ class TripletResNet34(BaseTripletNetwork):
         resnet = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
         resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
         
-        encoder = nn.Sequential(*list(resnet.children())[:-1], nn.Flatten())
+        encoder = nn.Sequential(
+            nn.Sequential(
+                resnet.conv1,
+                resnet.bn1,
+                resnet.relu,
+                resnet.maxpool,
+                resnet.layer1,
+                resnet.layer2,
+                resnet.layer3,
+                resnet.layer4,
+                resnet.avgpool
+            ),
+            nn.Flatten()
+        )
         
         super().__init__(
             encoder=encoder, 

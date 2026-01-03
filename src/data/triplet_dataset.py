@@ -6,8 +6,10 @@ import torch
 import random
 from itertools import combinations
 
+from .base_dataset import BaseWriterDataset
 
-class TripletDataset:
+
+class TripletDataset(BaseWriterDataset):
     """Dataset for Triplet network training."""
     
     def __init__(
