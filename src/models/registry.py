@@ -38,7 +38,9 @@ from .triplet_backbones import (
     TripletMobileNetV3Large,
     TripletResNet18,
     TripletResNet34,
+    TripletResNet50,
     TripletEfficientNetB0,
+    TripletEfficientNetB1
 )
 
 # ============================================================================

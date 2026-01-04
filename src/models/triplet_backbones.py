@@ -121,12 +121,67 @@ class TripletResNet34(BaseTripletNetwork):
         )
 
 
+class TripletResNet50(BaseTripletNetwork):
+    """Triplet network based on ResNet50"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        
+        encoder = nn.Sequential(
+            nn.Sequential(
+                resnet.conv1,
+                resnet.bn1,
+                resnet.relu,
+                resnet.maxpool,
+                resnet.layer1,
+                resnet.layer2,
+                resnet.layer3,
+                resnet.layer4,
+                resnet.avgpool
+            ),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=2048, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
 class TripletEfficientNetB0(BaseTripletNetwork):
     """Triplet network based on EfficientNet-B0"""
     
     def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         effnet = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.DEFAULT)
+        effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        encoder = nn.Sequential(
+            effnet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=1280, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class TripletEfficientNetB1(BaseTripletNetwork):
+    """Triplet network based on EfficientNet-B1"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        effnet = models.efficientnet_b1(weights=models.EfficientNet_B1_Weights.DEFAULT)
         effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
         
         encoder = nn.Sequential(
