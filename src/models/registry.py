@@ -94,9 +94,11 @@ TRIPLET_MODELS: Dict[str, Type[BaseTripletNetwork]] = {
     # ResNet family
     'resnet18': TripletResNet18,
     'resnet34': TripletResNet34,
+    'resnet50': TripletResNet50,
     
     # EfficientNet family
     'efficientnet_b0': TripletEfficientNetB0,
+    'efficientnet_b1': TripletEfficientNetB1
 }
 
 
