@@ -33,7 +33,9 @@ from .triplet_backbones import (
     TripletMobileNetV3Large,
     TripletResNet18,
     TripletResNet34,
+    TripletResNet50,
     TripletEfficientNetB0,
+    TripletEfficientNetB1
 )
 
 from .contrastive_backbones import (
@@ -43,6 +45,7 @@ from .contrastive_backbones import (
     ContrastiveResNet34,
     ContrastiveResNet50,
     ContrastiveEfficientNetB0,
+    ContrastiveEfficientNetB1,
     ContrastiveDenseNet121,
 )
 
@@ -89,7 +92,9 @@ __all__ = [
     'TripletMobileNetV3Large',
     'TripletResNet18',
     'TripletResNet34',
+    'TripletResNet50',
     'TripletEfficientNetB0',
+    'TripletEfficientNetB1',
     
     # ========================================================================
     # Contrastive models (direct import)
@@ -100,5 +105,6 @@ __all__ = [
     'ContrastiveResNet34',
     'ContrastiveResNet50',
     'ContrastiveEfficientNetB0',
+    'ContrastiveEfficientNetB1',
     'ContrastiveDenseNet121',
 ]

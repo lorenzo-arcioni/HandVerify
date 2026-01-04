@@ -29,6 +29,7 @@ from .contrastive_backbones import (
     ContrastiveResNet34,
     ContrastiveResNet50,
     ContrastiveEfficientNetB0,
+    ContrastiveEfficientNetB1,
     ContrastiveDenseNet121,
 )
 
@@ -81,6 +82,7 @@ CONTRASTIVE_MODELS: Dict[str, Type[BaseContrastiveNetwork]] = {
     
     # EfficientNet family
     'efficientnet_b0': ContrastiveEfficientNetB0,
+    'efficientnet_b1': ContrastiveEfficientNetB1,
     
     # DenseNet family
     'densenet121': ContrastiveDenseNet121,

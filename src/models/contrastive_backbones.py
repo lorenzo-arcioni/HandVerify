@@ -175,6 +175,27 @@ class ContrastiveEfficientNetB0(BaseContrastiveNetwork):
             dropout=dropout
         )
 
+class ContrastiveEfficientNetB1(BaseContrastiveNetwork):
+    """Contrastive network based on EfficientNet-B1"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        effnet = models.efficientnet_b1(weights=models.EfficientNet_B1_Weights.DEFAULT)
+        effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        encoder = nn.Sequential(
+            effnet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=1280, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
 
 class ContrastiveDenseNet121(BaseContrastiveNetwork):
     """Contrastive network based on DenseNet121"""
