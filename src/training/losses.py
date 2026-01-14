@@ -27,16 +27,19 @@ class BCELoss(nn.Module):
         return self.loss_fn(predictions, labels)
 
 
+
 class ContrastiveLoss(nn.Module):
     """
-    Contrastive Loss for metric learning.
-    Forces similar pairs to be close and dissimilar pairs to be far apart.
+    Contrastive Loss using Cosine Similarity.
+    Forces similar pairs to have high cosine similarity (close to 1)
+    and dissimilar pairs to have low cosine similarity (below margin).
     """
     
-    def __init__(self, margin: float = 1.0):
+    def __init__(self, margin: float = 0.5):
         """
         Args:
-            margin: Margin for negative pairs
+            margin: Margin for negative pairs (in cosine similarity space)
+                   Typical values: 0.2-0.5
         """
         super().__init__()
         self.margin = margin
@@ -45,56 +48,61 @@ class ContrastiveLoss(nn.Module):
                 labels: torch.Tensor) -> torch.Tensor:
         """
         Args:
-            feat1: Features from first image
-            feat2: Features from second image
+            feat1: Features from first image (will be normalized)
+            feat2: Features from second image (will be normalized)
             labels: 1 for similar, 0 for dissimilar
             
         Returns:
             Loss value
         """
-        # Euclidean distance
-        distances = F.pairwise_distance(feat1, feat2)
+        # L2 normalize features (project onto unit hypersphere)
+        feat1 = F.normalize(feat1, p=2, dim=1)
+        feat2 = F.normalize(feat2, p=2, dim=1)
+        
+        # Cosine similarity ∈ [-1, 1]
+        cosine_sim = F.cosine_similarity(feat1, feat2)
+        
+        # Convert to distance: higher similarity = lower distance
+        # distance ∈ [0, 2], where 0 = identical, 2 = opposite
+        distances = 1 - cosine_sim
         
         # Contrastive loss
+        # Positive pairs: minimize distance (maximize similarity)
         loss_positive = labels * torch.pow(distances, 2)
-        loss_negative = (1 - labels) * torch.pow(torch.clamp(self.margin - distances, min=0.0), 2)
+        
+        # Negative pairs: enforce distance > margin
+        # (enforce similarity < 1 - margin)
+        loss_negative = (1 - labels) * torch.pow(
+            torch.clamp(self.margin - distances, min=0.0), 2
+        )
         
         return torch.mean(loss_positive + loss_negative)
 
-
 class TripletLoss(nn.Module):
     """
-    Triplet Loss for metric learning.
-    Ensures anchor-positive distance < anchor-negative distance by margin.
+    Triplet Loss directly on Cosine Similarity.
+    Maximizes sim(anchor, positive) - sim(anchor, negative).
     """
     
-    def __init__(self, margin: float = 0.5):
-        """
-        Args:
-            margin: Margin between positive and negative pairs
-        """
+    def __init__(self, margin: float = 0.3):
         super().__init__()
         self.margin = margin
     
     def forward(self, anchor: torch.Tensor, positive: torch.Tensor,
                 negative: torch.Tensor) -> torch.Tensor:
-        """
-        Args:
-            anchor: Anchor embeddings
-            positive: Positive embeddings (same class as anchor)
-            negative: Negative embeddings (different class)
-            
-        Returns:
-            Triplet loss value
-        """
-
-        anchor   = F.normalize(anchor, p=2, dim=1)
+        # Normalize
+        anchor = F.normalize(anchor, p=2, dim=1)
         positive = F.normalize(positive, p=2, dim=1)
         negative = F.normalize(negative, p=2, dim=1)
-
-        pos_dist = F.pairwise_distance(anchor, positive, p=2)
-        neg_dist = F.pairwise_distance(anchor, negative, p=2)
-        losses   = F.relu(pos_dist - neg_dist + self.margin)
+        
+        # Cosine similarities
+        pos_sim = F.cosine_similarity(anchor, positive)
+        neg_sim = F.cosine_similarity(anchor, negative)
+        
+        # We want: pos_sim > neg_sim + margin
+        # Loss: max(0, margin - (pos_sim - neg_sim))
+        losses = F.relu(self.margin - (pos_sim - neg_sim))
+        
         return losses.mean()
 
 
