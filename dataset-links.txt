@@ -1,0 +1,6 @@
+IAM: https://www.kaggle.com/datasets/naderabdelghany/iam-handwritten-forms-dataset
+     https://fki.tic.heia-fr.ch/databases/download-the-iam-handwriting-database
+RIMES: https://www.kaggle.com/datasets/chaimaourgani/handwritten2text-training-dataset
+CEDAR:
+    - https://www.kaggle.com/datasets/shreelakshmigp/cedardataset
+    - https://www.kaggle.com/datasets/matteocarnebella/cedar-signatures/data
