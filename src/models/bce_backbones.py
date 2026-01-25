@@ -26,7 +26,6 @@ class SiameseResNet18(BaseSiameseNetwork):
             dropout=dropout
         )
 
-
 class SiameseResNet34(BaseSiameseNetwork):
     """Siamese network based on ResNet34"""
     
@@ -43,7 +42,6 @@ class SiameseResNet34(BaseSiameseNetwork):
             freeze_backbone_layers=freeze_backbone_layers,
             dropout=dropout
         )
-
 
 class SiameseResNet50(BaseSiameseNetwork):
     """Siamese network based on ResNet50"""
@@ -62,7 +60,6 @@ class SiameseResNet50(BaseSiameseNetwork):
             dropout=dropout
         )
 
-
 class SiameseEfficientNetB0(BaseSiameseNetwork):
     """Siamese network based on EfficientNet-B0"""
     
@@ -79,7 +76,6 @@ class SiameseEfficientNetB0(BaseSiameseNetwork):
             freeze_backbone_layers=freeze_backbone_layers,
             dropout=dropout
         )
-
 
 class SiameseEfficientNetB1(BaseSiameseNetwork):
     """Siamese network based on EfficientNet-B1"""
@@ -98,7 +94,6 @@ class SiameseEfficientNetB1(BaseSiameseNetwork):
             dropout=dropout
         )
 
-
 class SiameseEfficientNetV2(BaseSiameseNetwork):
     """Siamese network based on EfficientNetV2-S"""
     
@@ -115,7 +110,6 @@ class SiameseEfficientNetV2(BaseSiameseNetwork):
             freeze_backbone_layers=freeze_backbone_layers,
             dropout=dropout
         )
-
 
 class SiameseMobileNetV3Small(BaseSiameseNetwork):
     """Siamese network based on MobileNetV3-Small"""
@@ -134,7 +128,6 @@ class SiameseMobileNetV3Small(BaseSiameseNetwork):
             dropout=dropout
         )
 
-
 class SiameseMobileNetV3Large(BaseSiameseNetwork):
     """Siamese network based on MobileNetV3-Large"""
     
@@ -152,7 +145,6 @@ class SiameseMobileNetV3Large(BaseSiameseNetwork):
             dropout=dropout
         )
 
-
 class SiameseDenseNet121(BaseSiameseNetwork):
     """Siamese network based on DenseNet121"""
     
@@ -169,7 +161,6 @@ class SiameseDenseNet121(BaseSiameseNetwork):
             freeze_backbone_layers=freeze_backbone_layers,
             dropout=dropout
         )
-
 
 class SiameseRegNetY400MF(BaseSiameseNetwork):
     """Siamese network based on RegNet-Y-400MF"""
