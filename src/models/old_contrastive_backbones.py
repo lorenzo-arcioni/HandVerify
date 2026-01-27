@@ -1,7 +1,7 @@
 """
 Contrastive Network Backbones
 Implementation of various backbone architectures for contrastive learning.
-Updated with proper weight transfer from RGB to grayscale.
+Updated with layer freezing support and increased regularization.
 """
 
 import torch.nn as nn
@@ -9,7 +9,6 @@ import torch.nn.functional as F
 from torchvision import models
 
 from .base import BaseContrastiveNetwork
-from .utils import adapt_conv_layer_for_grayscale
 
 
 class ContrastiveMobileNetV3Small(BaseContrastiveNetwork):
@@ -18,12 +17,7 @@ class ContrastiveMobileNetV3Small(BaseContrastiveNetwork):
     def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         mobilenet = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
-        
-        # ✅ Adapt first conv with weight transfer
-        if in_channels != 3:
-            mobilenet.features[0][0] = adapt_conv_layer_for_grayscale(
-                mobilenet.features[0][0], in_channels
-            )
+        mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
         
         encoder = nn.Sequential(
             mobilenet.features,
@@ -46,12 +40,7 @@ class ContrastiveMobileNetV3Large(BaseContrastiveNetwork):
     def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         mobilenet = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT)
-        
-        # ✅ Adapt first conv with weight transfer
-        if in_channels != 3:
-            mobilenet.features[0][0] = adapt_conv_layer_for_grayscale(
-                mobilenet.features[0][0], in_channels
-            )
+        mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
         
         encoder = nn.Sequential(
             mobilenet.features,
@@ -74,10 +63,7 @@ class ContrastiveResNet18(BaseContrastiveNetwork):
     def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
-        
-        # ✅ Adapt conv1 with weight transfer
-        if in_channels != 3:
-            resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
+        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
         
         encoder = nn.Sequential(
             nn.Sequential(
@@ -109,10 +95,7 @@ class ContrastiveResNet34(BaseContrastiveNetwork):
     def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         resnet = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
-        
-        # ✅ Adapt conv1 with weight transfer
-        if in_channels != 3:
-            resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
+        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
         
         encoder = nn.Sequential(
             nn.Sequential(
@@ -144,10 +127,7 @@ class ContrastiveResNet50(BaseContrastiveNetwork):
     def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-        
-        # ✅ Adapt conv1 with weight transfer
-        if in_channels != 3:
-            resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
+        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
         
         encoder = nn.Sequential(
             nn.Sequential(
@@ -179,12 +159,7 @@ class ContrastiveEfficientNetB0(BaseContrastiveNetwork):
     def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         effnet = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.DEFAULT)
-        
-        # ✅ Adapt first conv with weight transfer
-        if in_channels != 3:
-            effnet.features[0][0] = adapt_conv_layer_for_grayscale(
-                effnet.features[0][0], in_channels
-            )
+        effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
         
         encoder = nn.Sequential(
             effnet.features,
@@ -199,7 +174,6 @@ class ContrastiveEfficientNetB0(BaseContrastiveNetwork):
             freeze_backbone_layers=freeze_backbone_layers,
             dropout=dropout
         )
-
 
 class ContrastiveEfficientNetB1(BaseContrastiveNetwork):
     """Contrastive network based on EfficientNet-B1"""
@@ -207,12 +181,7 @@ class ContrastiveEfficientNetB1(BaseContrastiveNetwork):
     def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         effnet = models.efficientnet_b1(weights=models.EfficientNet_B1_Weights.DEFAULT)
-        
-        # ✅ Adapt first conv with weight transfer
-        if in_channels != 3:
-            effnet.features[0][0] = adapt_conv_layer_for_grayscale(
-                effnet.features[0][0], in_channels
-            )
+        effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
         
         encoder = nn.Sequential(
             effnet.features,
@@ -228,19 +197,13 @@ class ContrastiveEfficientNetB1(BaseContrastiveNetwork):
             dropout=dropout
         )
 
-
 class ContrastiveDenseNet121(BaseContrastiveNetwork):
     """Contrastive network based on DenseNet121"""
     
     def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         densenet = models.densenet121(weights=models.DenseNet121_Weights.DEFAULT)
-        
-        # ✅ Adapt first conv (conv0) with weight transfer
-        if in_channels != 3:
-            densenet.features.conv0 = adapt_conv_layer_for_grayscale(
-                densenet.features.conv0, in_channels
-            )
+        densenet.features.conv0 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
         
         encoder = nn.Sequential(
             densenet.features,
