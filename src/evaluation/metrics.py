@@ -116,11 +116,11 @@ def compute_metrics(
         operating_points[f"threshold_at_{key_prefix}"] = thresholds[idx]
 
     # ------------------------------------------------------------------
-    # 7. d-prime & decidability (computed on DISTANCES)
+    # 7. d-prime & decidability (computed on DISTANCES) ### DA CONTROLLARE
     # ------------------------------------------------------------------
     if distances_are_similarity:
         # Assumes similarity scores in [0, 1], higher = more similar
-        genuine_dist = 1.0 - genuine_vals
+        genuine_dist  = 1.0 - genuine_vals
         impostor_dist = 1.0 - impostor_vals
     else:
         genuine_dist = genuine_vals

@@ -282,10 +282,10 @@ class BaseContrastiveNetwork(nn.Module):
         features = features.view(features.size(0), -1)
         
         # Project to embedding space
-        embeddings = self.projection(features)
+        embedding = self.projection(features)
         
         # Normalize
-        return F.normalize(embeddings, p=2, dim=1)
+        return F.normalize(embedding, p=2, dim=1)
     
     def get_embedding(self, x: torch.Tensor) -> torch.Tensor:
         """Alias for forward"""
