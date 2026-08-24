@@ -26,8 +26,6 @@ class BCELoss(nn.Module):
         """
         return self.loss_fn(predictions, labels)
 
-
-
 class ContrastiveLoss(nn.Module):
     """
     Contrastive Loss using Cosine Similarity.
@@ -101,7 +99,9 @@ class TripletLoss(nn.Module):
         
         # We want: pos_sim > neg_sim + margin
         # Loss: max(0, margin - (pos_sim - neg_sim))
-        losses = F.relu(self.margin - (pos_sim - neg_sim))
+        losses = F.relu(
+            self.margin - (pos_sim - neg_sim)
+        )
         
         return losses.mean()
 

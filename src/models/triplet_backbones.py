@@ -19,7 +19,7 @@ class TripletMobileNetV3Small(BaseTripletNetwork):
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         mobilenet = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
         
-        # ✅ Adapt first conv with weight transfer
+        # Adapt first conv with weight transfer
         if in_channels != 3:
             mobilenet.features[0][0] = adapt_conv_layer_for_grayscale(
                 mobilenet.features[0][0], in_channels
@@ -47,7 +47,7 @@ class TripletMobileNetV3Large(BaseTripletNetwork):
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         mobilenet = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT)
         
-        # ✅ Adapt first conv with weight transfer
+        # Adapt first conv with weight transfer
         if in_channels != 3:
             mobilenet.features[0][0] = adapt_conv_layer_for_grayscale(
                 mobilenet.features[0][0], in_channels
@@ -75,7 +75,7 @@ class TripletResNet18(BaseTripletNetwork):
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
         
-        # ✅ Adapt conv1 with weight transfer
+        # Adapt conv1 with weight transfer
         if in_channels != 3:
             resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
         
@@ -110,7 +110,7 @@ class TripletResNet34(BaseTripletNetwork):
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         resnet = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
         
-        # ✅ Adapt conv1 with weight transfer
+        # Adapt conv1 with weight transfer
         if in_channels != 3:
             resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
         
@@ -145,7 +145,7 @@ class TripletResNet50(BaseTripletNetwork):
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
         
-        # ✅ Adapt conv1 with weight transfer
+        # Adapt conv1 with weight transfer
         if in_channels != 3:
             resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
         
@@ -180,7 +180,7 @@ class TripletEfficientNetB0(BaseTripletNetwork):
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         effnet = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.DEFAULT)
         
-        # ✅ Adapt first conv with weight transfer
+        # Adapt first conv with weight transfer
         if in_channels != 3:
             effnet.features[0][0] = adapt_conv_layer_for_grayscale(
                 effnet.features[0][0], in_channels
@@ -208,7 +208,7 @@ class TripletEfficientNetB1(BaseTripletNetwork):
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         effnet = models.efficientnet_b1(weights=models.EfficientNet_B1_Weights.DEFAULT)
         
-        # ✅ Adapt first conv with weight transfer
+        # Adapt first conv with weight transfer
         if in_channels != 3:
             effnet.features[0][0] = adapt_conv_layer_for_grayscale(
                 effnet.features[0][0], in_channels

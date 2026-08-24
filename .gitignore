@@ -7,3 +7,4 @@ __pycache__
 results/bce
 results/contrastive
 results/triplet
+notebooks/steps*

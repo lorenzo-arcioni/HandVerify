@@ -1,6 +1,7 @@
+-e 
 
+===== ./src/data/transforms.py =====
 
-=== src/data/transforms.py ===
 """
 Data Transforms
 Custom transforms and augmentations for handwriting images.
@@ -40,9 +41,10 @@ def get_test_transforms(target_size: int = 448):
         transforms.Resize((target_size, target_size)),
         transforms.ToTensor()
     ])
+-e 
 
+===== ./src/data/dataloader_factory.py =====
 
-=== src/data/dataloader_factory.py ===
 # ============================================================================
 # dataloader_factory.py
 # ============================================================================
@@ -262,9 +264,10 @@ def create_triplet_dataloaders(*args, **kwargs):
 
 def create_triplet_kfold_dataloaders(*args, **kwargs):
     """Create Triplet K-Fold dataloaders."""
-    return create_kfold_dataloaders(TripletDataset, *args, **kwargs)
+    return create_kfold_dataloaders(TripletDataset, *args, **kwargs)-e 
 
-=== src/data/siamese_dataset.py ===
+===== ./src/data/siamese_dataset.py =====
+
 # ============================================================================
 # siamese_dataset.py
 # ============================================================================
@@ -309,9 +312,10 @@ class SiameseDataset(BaseWriterDataset):
         Get a validation pair from samples.
         For Siamese, samples already contain pairs in the correct format.
         """
-        return self.samples[idx]
+        return self.samples[idx]-e 
 
-=== src/data/triplet_dataset.py ===
+===== ./src/data/triplet_dataset.py =====
+
 # ============================================================================
 # triplet_dataset.py
 # ============================================================================
@@ -510,9 +514,10 @@ class TripletDataset(BaseWriterDataset):
         Returns:
             Tuple of (img1_path, img2_path, label)
         """
-        return self.validation_pairs[idx]
+        return self.validation_pairs[idx]-e 
 
-=== src/data/__init__.py ===
+===== ./src/data/__init__.py =====
+
 # src/data/__init__.py
 """
 Data module - Refactored with modular structure
@@ -561,9 +566,10 @@ __all__ = [
     # Transforms
     'get_train_transforms',
     'get_test_transforms',
-]
+]-e 
 
-=== src/data/base_dataset.py ===
+===== ./src/data/base_dataset.py =====
+
 """
 Base Dataset Classes
 Provides common functionality for all dataset types.
@@ -763,9 +769,10 @@ class BaseWriterDataset(Dataset, ABC):
         Returns:
             Tuple of (img1_path, img2_path, label)
         """
-        pass
+        pass-e 
 
-=== src/data/contrastive_dataset.py ===
+===== ./src/data/contrastive_dataset.py =====
+
 # ============================================================================
 # contrastive_dataset.py
 # ============================================================================
@@ -811,9 +818,10 @@ class ContrastiveDataset(BaseWriterDataset):
         Get a validation pair from samples.
         For Contrastive, samples already contain pairs in the correct format.
         """
-        return self.samples[idx]
+        return self.samples[idx]-e 
 
-=== src/evaluation/metrics.py ===
+===== ./src/evaluation/metrics.py =====
+
 """
 Evaluation Metrics for Writer Verification
 Comprehensive metrics including classification and biometric verification.
@@ -932,11 +940,11 @@ def compute_metrics(
         operating_points[f"threshold_at_{key_prefix}"] = thresholds[idx]
 
     # ------------------------------------------------------------------
-    # 7. d-prime & decidability (computed on DISTANCES)
+    # 7. d-prime & decidability (computed on DISTANCES) ### DA CONTROLLARE
     # ------------------------------------------------------------------
     if distances_are_similarity:
         # Assumes similarity scores in [0, 1], higher = more similar
-        genuine_dist = 1.0 - genuine_vals
+        genuine_dist  = 1.0 - genuine_vals
         impostor_dist = 1.0 - impostor_vals
     else:
         genuine_dist = genuine_vals
@@ -1037,9 +1045,10 @@ def print_results(metrics: Dict[str, float], dataset_name: str = "Validation"):
             print(f"    GAR @ FAR:                 {gar*100:.4f}%")
             print(f"    Threshold @ FAR:           {thr:.4f}")
 
-    print(f"{'='*70}\n")
+    print(f"{'='*70}\n")-e 
 
-=== src/evaluation/__init__.py ===
+===== ./src/evaluation/__init__.py =====
+
 """
 Evaluation module
 Unified metrics and visualization for model evaluation.
@@ -1055,13 +1064,153 @@ __all__ = [
     # Metrics
     'compute_metrics',
     'print_results',
-]
+]-e 
 
-=== src/models/contrastive_backbones.py ===
+===== ./src/models/utils.py =====
+
+"""
+Model Utilities
+Helper functions for model initialization and weight transfer.
+"""
+
+import torch
+import torch.nn as nn
+from typing import Union
+
+
+def adapt_conv_layer_for_grayscale(
+    conv_layer: nn.Conv2d,
+    target_in_channels: int = 1
+) -> nn.Conv2d:
+    """
+    Adapt a pretrained RGB convolutional layer for grayscale input.
+    
+    Transfers pretrained weights by averaging across RGB channels instead of
+    random initialization. This preserves learned low-level features.
+    
+    Args:
+        conv_layer: Pretrained Conv2d layer (typically with 3 input channels)
+        target_in_channels: Target number of input channels (default: 1 for grayscale)
+    
+    Returns:
+        New Conv2d layer with adapted weights
+        
+    Example:
+        >>> resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        >>> resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, target_in_channels=1)
+    """
+    
+    # If already the correct number of channels, return as-is
+    if conv_layer.in_channels == target_in_channels:
+        return conv_layer
+    
+    # Extract pretrained weights: [out_channels, in_channels, H, W]
+    pretrained_weights = conv_layer.weight.data
+    
+    # Average across input channels: [out_channels, 1, H, W]
+    # This preserves the learned edge/texture filters
+    adapted_weights = pretrained_weights.mean(dim=1, keepdim=True)
+    
+    # If target has more than 1 channel, repeat the averaged weights
+    if target_in_channels > 1:
+        adapted_weights = adapted_weights.repeat(1, target_in_channels, 1, 1)
+        # Normalize to maintain similar activation magnitudes
+        adapted_weights = adapted_weights / target_in_channels
+    
+    # Create new Conv2d layer with same architecture
+    new_conv = nn.Conv2d(
+        in_channels=target_in_channels,
+        out_channels=conv_layer.out_channels,
+        kernel_size=conv_layer.kernel_size,
+        stride=conv_layer.stride,
+        padding=conv_layer.padding,
+        dilation=conv_layer.dilation,
+        groups=conv_layer.groups,
+        bias=conv_layer.bias is not None,
+        padding_mode=conv_layer.padding_mode
+    )
+    
+    # Transfer adapted weights
+    new_conv.weight.data = adapted_weights
+    
+    # Transfer bias if present
+    if conv_layer.bias is not None:
+        new_conv.bias.data = conv_layer.bias.data.clone()
+    
+    return new_conv
+
+
+def adapt_model_for_grayscale(
+    model: nn.Module,
+    first_conv_path: str,
+    target_in_channels: int = 1
+) -> nn.Module:
+    """
+    Adapt a pretrained model's first convolutional layer for grayscale input.
+    
+    Supports nested module paths (e.g., 'features.0.0' for nested Sequential modules).
+    
+    Args:
+        model: Pretrained model
+        first_conv_path: Dot-separated path to first conv layer
+                        Examples: 'conv1', 'features.0.0', 'stem.0'
+        target_in_channels: Target number of input channels (default: 1)
+    
+    Returns:
+        Model with adapted first conv layer
+        
+    Examples:
+        >>> # Simple case: ResNet
+        >>> resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        >>> resnet = adapt_model_for_grayscale(resnet, 'conv1')
+        
+        >>> # Nested case: EfficientNet
+        >>> effnet = models.efficientnet_b0(weights=...)
+        >>> effnet = adapt_model_for_grayscale(effnet, 'features.0.0')
+    """
+    
+    # Navigate to parent module and get attribute name
+    path_parts = first_conv_path.split('.')
+    parent_module = model
+    
+    # Navigate to parent
+    for part in path_parts[:-1]:
+        parent_module = getattr(parent_module, part)
+    
+    # Get the conv layer
+    attr_name = path_parts[-1]
+    conv_layer = getattr(parent_module, attr_name)
+    
+    # Adapt and replace
+    adapted_conv = adapt_conv_layer_for_grayscale(conv_layer, target_in_channels)
+    setattr(parent_module, attr_name, adapted_conv)
+    
+    return model
+
+
+def print_weight_transfer_info(original_conv: nn.Conv2d, adapted_conv: nn.Conv2d):
+    """
+    Print information about weight transfer process.
+    
+    Args:
+        original_conv: Original pretrained conv layer
+        adapted_conv: Adapted conv layer
+    """
+    orig_shape = tuple(original_conv.weight.shape)
+    new_shape = tuple(adapted_conv.weight.shape)
+    
+    print(f"  ✓ Weight transfer: {orig_shape} → {new_shape}")
+    print(f"    Original channels: {original_conv.in_channels} (RGB)")
+    print(f"    Adapted channels:  {adapted_conv.in_channels} (Grayscale)")
+    print(f"    Method: Averaging across RGB channels")
+-e 
+
+===== ./src/models/contrastive_backbones.py =====
+
 """
 Contrastive Network Backbones
 Implementation of various backbone architectures for contrastive learning.
-Updated with layer freezing support and increased regularization.
+Updated with proper weight transfer from RGB to grayscale.
 """
 
 import torch.nn as nn
@@ -1069,6 +1218,7 @@ import torch.nn.functional as F
 from torchvision import models
 
 from .base import BaseContrastiveNetwork
+from .utils import adapt_conv_layer_for_grayscale
 
 
 class ContrastiveMobileNetV3Small(BaseContrastiveNetwork):
@@ -1077,7 +1227,12 @@ class ContrastiveMobileNetV3Small(BaseContrastiveNetwork):
     def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         mobilenet = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
-        mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        # Adapt first conv with weight transfer
+        if in_channels != 3:
+            mobilenet.features[0][0] = adapt_conv_layer_for_grayscale(
+                mobilenet.features[0][0], in_channels
+            )
         
         encoder = nn.Sequential(
             mobilenet.features,
@@ -1100,7 +1255,12 @@ class ContrastiveMobileNetV3Large(BaseContrastiveNetwork):
     def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         mobilenet = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT)
-        mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        # Adapt first conv with weight transfer
+        if in_channels != 3:
+            mobilenet.features[0][0] = adapt_conv_layer_for_grayscale(
+                mobilenet.features[0][0], in_channels
+            )
         
         encoder = nn.Sequential(
             mobilenet.features,
@@ -1123,7 +1283,10 @@ class ContrastiveResNet18(BaseContrastiveNetwork):
     def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
-        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        
+        # Adapt conv1 with weight transfer
+        if in_channels != 3:
+            resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
         
         encoder = nn.Sequential(
             nn.Sequential(
@@ -1155,7 +1318,10 @@ class ContrastiveResNet34(BaseContrastiveNetwork):
     def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         resnet = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
-        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        
+        # Adapt conv1 with weight transfer
+        if in_channels != 3:
+            resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
         
         encoder = nn.Sequential(
             nn.Sequential(
@@ -1187,7 +1353,10 @@ class ContrastiveResNet50(BaseContrastiveNetwork):
     def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        
+        # Adapt conv1 with weight transfer
+        if in_channels != 3:
+            resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
         
         encoder = nn.Sequential(
             nn.Sequential(
@@ -1219,7 +1388,12 @@ class ContrastiveEfficientNetB0(BaseContrastiveNetwork):
     def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         effnet = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.DEFAULT)
-        effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        # Adapt first conv with weight transfer
+        if in_channels != 3:
+            effnet.features[0][0] = adapt_conv_layer_for_grayscale(
+                effnet.features[0][0], in_channels
+            )
         
         encoder = nn.Sequential(
             effnet.features,
@@ -1234,6 +1408,7 @@ class ContrastiveEfficientNetB0(BaseContrastiveNetwork):
             freeze_backbone_layers=freeze_backbone_layers,
             dropout=dropout
         )
+
 
 class ContrastiveEfficientNetB1(BaseContrastiveNetwork):
     """Contrastive network based on EfficientNet-B1"""
@@ -1241,7 +1416,12 @@ class ContrastiveEfficientNetB1(BaseContrastiveNetwork):
     def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         effnet = models.efficientnet_b1(weights=models.EfficientNet_B1_Weights.DEFAULT)
-        effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        # Adapt first conv with weight transfer
+        if in_channels != 3:
+            effnet.features[0][0] = adapt_conv_layer_for_grayscale(
+                effnet.features[0][0], in_channels
+            )
         
         encoder = nn.Sequential(
             effnet.features,
@@ -1257,13 +1437,19 @@ class ContrastiveEfficientNetB1(BaseContrastiveNetwork):
             dropout=dropout
         )
 
+
 class ContrastiveDenseNet121(BaseContrastiveNetwork):
     """Contrastive network based on DenseNet121"""
     
     def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         densenet = models.densenet121(weights=models.DenseNet121_Weights.DEFAULT)
-        densenet.features.conv0 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        
+        # Adapt first conv (conv0) with weight transfer
+        if in_channels != 3:
+            densenet.features.conv0 = adapt_conv_layer_for_grayscale(
+                densenet.features.conv0, in_channels
+            )
         
         encoder = nn.Sequential(
             densenet.features,
@@ -1278,8 +1464,193 @@ class ContrastiveDenseNet121(BaseContrastiveNetwork):
             freeze_backbone_layers=freeze_backbone_layers,
             dropout=dropout
         )
+-e 
 
-=== src/models/registry.py ===
+===== ./src/models/old_bce_backbones.py =====
+
+"""
+Siamese Network Backbones
+Implementation of various backbone architectures for handwriting verification.
+Updated with layer freezing support and increased regularization.
+"""
+
+import torch.nn as nn
+from torchvision import models
+from .base import BaseSiameseNetwork
+
+
+class SiameseResNet18(BaseSiameseNetwork):
+    """Siamese network based on ResNet18"""
+    
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512, 
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        encoder = nn.Sequential(*list(resnet.children())[:-1])
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=512, 
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+class SiameseResNet34(BaseSiameseNetwork):
+    """Siamese network based on ResNet34"""
+    
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        resnet = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
+        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        encoder = nn.Sequential(*list(resnet.children())[:-1])
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=512, 
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+class SiameseResNet50(BaseSiameseNetwork):
+    """Siamese network based on ResNet50"""
+    
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        encoder = nn.Sequential(*list(resnet.children())[:-1])
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=2048, 
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+class SiameseEfficientNetB0(BaseSiameseNetwork):
+    """Siamese network based on EfficientNet-B0"""
+    
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        effnet = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.DEFAULT)
+        effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
+        encoder = nn.Sequential(effnet.features, nn.AdaptiveAvgPool2d(1))
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=1280, 
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+class SiameseEfficientNetB1(BaseSiameseNetwork):
+    """Siamese network based on EfficientNet-B1"""
+    
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        effnet = models.efficientnet_b1(weights=models.EfficientNet_B1_Weights.DEFAULT)
+        effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
+        encoder = nn.Sequential(effnet.features, nn.AdaptiveAvgPool2d(1))
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=1280, 
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+class SiameseEfficientNetV2(BaseSiameseNetwork):
+    """Siamese network based on EfficientNetV2-S"""
+    
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        backbone = models.efficientnet_v2_s(weights=models.EfficientNet_V2_S_Weights.DEFAULT)
+        backbone.features[0][0] = nn.Conv2d(in_channels, 24, kernel_size=3, stride=2, padding=1, bias=False)
+        encoder = nn.Sequential(backbone.features, nn.AdaptiveAvgPool2d(1))
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=1280, 
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+class SiameseMobileNetV3Small(BaseSiameseNetwork):
+    """Siamese network based on MobileNetV3-Small"""
+    
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        mobilenet = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
+        mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
+        encoder = nn.Sequential(mobilenet.features, nn.AdaptiveAvgPool2d(1))
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=576, 
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+class SiameseMobileNetV3Large(BaseSiameseNetwork):
+    """Siamese network based on MobileNetV3-Large"""
+    
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        mobilenet = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT)
+        mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
+        encoder = nn.Sequential(mobilenet.features, nn.AdaptiveAvgPool2d(1))
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=960, 
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+class SiameseDenseNet121(BaseSiameseNetwork):
+    """Siamese network based on DenseNet121"""
+    
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        densenet = models.densenet121(weights=models.DenseNet121_Weights.DEFAULT)
+        densenet.features.conv0 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        encoder = nn.Sequential(densenet.features, nn.AdaptiveAvgPool2d(1))
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=1024, 
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+class SiameseRegNetY400MF(BaseSiameseNetwork):
+    """Siamese network based on RegNet-Y-400MF"""
+    
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        regnet = models.regnet_y_400mf(weights=models.RegNet_Y_400MF_Weights.DEFAULT)
+        regnet.stem[0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
+        encoder = nn.Sequential(*list(regnet.children())[:-1], nn.AdaptiveAvgPool2d(1))
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=440, 
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )-e 
+
+===== ./src/models/registry.py =====
+
 """
 Model Registry
 Central registry for all available model architectures (BCE, Contrastive, Triplet).
@@ -1548,18 +1919,20 @@ def get_model_info(model_name: str = None) -> Dict:
             'triplet': name in TRIPLET_MODELS,
         }
     
-    return info
+    return info-e 
 
-=== src/models/bce_backbones.py ===
+===== ./src/models/bce_backbones.py =====
+
 """
 Siamese Network Backbones
 Implementation of various backbone architectures for handwriting verification.
-Updated with layer freezing support and increased regularization.
+Updated with proper weight transfer from RGB to grayscale.
 """
 
 import torch.nn as nn
 from torchvision import models
 from .base import BaseSiameseNetwork
+from .utils import adapt_conv_layer_for_grayscale
 
 
 class SiameseResNet18(BaseSiameseNetwork):
@@ -1568,7 +1941,11 @@ class SiameseResNet18(BaseSiameseNetwork):
     def __init__(self, in_channels: int = 1, projection_dim: int = 512, 
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
-        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+
+        # Adapt conv1 with weight transfer
+        if in_channels != 3:
+            resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
+        
         encoder = nn.Sequential(*list(resnet.children())[:-1])
         
         super().__init__(
@@ -1578,6 +1955,7 @@ class SiameseResNet18(BaseSiameseNetwork):
             freeze_backbone_layers=freeze_backbone_layers,
             dropout=dropout
         )
+
 
 class SiameseResNet34(BaseSiameseNetwork):
     """Siamese network based on ResNet34"""
@@ -1585,7 +1963,11 @@ class SiameseResNet34(BaseSiameseNetwork):
     def __init__(self, in_channels: int = 1, projection_dim: int = 512,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         resnet = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
-        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+
+        # Adapt conv1 with weight transfer
+        if in_channels != 3:
+            resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
+        
         encoder = nn.Sequential(*list(resnet.children())[:-1])
         
         super().__init__(
@@ -1596,13 +1978,18 @@ class SiameseResNet34(BaseSiameseNetwork):
             dropout=dropout
         )
 
+
 class SiameseResNet50(BaseSiameseNetwork):
     """Siamese network based on ResNet50"""
     
     def __init__(self, in_channels: int = 1, projection_dim: int = 512,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        
+        # Adapt conv1 with weight transfer
+        if in_channels != 3:
+            resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
+        
         encoder = nn.Sequential(*list(resnet.children())[:-1])
         
         super().__init__(
@@ -1613,13 +2000,20 @@ class SiameseResNet50(BaseSiameseNetwork):
             dropout=dropout
         )
 
+
 class SiameseEfficientNetB0(BaseSiameseNetwork):
     """Siamese network based on EfficientNet-B0"""
     
     def __init__(self, in_channels: int = 1, projection_dim: int = 512,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         effnet = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.DEFAULT)
-        effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        # Adapt first conv with weight transfer
+        if in_channels != 3:
+            effnet.features[0][0] = adapt_conv_layer_for_grayscale(
+                effnet.features[0][0], in_channels
+            )
+        
         encoder = nn.Sequential(effnet.features, nn.AdaptiveAvgPool2d(1))
         
         super().__init__(
@@ -1629,6 +2023,7 @@ class SiameseEfficientNetB0(BaseSiameseNetwork):
             freeze_backbone_layers=freeze_backbone_layers,
             dropout=dropout
         )
+
 
 class SiameseEfficientNetB1(BaseSiameseNetwork):
     """Siamese network based on EfficientNet-B1"""
@@ -1636,7 +2031,13 @@ class SiameseEfficientNetB1(BaseSiameseNetwork):
     def __init__(self, in_channels: int = 1, projection_dim: int = 512,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         effnet = models.efficientnet_b1(weights=models.EfficientNet_B1_Weights.DEFAULT)
-        effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        # Adapt first conv with weight transfer
+        if in_channels != 3:
+            effnet.features[0][0] = adapt_conv_layer_for_grayscale(
+                effnet.features[0][0], in_channels
+            )
+        
         encoder = nn.Sequential(effnet.features, nn.AdaptiveAvgPool2d(1))
         
         super().__init__(
@@ -1647,13 +2048,20 @@ class SiameseEfficientNetB1(BaseSiameseNetwork):
             dropout=dropout
         )
 
+
 class SiameseEfficientNetV2(BaseSiameseNetwork):
     """Siamese network based on EfficientNetV2-S"""
     
     def __init__(self, in_channels: int = 1, projection_dim: int = 512,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         backbone = models.efficientnet_v2_s(weights=models.EfficientNet_V2_S_Weights.DEFAULT)
-        backbone.features[0][0] = nn.Conv2d(in_channels, 24, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        # Adapt first conv with weight transfer
+        if in_channels != 3:
+            backbone.features[0][0] = adapt_conv_layer_for_grayscale(
+                backbone.features[0][0], in_channels
+            )
+        
         encoder = nn.Sequential(backbone.features, nn.AdaptiveAvgPool2d(1))
         
         super().__init__(
@@ -1664,13 +2072,20 @@ class SiameseEfficientNetV2(BaseSiameseNetwork):
             dropout=dropout
         )
 
+
 class SiameseMobileNetV3Small(BaseSiameseNetwork):
     """Siamese network based on MobileNetV3-Small"""
     
     def __init__(self, in_channels: int = 1, projection_dim: int = 512,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         mobilenet = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
-        mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        # Adapt first conv with weight transfer
+        if in_channels != 3:
+            mobilenet.features[0][0] = adapt_conv_layer_for_grayscale(
+                mobilenet.features[0][0], in_channels
+            )
+        
         encoder = nn.Sequential(mobilenet.features, nn.AdaptiveAvgPool2d(1))
         
         super().__init__(
@@ -1681,13 +2096,20 @@ class SiameseMobileNetV3Small(BaseSiameseNetwork):
             dropout=dropout
         )
 
+
 class SiameseMobileNetV3Large(BaseSiameseNetwork):
     """Siamese network based on MobileNetV3-Large"""
     
     def __init__(self, in_channels: int = 1, projection_dim: int = 512,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         mobilenet = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT)
-        mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        # Adapt first conv with weight transfer
+        if in_channels != 3:
+            mobilenet.features[0][0] = adapt_conv_layer_for_grayscale(
+                mobilenet.features[0][0], in_channels
+            )
+        
         encoder = nn.Sequential(mobilenet.features, nn.AdaptiveAvgPool2d(1))
         
         super().__init__(
@@ -1698,13 +2120,20 @@ class SiameseMobileNetV3Large(BaseSiameseNetwork):
             dropout=dropout
         )
 
+
 class SiameseDenseNet121(BaseSiameseNetwork):
     """Siamese network based on DenseNet121"""
     
     def __init__(self, in_channels: int = 1, projection_dim: int = 512,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         densenet = models.densenet121(weights=models.DenseNet121_Weights.DEFAULT)
-        densenet.features.conv0 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        
+        # Adapt first conv (conv0) with weight transfer
+        if in_channels != 3:
+            densenet.features.conv0 = adapt_conv_layer_for_grayscale(
+                densenet.features.conv0, in_channels
+            )
+        
         encoder = nn.Sequential(densenet.features, nn.AdaptiveAvgPool2d(1))
         
         super().__init__(
@@ -1715,13 +2144,20 @@ class SiameseDenseNet121(BaseSiameseNetwork):
             dropout=dropout
         )
 
+
 class SiameseRegNetY400MF(BaseSiameseNetwork):
     """Siamese network based on RegNet-Y-400MF"""
     
     def __init__(self, in_channels: int = 1, projection_dim: int = 512,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         regnet = models.regnet_y_400mf(weights=models.RegNet_Y_400MF_Weights.DEFAULT)
-        regnet.stem[0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        # Adapt first conv in stem with weight transfer
+        if in_channels != 3:
+            regnet.stem[0] = adapt_conv_layer_for_grayscale(
+                regnet.stem[0], in_channels
+            )
+        
         encoder = nn.Sequential(*list(regnet.children())[:-1], nn.AdaptiveAvgPool2d(1))
         
         super().__init__(
@@ -1731,11 +2167,13 @@ class SiameseRegNetY400MF(BaseSiameseNetwork):
             freeze_backbone_layers=freeze_backbone_layers,
             dropout=dropout
         )
+-e 
 
-=== src/models/triplet_backbones.py ===
+===== ./src/models/old_contrastive_backbones.py =====
+
 """
-Triplet Network Backbones
-Implementation of various backbone architectures for triplet learning.
+Contrastive Network Backbones
+Implementation of various backbone architectures for contrastive learning.
 Updated with layer freezing support and increased regularization.
 """
 
@@ -1743,7 +2181,231 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import models
 
+from .base import BaseContrastiveNetwork
+
+
+class ContrastiveMobileNetV3Small(BaseContrastiveNetwork):
+    """Contrastive network based on MobileNetV3-Small"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        mobilenet = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
+        mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        encoder = nn.Sequential(
+            mobilenet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=576, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class ContrastiveMobileNetV3Large(BaseContrastiveNetwork):
+    """Contrastive network based on MobileNetV3-Large"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        mobilenet = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT)
+        mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        encoder = nn.Sequential(
+            mobilenet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=960, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class ContrastiveResNet18(BaseContrastiveNetwork):
+    """Contrastive network based on ResNet18"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        
+        encoder = nn.Sequential(
+            nn.Sequential(
+                resnet.conv1,
+                resnet.bn1,
+                resnet.relu,
+                resnet.maxpool,
+                resnet.layer1,
+                resnet.layer2,
+                resnet.layer3,
+                resnet.layer4,
+                resnet.avgpool
+            ),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=512, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class ContrastiveResNet34(BaseContrastiveNetwork):
+    """Contrastive network based on ResNet34"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        resnet = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
+        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        
+        encoder = nn.Sequential(
+            nn.Sequential(
+                resnet.conv1,
+                resnet.bn1,
+                resnet.relu,
+                resnet.maxpool,
+                resnet.layer1,
+                resnet.layer2,
+                resnet.layer3,
+                resnet.layer4,
+                resnet.avgpool
+            ),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=512, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class ContrastiveResNet50(BaseContrastiveNetwork):
+    """Contrastive network based on ResNet50"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        
+        encoder = nn.Sequential(
+            nn.Sequential(
+                resnet.conv1,
+                resnet.bn1,
+                resnet.relu,
+                resnet.maxpool,
+                resnet.layer1,
+                resnet.layer2,
+                resnet.layer3,
+                resnet.layer4,
+                resnet.avgpool
+            ),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=2048, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class ContrastiveEfficientNetB0(BaseContrastiveNetwork):
+    """Contrastive network based on EfficientNet-B0"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        effnet = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.DEFAULT)
+        effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        encoder = nn.Sequential(
+            effnet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=1280, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+class ContrastiveEfficientNetB1(BaseContrastiveNetwork):
+    """Contrastive network based on EfficientNet-B1"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        effnet = models.efficientnet_b1(weights=models.EfficientNet_B1_Weights.DEFAULT)
+        effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        encoder = nn.Sequential(
+            effnet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=1280, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+class ContrastiveDenseNet121(BaseContrastiveNetwork):
+    """Contrastive network based on DenseNet121"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        densenet = models.densenet121(weights=models.DenseNet121_Weights.DEFAULT)
+        densenet.features.conv0 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        
+        encoder = nn.Sequential(
+            densenet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=1024, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )-e 
+
+===== ./src/models/triplet_backbones.py =====
+
+"""
+Triplet Network Backbones
+Implementation of various backbone architectures for triplet learning.
+Updated with proper weight transfer from RGB to grayscale.
+"""
+
+import torch.nn as nn
+import torch.nn.functional as F
+from torchvision import models
+
 from .base import BaseTripletNetwork
+from .utils import adapt_conv_layer_for_grayscale
 
 
 class TripletMobileNetV3Small(BaseTripletNetwork):
@@ -1752,7 +2414,12 @@ class TripletMobileNetV3Small(BaseTripletNetwork):
     def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         mobilenet = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
-        mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        # Adapt first conv with weight transfer
+        if in_channels != 3:
+            mobilenet.features[0][0] = adapt_conv_layer_for_grayscale(
+                mobilenet.features[0][0], in_channels
+            )
         
         encoder = nn.Sequential(
             mobilenet.features,
@@ -1775,7 +2442,12 @@ class TripletMobileNetV3Large(BaseTripletNetwork):
     def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         mobilenet = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT)
-        mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        # Adapt first conv with weight transfer
+        if in_channels != 3:
+            mobilenet.features[0][0] = adapt_conv_layer_for_grayscale(
+                mobilenet.features[0][0], in_channels
+            )
         
         encoder = nn.Sequential(
             mobilenet.features,
@@ -1798,7 +2470,10 @@ class TripletResNet18(BaseTripletNetwork):
     def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
-        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        
+        # Adapt conv1 with weight transfer
+        if in_channels != 3:
+            resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
         
         encoder = nn.Sequential(
             nn.Sequential(
@@ -1830,7 +2505,10 @@ class TripletResNet34(BaseTripletNetwork):
     def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         resnet = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
-        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        
+        # Adapt conv1 with weight transfer
+        if in_channels != 3:
+            resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
         
         encoder = nn.Sequential(
             nn.Sequential(
@@ -1862,7 +2540,10 @@ class TripletResNet50(BaseTripletNetwork):
     def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        
+        # Adapt conv1 with weight transfer
+        if in_channels != 3:
+            resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
         
         encoder = nn.Sequential(
             nn.Sequential(
@@ -1894,7 +2575,12 @@ class TripletEfficientNetB0(BaseTripletNetwork):
     def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         effnet = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.DEFAULT)
-        effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        # Adapt first conv with weight transfer
+        if in_channels != 3:
+            effnet.features[0][0] = adapt_conv_layer_for_grayscale(
+                effnet.features[0][0], in_channels
+            )
         
         encoder = nn.Sequential(
             effnet.features,
@@ -1917,7 +2603,12 @@ class TripletEfficientNetB1(BaseTripletNetwork):
     def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         effnet = models.efficientnet_b1(weights=models.EfficientNet_B1_Weights.DEFAULT)
-        effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        # Adapt first conv with weight transfer
+        if in_channels != 3:
+            effnet.features[0][0] = adapt_conv_layer_for_grayscale(
+                effnet.features[0][0], in_channels
+            )
         
         encoder = nn.Sequential(
             effnet.features,
@@ -1932,8 +2623,10 @@ class TripletEfficientNetB1(BaseTripletNetwork):
             freeze_backbone_layers=freeze_backbone_layers,
             dropout=dropout
         )
+-e 
 
-=== src/models/base.py ===
+===== ./src/models/base.py =====
+
 """
 Base Siamese Network Module
 Defines the base architecture for Siamese networks with shared encoder.
@@ -2218,10 +2911,10 @@ class BaseContrastiveNetwork(nn.Module):
         features = features.view(features.size(0), -1)
         
         # Project to embedding space
-        embeddings = self.projection(features)
+        embedding = self.projection(features)
         
         # Normalize
-        return F.normalize(embeddings, p=2, dim=1)
+        return F.normalize(embedding, p=2, dim=1)
     
     def get_embedding(self, x: torch.Tensor) -> torch.Tensor:
         """Alias for forward"""
@@ -2345,9 +3038,10 @@ class BaseTripletNetwork(nn.Module):
     def get_embedding(self, x):
         """Alias for forward"""
         return self.forward(x)
+-e 
 
+===== ./src/models/__init__.py =====
 
-=== src/models/__init__.py ===
 # src/models/__init__.py
 """
 Models module
@@ -2457,17 +3151,221 @@ __all__ = [
     'ContrastiveEfficientNetB0',
     'ContrastiveEfficientNetB1',
     'ContrastiveDenseNet121',
-]
+]-e 
 
-=== src/__init__.py ===
+===== ./src/models/old_triplet_backbones.py =====
+
+"""
+Triplet Network Backbones
+Implementation of various backbone architectures for triplet learning.
+Updated with layer freezing support and increased regularization.
+"""
+
+import torch.nn as nn
+import torch.nn.functional as F
+from torchvision import models
+
+from .base import BaseTripletNetwork
+
+
+class TripletMobileNetV3Small(BaseTripletNetwork):
+    """Triplet network based on MobileNetV3-Small"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        mobilenet = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
+        mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        encoder = nn.Sequential(
+            mobilenet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=576, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class TripletMobileNetV3Large(BaseTripletNetwork):
+    """Triplet network based on MobileNetV3-Large"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        mobilenet = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT)
+        mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        encoder = nn.Sequential(
+            mobilenet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=960, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class TripletResNet18(BaseTripletNetwork):
+    """Triplet network based on ResNet18"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        
+        encoder = nn.Sequential(
+            nn.Sequential(
+                resnet.conv1,
+                resnet.bn1,
+                resnet.relu,
+                resnet.maxpool,
+                resnet.layer1,
+                resnet.layer2,
+                resnet.layer3,
+                resnet.layer4,
+                resnet.avgpool
+            ),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=512, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class TripletResNet34(BaseTripletNetwork):
+    """Triplet network based on ResNet34"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        resnet = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
+        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        
+        encoder = nn.Sequential(
+            nn.Sequential(
+                resnet.conv1,
+                resnet.bn1,
+                resnet.relu,
+                resnet.maxpool,
+                resnet.layer1,
+                resnet.layer2,
+                resnet.layer3,
+                resnet.layer4,
+                resnet.avgpool
+            ),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=512, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class TripletResNet50(BaseTripletNetwork):
+    """Triplet network based on ResNet50"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        
+        encoder = nn.Sequential(
+            nn.Sequential(
+                resnet.conv1,
+                resnet.bn1,
+                resnet.relu,
+                resnet.maxpool,
+                resnet.layer1,
+                resnet.layer2,
+                resnet.layer3,
+                resnet.layer4,
+                resnet.avgpool
+            ),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=2048, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class TripletEfficientNetB0(BaseTripletNetwork):
+    """Triplet network based on EfficientNet-B0"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        effnet = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.DEFAULT)
+        effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        encoder = nn.Sequential(
+            effnet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=1280, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class TripletEfficientNetB1(BaseTripletNetwork):
+    """Triplet network based on EfficientNet-B1"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        effnet = models.efficientnet_b1(weights=models.EfficientNet_B1_Weights.DEFAULT)
+        effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
+        
+        encoder = nn.Sequential(
+            effnet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=1280, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )-e 
+
+===== ./src/__init__.py =====
+
 # src/__init__.py
 """
 Handwriting Verification Package
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.0"-e 
 
-=== src/training/base_trainer.py ===
+===== ./src/training/base_trainer.py =====
+
 # src/training/base_trainer.py
 """
 Base Trainer Class
@@ -2601,7 +3499,7 @@ class BaseTrainer(ABC):
         metrics = compute_metrics(
             np.array(genuine_scores),
             np.array(impostor_scores),
-            distances_are_similarity=True#distances_are_similarity
+            distances_are_similarity=True #distances_are_similarity
         )
         
         print(f"\n  ✓ Evaluated {len(genuine_scores)} genuine + {len(impostor_scores)} impostor pairs")
@@ -2771,9 +3669,10 @@ class BaseTrainer(ABC):
         self.model.cpu()
         del self.model
         torch.cuda.empty_cache()
-        gc.collect()
+        gc.collect()-e 
 
-=== src/training/trainer_triplet.py ===
+===== ./src/training/trainer_triplet.py =====
+
 """
 Triplet Loss Trainer
 Trainer class for triplet networks with comprehensive biometric evaluation.
@@ -2968,9 +3867,10 @@ class TripletTrainer(BaseTrainer):
         print(f"Per-fold: {fold_eers}")
         print(f"{'='*70}\n")
         
-        return aggregated
+        return aggregated-e 
 
-=== src/training/trainer_bce.py ===
+===== ./src/training/trainer_bce.py =====
+
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -3142,9 +4042,10 @@ class BCETrainer(BaseTrainer):
         print(f"Per-fold: {fold_eers}")
         print(f"{'='*70}\n")
         
-        return aggregated
+        return aggregated-e 
 
-=== src/training/trainer_contrastive.py ===
+===== ./src/training/trainer_contrastive.py =====
+
 """
 Contrastive Loss Trainer
 Trainer class for contrastive learning with comprehensive biometric evaluation.
@@ -3337,9 +4238,10 @@ class ContrastiveTrainer(BaseTrainer):
         print(f"Per-fold: {fold_eers}")
         print(f"{'='*70}\n")
 
-        return aggregated
+        return aggregated-e 
 
-=== src/training/losses.py ===
+===== ./src/training/losses.py =====
+
 """
 Loss Functions
 Various loss functions for Siamese and Triplet networks.
@@ -3367,8 +4269,6 @@ class BCELoss(nn.Module):
             Loss value
         """
         return self.loss_fn(predictions, labels)
-
-
 
 class ContrastiveLoss(nn.Module):
     """
@@ -3443,7 +4343,9 @@ class TripletLoss(nn.Module):
         
         # We want: pos_sim > neg_sim + margin
         # Loss: max(0, margin - (pos_sim - neg_sim))
-        losses = F.relu(self.margin - (pos_sim - neg_sim))
+        losses = F.relu(
+            self.margin - (pos_sim - neg_sim)
+        )
         
         return losses.mean()
 
@@ -3479,9 +4381,10 @@ class CombinedLoss(nn.Module):
         bce = self.bce_loss(predictions, labels)
         contrastive = self.contrastive_loss(feat1, feat2, labels)
         
-        return self.alpha * bce + (1 - self.alpha) * contrastive
+        return self.alpha * bce + (1 - self.alpha) * contrastive-e 
 
-=== src/training/__init__.py ===
+===== ./src/training/__init__.py =====
+
 # src/training/__init__.py
 """
 Training module
@@ -3507,9 +4410,10 @@ __all__ = [
     'BCETrainer',
     'TripletTrainer',
     'ContrastiveTrainer',
-]
+]-e 
 
-=== src/utils/helpers.py ===
+===== ./src/utils/helpers.py =====
+
 """
 Utility Helper Functions
 General utility functions for the project.
@@ -3648,9 +4552,10 @@ def save_checkpoint(
     """
     ensure_dir(os.path.dirname(save_path))
     torch.save(model.state_dict(), save_path)
-    print(f"✓ Saved checkpoint to {save_path}")
+    print(f"✓ Saved checkpoint to {save_path}")-e 
 
-=== src/utils/__init__.py ===
+===== ./src/utils/__init__.py =====
+
 # src/utils/__init__.py
 """
 Utilities module
@@ -3677,3 +4582,296 @@ __all__ = [
     'load_checkpoint',
     'save_checkpoint',
 ]
+-e 
+
+===== ./main.py =====
+
+def main():
+    print("Hello from handverify!")
+
+
+if __name__ == "__main__":
+    main()
+-e 
+
+===== ./main_triplet.py =====
+
+"""
+Main script for running triplet loss experiments on handwriting verification.
+Replicates the notebook experiments in a single script.
+"""
+
+import os
+import torch
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from torch.utils.data import DataLoader
+
+from src.data import TripletDataset
+from src.models import TripletMobileNetV3Small
+from src.training import TripletTrainer
+from src.evaluation import (
+    evaluate_comprehensive,
+    plot_comprehensive_results,
+    plot_training_history_triplet
+)
+from src.utils import set_seed, get_device
+
+
+def main():
+    # Configuration
+    IAM_ROOT = "datasets/processed-handwritten/iam_processed"
+    RIMES_ROOT = "datasets/processed-handwritten/rimes_processed"
+    RESULTS_DIR = "results/triplet"
+    
+    BATCH_SIZE = 16
+    NUM_WORKERS = 4
+    TARGET_SIZE = 448
+    EMBEDDING_DIM = 128
+    MARGIN = 0.5
+    EPOCHS = 10
+    PATIENCE = 7
+    TRIPLETS_PER_WRITER = 100
+    
+    # Setup
+    set_seed(42)
+    device = get_device()
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+    
+    # Load datasets
+    print("Loading datasets...")
+    iam_dirs = [
+        os.path.join(IAM_ROOT, d)
+        for d in sorted(os.listdir(IAM_ROOT))
+        if os.path.isdir(os.path.join(IAM_ROOT, d))
+    ]
+    
+    rimes_dirs = [
+        os.path.join(RIMES_ROOT, d)
+        for d in sorted(os.listdir(RIMES_ROOT))
+        if os.path.isdir(os.path.join(RIMES_ROOT, d))
+    ]
+    
+    print(f"IAM writers: {len(iam_dirs)}")
+    print(f"RIMES writers: {len(rimes_dirs)}")
+    
+    # Split datasets
+    iam_train, iam_temp = train_test_split(iam_dirs, test_size=0.2, random_state=42)
+    iam_val, iam_test = train_test_split(iam_temp, test_size=0.5, random_state=42)
+    
+    rimes_train, rimes_temp = train_test_split(rimes_dirs, test_size=0.2, random_state=42)
+    rimes_val, rimes_test = train_test_split(rimes_temp, test_size=0.5, random_state=42)
+    
+    print(f"\nIAM: Train={len(iam_train)}, Val={len(iam_val)}, Test={len(iam_test)}")
+    print(f"RIMES: Train={len(rimes_train)}, Val={len(rimes_val)}, Test={len(rimes_test)}")
+    
+    results_summary = []
+    
+    # ========== EXPERIMENT 1: Train IAM → Test IAM ==========
+    print("\n" + "="*70)
+    print("EXPERIMENT 1: Train IAM → Test IAM")
+    print("="*70)
+    
+    train_ds = TripletDataset(iam_train, train=True, 
+                             triplets_per_writer=TRIPLETS_PER_WRITER, 
+                             target_size=TARGET_SIZE)
+    val_ds = TripletDataset(iam_val, train=False, 
+                           triplets_per_writer=TRIPLETS_PER_WRITER, 
+                           target_size=TARGET_SIZE)
+    test_ds = TripletDataset(iam_test, train=False, 
+                            triplets_per_writer=TRIPLETS_PER_WRITER, 
+                            target_size=TARGET_SIZE)
+    
+    train_loader = DataLoader(train_ds, BATCH_SIZE, shuffle=True, 
+                             num_workers=NUM_WORKERS, pin_memory=True)
+    
+    model = TripletMobileNetV3Small(embedding_dim=EMBEDDING_DIM)
+    trainer = TripletTrainer(model, "iam_to_iam_triplet", device, MARGIN, RESULTS_DIR)
+    
+    history = trainer.train(train_loader, val_ds, EPOCHS, PATIENCE)
+    plot_training_history_triplet(history, "IAM→IAM Triplet",
+                                 os.path.join(RESULTS_DIR, "iam_to_iam_history.png"))
+    
+    model.load_state_dict(torch.load(os.path.join(RESULTS_DIR, "iam_to_iam_triplet_best.pth")))
+    metrics = evaluate_comprehensive(model, test_ds, device, 2000, "IAM→IAM Test")
+    plot_comprehensive_results(metrics, os.path.join(RESULTS_DIR, "iam_to_iam_comprehensive.png"))
+    
+    results_summary.append({
+        'experiment': 'IAM→IAM',
+        **{k: v for k, v in metrics.items() if not isinstance(v, (list, type(None)))}
+    })
+    
+    trainer.cleanup()
+    
+    # ========== EXPERIMENT 2: Train IAM → Test RIMES ==========
+    print("\n" + "="*70)
+    print("EXPERIMENT 2: Train IAM → Test RIMES (Cross-Dataset)")
+    print("="*70)
+    
+    model.load_state_dict(torch.load(os.path.join(RESULTS_DIR, "iam_to_iam_triplet_best.pth")))
+    model = model.to(device)
+    
+    test_ds_rimes = TripletDataset(rimes_test, train=False, 
+                                   triplets_per_writer=TRIPLETS_PER_WRITER, 
+                                   target_size=TARGET_SIZE)
+    
+    metrics = evaluate_comprehensive(model, test_ds_rimes, device, 2000, "IAM→RIMES Test")
+    plot_comprehensive_results(metrics, os.path.join(RESULTS_DIR, "iam_to_rimes_comprehensive.png"))
+    
+    results_summary.append({
+        'experiment': 'IAM→RIMES',
+        **{k: v for k, v in metrics.items() if not isinstance(v, (list, type(None)))}
+    })
+    
+    del model
+    torch.cuda.empty_cache()
+    
+    # ========== EXPERIMENT 3: Train RIMES → Test RIMES ==========
+    print("\n" + "="*70)
+    print("EXPERIMENT 3: Train RIMES → Test RIMES")
+    print("="*70)
+    
+    train_ds = TripletDataset(rimes_train, train=True, 
+                             triplets_per_writer=TRIPLETS_PER_WRITER, 
+                             target_size=TARGET_SIZE)
+    val_ds = TripletDataset(rimes_val, train=False, 
+                           triplets_per_writer=TRIPLETS_PER_WRITER, 
+                           target_size=TARGET_SIZE)
+    test_ds = TripletDataset(rimes_test, train=False, 
+                            triplets_per_writer=TRIPLETS_PER_WRITER, 
+                            target_size=TARGET_SIZE)
+    
+    train_loader = DataLoader(train_ds, BATCH_SIZE, shuffle=True, 
+                             num_workers=NUM_WORKERS, pin_memory=True)
+    
+    model = TripletMobileNetV3Small(embedding_dim=EMBEDDING_DIM)
+    trainer = TripletTrainer(model, "rimes_to_rimes_triplet", device, MARGIN, RESULTS_DIR)
+    
+    history = trainer.train(train_loader, val_ds, EPOCHS, PATIENCE)
+    plot_training_history_triplet(history, "RIMES→RIMES Triplet",
+                                 os.path.join(RESULTS_DIR, "rimes_to_rimes_history.png"))
+    
+    model.load_state_dict(torch.load(os.path.join(RESULTS_DIR, "rimes_to_rimes_triplet_best.pth")))
+    metrics = evaluate_comprehensive(model, test_ds, device, 2000, "RIMES→RIMES Test")
+    plot_comprehensive_results(metrics, os.path.join(RESULTS_DIR, "rimes_to_rimes_comprehensive.png"))
+    
+    results_summary.append({
+        'experiment': 'RIMES→RIMES',
+        **{k: v for k, v in metrics.items() if not isinstance(v, (list, type(None)))}
+    })
+    
+    trainer.cleanup()
+    
+    # ========== EXPERIMENT 4: Train RIMES → Test IAM ==========
+    print("\n" + "="*70)
+    print("EXPERIMENT 4: Train RIMES → Test IAM (Cross-Dataset)")
+    print("="*70)
+    
+    model.load_state_dict(torch.load(os.path.join(RESULTS_DIR, "rimes_to_rimes_triplet_best.pth")))
+    model = model.to(device)
+    
+    test_ds_iam = TripletDataset(iam_test, train=False, 
+                                 triplets_per_writer=TRIPLETS_PER_WRITER, 
+                                 target_size=TARGET_SIZE)
+    
+    metrics = evaluate_comprehensive(model, test_ds_iam, device, 2000, "RIMES→IAM Test")
+    plot_comprehensive_results(metrics, os.path.join(RESULTS_DIR, "rimes_to_iam_comprehensive.png"))
+    
+    results_summary.append({
+        'experiment': 'RIMES→IAM',
+        **{k: v for k, v in metrics.items() if not isinstance(v, (list, type(None)))}
+    })
+    
+    # ========== FINAL SUMMARY ==========
+    df_summary = pd.DataFrame(results_summary)
+    df_summary.to_csv(os.path.join(RESULTS_DIR, "experiments_summary.csv"), index=False)
+    
+    print("\n" + "="*70)
+    print("FINAL RESULTS SUMMARY")
+    print("="*70)
+    print(df_summary[['experiment', 'eer', 'auc', 'acc_far_0.1%', 
+                      'acc_far_1.0%', 'd_prime']].to_string(index=False))
+    print(f"\n✓ All results saved to {RESULTS_DIR}/")
+
+
+if __name__ == "__main__":
+    main()-e 
+
+===== ./results/script.py =====
+
+#!/usr/bin/env python3
+
+import os
+import pandas as pd
+
+# Directory da cui partire
+ROOT_DIR = "."
+
+# File di output
+OUTPUT_FILE = "final.txt"
+
+# Pattern dei file da cercare
+TARGET = "final_metrics.csv"
+
+
+def find_metric_files(root):
+    """
+    Cerca ricorsivamente tutti i file che terminano con final_metrics.csv
+    """
+    files = []
+
+    for dirpath, _, filenames in os.walk(root):
+        for filename in filenames:
+            if filename.endswith(TARGET):
+                files.append(os.path.join(dirpath, filename))
+
+    return sorted(files)
+
+
+def process_file(filepath, output):
+    """
+    Legge il CSV, arrotonda i valori e scrive nel file cumulativo
+    """
+
+    filename = os.path.basename(filepath)
+
+    output.write(f"=== {filename} ===\n\n")
+
+    try:
+        df = pd.read_csv(filepath)
+
+        # Arrotonda tutte le colonne numeriche a 3 decimali
+        df = df.round(3)
+
+        # Scrive il dataframe in formato CSV
+        df.to_csv(
+            output,
+            index=False
+        )
+
+    except Exception as e:
+        output.write(f"ERRORE LETTURA FILE: {e}\n")
+
+    output.write("\n\n")
+
+
+def main():
+
+    files = find_metric_files(ROOT_DIR)
+
+    print(f"Trovati {len(files)} file:")
+
+    for f in files:
+        print(" -", f)
+
+    # Sovrascrive final.txt
+    with open(OUTPUT_FILE, "w", encoding="utf-8") as out:
+
+        for filepath in files:
+            process_file(filepath, out)
+
+    print(f"\nCreato {OUTPUT_FILE}")
+
+
+if __name__ == "__main__":
+    main()
