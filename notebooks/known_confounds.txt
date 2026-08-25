@@ -1,0 +1,55 @@
+
+CONFONDIMENTI NOTI TRA LE CONFIGURAZIONI DI TRAINING (da BCE/Contrastive/Triplet notebook):
+
+1. embedding_dim / projection_dim:
+   - BCE: 32
+   - Contrastive: 128
+   - Triplet: 128
+   BCE opera quindi con una capacita' rappresentativa 4x inferiore.
+
+2. frozen_backbone_layers:
+   - BCE: 0 (fine-tuning completo del backbone)
+   - Contrastive: 3
+   - Triplet: 3
+   Il fine-tuning completo di BCE e' un candidato primario per spiegare il
+   gap di generalizzazione cross-dataset osservato: il backbone puo'
+   overfittare le feature di basso livello sul dominio sorgente.
+
+3. batch_size:
+   - BCE: 16
+   - Contrastive: 32
+   - Triplet: 16
+   Combinato con la diversa cardinalita' di sample per epoca (TripletDataset
+   genera un triplet per ogni coppia genuina, mentre BCE/Contrastive
+   generano coppie genuine+impostor in rapporto 1:1), il numero di step di
+   gradiente per epoca NON e' equivalente tra le tre loss a parita' di
+   epochs=50.
+
+4. dropout:
+   - BCE: 0.2
+   - Contrastive: 0.4
+   - Triplet: 0.2
+
+IMPLICAZIONE PER I RESULTS:
+Le differenze di performance osservate tra loss function (in particolare
+sulla generalizzazione cross-dataset) non possono essere attribuite alla
+sola natura della loss finche' questi iperparametri non vengono uniformati
+e gli esperimenti ripetuti. Il claim corretto da riportare e' del tipo
+"la combinazione contrastive-loss + partial-freezing generalizza meglio
+della combinazione BCE + full-finetuning", non "contrastive loss
+generalizza meglio di BCE" in isolamento.
+
+ALTRE LIMITAZIONI:
+- Nessuna ripetizione multi-seed: ogni configurazione (loss, backbone,
+  split) e' un singolo run. Le CI riportate sopra sono bootstrap sugli
+  score di un singolo modello addestrato, NON intervalli di confidenza
+  sulla varianza di training (inizializzazione, ordine dei batch, ecc.).
+- La soglia usata per accuracy/precision/recall/F1 e' l'EER dello stesso
+  set di validazione su cui vengono poi misurate queste metriche (nessun
+  set di calibrazione indipendente): leggermente ottimistico.
+- I valori mu_genuine/mu_impostor/sigma_genuine/sigma_impostor NON sono
+  confrontabili in valore assoluto tra loss diverse: per BCE lo score e'
+  una probabilita' sigmoid in [0,1], per contrastive/triplet e' una cosine
+  similarity in [-1,1]. Solo d_prime/decidability (invarianti per
+  trasformazione affine) e le metriche rank-based (AUC, EER, FAR/FRR)
+  sono confrontabili cross-loss.

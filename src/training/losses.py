@@ -87,22 +87,23 @@ class TripletLoss(nn.Module):
         self.margin = margin
     
     def forward(self, anchor: torch.Tensor, positive: torch.Tensor,
-                negative: torch.Tensor) -> torch.Tensor:
-        # Normalize
+            negative: torch.Tensor) -> torch.Tensor:
+
+        # L2 normalization
         anchor = F.normalize(anchor, p=2, dim=1)
         positive = F.normalize(positive, p=2, dim=1)
         negative = F.normalize(negative, p=2, dim=1)
-        
-        # Cosine similarities
-        pos_sim = F.cosine_similarity(anchor, positive)
-        neg_sim = F.cosine_similarity(anchor, negative)
-        
-        # We want: pos_sim > neg_sim + margin
-        # Loss: max(0, margin - (pos_sim - neg_sim))
+
+        # Cosine distance: d = 1 - cosine_similarity
+        pos_dist = 1 - F.cosine_similarity(anchor, positive)
+        neg_dist = 1 - F.cosine_similarity(anchor, negative)
+
+        # Want: d(anchor, positive) + margin < d(anchor, negative)
+        # Loss: max(d_pos - d_neg + margin, 0)
         losses = F.relu(
-            self.margin - (pos_sim - neg_sim)
+            pos_dist - neg_dist + self.margin
         )
-        
+
         return losses.mean()
 
 
