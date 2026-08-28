@@ -1,0 +1,6 @@
+method,task,dataset,metric,value,comparable
+"Fiel & Sablatnig (2015), CNN activation features",Writer identification (closed-set),"IAM (train), ICDAR13/CVL (eval)",Accuracy/mAP,SOTA al momento della pubblicazione,"NO - task diverso (identification, non verification)"
+"Christlein et al. (2017), GMM supervector + KL-kernel",Writer identification (closed-set),"ICDAR13, CVL",mAP,+0.21 assoluto su ICDAR13 vs. SOTA precedente,NO - task diverso
+"Afzali et al. (2024), CSCNN (Siamese + combined loss)",Writer verification,"IAM, IFN/ENIT",EER/Accuracy,[DA VERIFICARE SUL PDF ORIGINALE],"PARZIALE - stesso task (verification) e IAM, script/loss diversi"
+"CAE + Siamese, text-independent writer verification (2019)",Writer verification,non IAM/RIMES (script non confermato),EER / AUC,"EER=26.4%, AUC=0.818","PARZIALE - stesse metriche, dataset diverso"
+"Scribe verification, Siamese/Triplet (ResNet18/34, MobileNetV3, ecc.)",Writer/scribe verification (stessa famiglia protocollare),"Tsinghua Bamboo Slips, MCCD (manoscritti cinesi)",AUC / errore tipo-EER,AUC 0.86-0.96; errore ~7.8-21% a seconda di backbone/corpus,"PARZIALE - stessi backbone e protocollo, dominio/script diverso"

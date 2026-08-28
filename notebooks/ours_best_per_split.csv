@@ -1,0 +1,5 @@
+loss,backbone,split,auc,eer
+bce,mobilenet_v3_small,iam_to_iam,0.9877483363329622,0.0493482309124767
+contrastive,efficientnet_b0,iam_to_rimes,0.7100225084679918,0.3439721254355401
+contrastive,resnet18,rimes_to_iam,0.9299643261084711,0.1436682300666502
+bce,mobilenet_v3_small,rimes_to_rimes,0.9211744461752136,0.13711911357340723
