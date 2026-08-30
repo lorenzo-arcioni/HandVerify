@@ -35,7 +35,7 @@ class ContrastiveTrainer(BaseTrainer):
         """Setup optimizer for contrastive learning."""
         num_params = sum(p.numel() for p in self.model.parameters())
         lr = 5e-5 if num_params > 15e6 else 1e-4
-        
+
         self.optimizer = torch.optim.AdamW(
             self.model.parameters(),
             lr=lr,
@@ -80,18 +80,18 @@ class ContrastiveTrainer(BaseTrainer):
         """Calculate Contrastive validation loss."""
         self.model.eval()
         val_loss = 0.0
-        
+
         for img1, img2, labels in tqdm(val_loader, desc="Validation"):
             img1, img2, labels = img1.to(self.device), img2.to(self.device), labels.float().to(self.device)
-            
+
             # Get embeddings
             emb1 = self.model(img1)
             emb2 = self.model(img2)
-            
+
             # Contrastive loss
             loss = self.criterion(emb1, emb2, labels)
             val_loss += loss.item()
-        
+
         return val_loss / len(val_loader)
 
     def _get_embeddings(self, img1, img2):
