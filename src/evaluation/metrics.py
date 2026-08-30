@@ -118,24 +118,20 @@ def compute_metrics(
     # ------------------------------------------------------------------
     # 7. d-prime & decidability (computed on DISTANCES) ### DA CONTROLLARE
     # ------------------------------------------------------------------
-    if distances_are_similarity:
-        # Assumes similarity scores in [0, 1], higher = more similar
-        genuine_dist  = 1.0 - genuine_vals
-        impostor_dist = 1.0 - impostor_vals
-    else:
-        genuine_dist = genuine_vals
-        impostor_dist = impostor_vals
+    # mu_genuine / mu_impostor restano sulla STESSA scala di genuine_vals /
+    # impostor_vals (score grezzi, alto = piu' simile). Nessuna conversione
+    # in distanza: cosi' sono coerenti con i valori salvati e con
+    # calculate_biometric_metrics del notebook di analisi.
+    mu_g = np.mean(genuine_vals)
+    mu_i = np.mean(impostor_vals)
 
-    mu_g = np.mean(genuine_dist)
-    mu_i = np.mean(impostor_dist)
-
-    sigma_g = np.std(genuine_dist, ddof=1)
-    sigma_i = np.std(impostor_dist, ddof=1)
+    sigma_g = np.std(genuine_vals, ddof=1)
+    sigma_i = np.std(impostor_vals, ddof=1)
 
     pooled_std = np.sqrt(0.5 * (sigma_g**2 + sigma_i**2))
 
     if pooled_std > 0:
-        d_prime = (mu_i - mu_g) / pooled_std
+        d_prime = (mu_g - mu_i) / pooled_std
         decidability = abs(d_prime)
     else:
         d_prime = 0.0
@@ -157,7 +153,7 @@ def compute_metrics(
         "d_prime": d_prime,
         "decidability": decidability,
 
-        # Distance statistics
+        # Score statistics
         "mu_genuine": mu_g,
         "mu_impostor": mu_i,
         "sigma_genuine": sigma_g,
@@ -196,7 +192,7 @@ def print_results(metrics: Dict[str, float], dataset_name: str = "Validation"):
     print(f"  d-prime (d'):                {metrics['d_prime']:.4f}")
     print(f"  Decidability Index:          {metrics['decidability']:.4f}")
     
-    print(f"\n📏 DISTANCE STATISTICS:")
+    print(f"\n📏 SCORE STATISTICS:")
     print(f"  Genuine:  μ={metrics['mu_genuine']:.4f}, σ={metrics['sigma_genuine']:.4f}")
     print(f"  Impostor: μ={metrics['mu_impostor']:.4f}, σ={metrics['sigma_impostor']:.4f}")
     

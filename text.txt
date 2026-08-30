@@ -942,24 +942,20 @@ def compute_metrics(
     # ------------------------------------------------------------------
     # 7. d-prime & decidability (computed on DISTANCES) ### DA CONTROLLARE
     # ------------------------------------------------------------------
-    if distances_are_similarity:
-        # Assumes similarity scores in [0, 1], higher = more similar
-        genuine_dist  = 1.0 - genuine_vals
-        impostor_dist = 1.0 - impostor_vals
-    else:
-        genuine_dist = genuine_vals
-        impostor_dist = impostor_vals
+    # mu_genuine / mu_impostor restano sulla STESSA scala di genuine_vals /
+    # impostor_vals (score grezzi, alto = piu' simile). Nessuna conversione
+    # in distanza: cosi' sono coerenti con i valori salvati e con
+    # calculate_biometric_metrics del notebook di analisi.
+    mu_g = np.mean(genuine_vals)
+    mu_i = np.mean(impostor_vals)
 
-    mu_g = np.mean(genuine_dist)
-    mu_i = np.mean(impostor_dist)
-
-    sigma_g = np.std(genuine_dist, ddof=1)
-    sigma_i = np.std(impostor_dist, ddof=1)
+    sigma_g = np.std(genuine_vals, ddof=1)
+    sigma_i = np.std(impostor_vals, ddof=1)
 
     pooled_std = np.sqrt(0.5 * (sigma_g**2 + sigma_i**2))
 
     if pooled_std > 0:
-        d_prime = (mu_i - mu_g) / pooled_std
+        d_prime = (mu_g - mu_i) / pooled_std
         decidability = abs(d_prime)
     else:
         d_prime = 0.0
@@ -981,7 +977,7 @@ def compute_metrics(
         "d_prime": d_prime,
         "decidability": decidability,
 
-        # Distance statistics
+        # Score statistics
         "mu_genuine": mu_g,
         "mu_impostor": mu_i,
         "sigma_genuine": sigma_g,
@@ -1020,7 +1016,7 @@ def print_results(metrics: Dict[str, float], dataset_name: str = "Validation"):
     print(f"  d-prime (d'):                {metrics['d_prime']:.4f}")
     print(f"  Decidability Index:          {metrics['decidability']:.4f}")
     
-    print(f"\n📏 DISTANCE STATISTICS:")
+    print(f"\n📏 SCORE STATISTICS:")
     print(f"  Genuine:  μ={metrics['mu_genuine']:.4f}, σ={metrics['sigma_genuine']:.4f}")
     print(f"  Impostor: μ={metrics['mu_impostor']:.4f}, σ={metrics['sigma_impostor']:.4f}")
     
@@ -1466,189 +1462,6 @@ class ContrastiveDenseNet121(BaseContrastiveNetwork):
         )
 -e 
 
-===== ./src/models/old_bce_backbones.py =====
-
-"""
-Siamese Network Backbones
-Implementation of various backbone architectures for handwriting verification.
-Updated with layer freezing support and increased regularization.
-"""
-
-import torch.nn as nn
-from torchvision import models
-from .base import BaseSiameseNetwork
-
-
-class SiameseResNet18(BaseSiameseNetwork):
-    """Siamese network based on ResNet18"""
-    
-    def __init__(self, in_channels: int = 1, projection_dim: int = 512, 
-                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
-        resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
-        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        encoder = nn.Sequential(*list(resnet.children())[:-1])
-        
-        super().__init__(
-            encoder=encoder, 
-            feature_dim=512, 
-            projection_dim=projection_dim,
-            freeze_backbone_layers=freeze_backbone_layers,
-            dropout=dropout
-        )
-
-class SiameseResNet34(BaseSiameseNetwork):
-    """Siamese network based on ResNet34"""
-    
-    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
-                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
-        resnet = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
-        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        encoder = nn.Sequential(*list(resnet.children())[:-1])
-        
-        super().__init__(
-            encoder=encoder, 
-            feature_dim=512, 
-            projection_dim=projection_dim,
-            freeze_backbone_layers=freeze_backbone_layers,
-            dropout=dropout
-        )
-
-class SiameseResNet50(BaseSiameseNetwork):
-    """Siamese network based on ResNet50"""
-    
-    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
-                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
-        resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        encoder = nn.Sequential(*list(resnet.children())[:-1])
-        
-        super().__init__(
-            encoder=encoder, 
-            feature_dim=2048, 
-            projection_dim=projection_dim,
-            freeze_backbone_layers=freeze_backbone_layers,
-            dropout=dropout
-        )
-
-class SiameseEfficientNetB0(BaseSiameseNetwork):
-    """Siamese network based on EfficientNet-B0"""
-    
-    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
-                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
-        effnet = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.DEFAULT)
-        effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
-        encoder = nn.Sequential(effnet.features, nn.AdaptiveAvgPool2d(1))
-        
-        super().__init__(
-            encoder=encoder, 
-            feature_dim=1280, 
-            projection_dim=projection_dim,
-            freeze_backbone_layers=freeze_backbone_layers,
-            dropout=dropout
-        )
-
-class SiameseEfficientNetB1(BaseSiameseNetwork):
-    """Siamese network based on EfficientNet-B1"""
-    
-    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
-                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
-        effnet = models.efficientnet_b1(weights=models.EfficientNet_B1_Weights.DEFAULT)
-        effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
-        encoder = nn.Sequential(effnet.features, nn.AdaptiveAvgPool2d(1))
-        
-        super().__init__(
-            encoder=encoder, 
-            feature_dim=1280, 
-            projection_dim=projection_dim,
-            freeze_backbone_layers=freeze_backbone_layers,
-            dropout=dropout
-        )
-
-class SiameseEfficientNetV2(BaseSiameseNetwork):
-    """Siamese network based on EfficientNetV2-S"""
-    
-    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
-                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
-        backbone = models.efficientnet_v2_s(weights=models.EfficientNet_V2_S_Weights.DEFAULT)
-        backbone.features[0][0] = nn.Conv2d(in_channels, 24, kernel_size=3, stride=2, padding=1, bias=False)
-        encoder = nn.Sequential(backbone.features, nn.AdaptiveAvgPool2d(1))
-        
-        super().__init__(
-            encoder=encoder, 
-            feature_dim=1280, 
-            projection_dim=projection_dim,
-            freeze_backbone_layers=freeze_backbone_layers,
-            dropout=dropout
-        )
-
-class SiameseMobileNetV3Small(BaseSiameseNetwork):
-    """Siamese network based on MobileNetV3-Small"""
-    
-    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
-                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
-        mobilenet = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
-        mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
-        encoder = nn.Sequential(mobilenet.features, nn.AdaptiveAvgPool2d(1))
-        
-        super().__init__(
-            encoder=encoder, 
-            feature_dim=576, 
-            projection_dim=projection_dim,
-            freeze_backbone_layers=freeze_backbone_layers,
-            dropout=dropout
-        )
-
-class SiameseMobileNetV3Large(BaseSiameseNetwork):
-    """Siamese network based on MobileNetV3-Large"""
-    
-    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
-                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
-        mobilenet = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT)
-        mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
-        encoder = nn.Sequential(mobilenet.features, nn.AdaptiveAvgPool2d(1))
-        
-        super().__init__(
-            encoder=encoder, 
-            feature_dim=960, 
-            projection_dim=projection_dim,
-            freeze_backbone_layers=freeze_backbone_layers,
-            dropout=dropout
-        )
-
-class SiameseDenseNet121(BaseSiameseNetwork):
-    """Siamese network based on DenseNet121"""
-    
-    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
-                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
-        densenet = models.densenet121(weights=models.DenseNet121_Weights.DEFAULT)
-        densenet.features.conv0 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        encoder = nn.Sequential(densenet.features, nn.AdaptiveAvgPool2d(1))
-        
-        super().__init__(
-            encoder=encoder, 
-            feature_dim=1024, 
-            projection_dim=projection_dim,
-            freeze_backbone_layers=freeze_backbone_layers,
-            dropout=dropout
-        )
-
-class SiameseRegNetY400MF(BaseSiameseNetwork):
-    """Siamese network based on RegNet-Y-400MF"""
-    
-    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
-                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
-        regnet = models.regnet_y_400mf(weights=models.RegNet_Y_400MF_Weights.DEFAULT)
-        regnet.stem[0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
-        encoder = nn.Sequential(*list(regnet.children())[:-1], nn.AdaptiveAvgPool2d(1))
-        
-        super().__init__(
-            encoder=encoder, 
-            feature_dim=440, 
-            projection_dim=projection_dim,
-            freeze_backbone_layers=freeze_backbone_layers,
-            dropout=dropout
-        )-e 
-
 ===== ./src/models/registry.py =====
 
 """
@@ -1937,20 +1750,33 @@ from .utils import adapt_conv_layer_for_grayscale
 
 class SiameseResNet18(BaseSiameseNetwork):
     """Siamese network based on ResNet18"""
-    
-    def __init__(self, in_channels: int = 1, projection_dim: int = 512, 
+
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
 
         # Adapt conv1 with weight transfer
         if in_channels != 3:
             resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
-        
-        encoder = nn.Sequential(*list(resnet.children())[:-1])
-        
+
+        encoder = nn.Sequential(
+            nn.Sequential(
+                resnet.conv1,
+                resnet.bn1,
+                resnet.relu,
+                resnet.maxpool,
+                resnet.layer1,
+                resnet.layer2,
+                resnet.layer3,
+                resnet.layer4,
+                resnet.avgpool
+            ),
+            nn.Flatten()
+        )
+
         super().__init__(
-            encoder=encoder, 
-            feature_dim=512, 
+            encoder=encoder,
+            feature_dim=512,
             projection_dim=projection_dim,
             freeze_backbone_layers=freeze_backbone_layers,
             dropout=dropout
@@ -1959,7 +1785,7 @@ class SiameseResNet18(BaseSiameseNetwork):
 
 class SiameseResNet34(BaseSiameseNetwork):
     """Siamese network based on ResNet34"""
-    
+
     def __init__(self, in_channels: int = 1, projection_dim: int = 512,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         resnet = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
@@ -1967,12 +1793,25 @@ class SiameseResNet34(BaseSiameseNetwork):
         # Adapt conv1 with weight transfer
         if in_channels != 3:
             resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
-        
-        encoder = nn.Sequential(*list(resnet.children())[:-1])
-        
+
+        encoder = nn.Sequential(
+            nn.Sequential(
+                resnet.conv1,
+                resnet.bn1,
+                resnet.relu,
+                resnet.maxpool,
+                resnet.layer1,
+                resnet.layer2,
+                resnet.layer3,
+                resnet.layer4,
+                resnet.avgpool
+            ),
+            nn.Flatten()
+        )
+
         super().__init__(
-            encoder=encoder, 
-            feature_dim=512, 
+            encoder=encoder,
+            feature_dim=512,
             projection_dim=projection_dim,
             freeze_backbone_layers=freeze_backbone_layers,
             dropout=dropout
@@ -1981,20 +1820,33 @@ class SiameseResNet34(BaseSiameseNetwork):
 
 class SiameseResNet50(BaseSiameseNetwork):
     """Siamese network based on ResNet50"""
-    
+
     def __init__(self, in_channels: int = 1, projection_dim: int = 512,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-        
+
         # Adapt conv1 with weight transfer
         if in_channels != 3:
             resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
-        
-        encoder = nn.Sequential(*list(resnet.children())[:-1])
-        
+
+        encoder = nn.Sequential(
+            nn.Sequential(
+                resnet.conv1,
+                resnet.bn1,
+                resnet.relu,
+                resnet.maxpool,
+                resnet.layer1,
+                resnet.layer2,
+                resnet.layer3,
+                resnet.layer4,
+                resnet.avgpool
+            ),
+            nn.Flatten()
+        )
+
         super().__init__(
-            encoder=encoder, 
-            feature_dim=2048, 
+            encoder=encoder,
+            feature_dim=2048,
             projection_dim=projection_dim,
             freeze_backbone_layers=freeze_backbone_layers,
             dropout=dropout
@@ -2003,22 +1855,26 @@ class SiameseResNet50(BaseSiameseNetwork):
 
 class SiameseEfficientNetB0(BaseSiameseNetwork):
     """Siamese network based on EfficientNet-B0"""
-    
+
     def __init__(self, in_channels: int = 1, projection_dim: int = 512,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         effnet = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.DEFAULT)
-        
+
         # Adapt first conv with weight transfer
         if in_channels != 3:
             effnet.features[0][0] = adapt_conv_layer_for_grayscale(
                 effnet.features[0][0], in_channels
             )
-        
-        encoder = nn.Sequential(effnet.features, nn.AdaptiveAvgPool2d(1))
-        
+
+        encoder = nn.Sequential(
+            effnet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+
         super().__init__(
-            encoder=encoder, 
-            feature_dim=1280, 
+            encoder=encoder,
+            feature_dim=1280,
             projection_dim=projection_dim,
             freeze_backbone_layers=freeze_backbone_layers,
             dropout=dropout
@@ -2027,22 +1883,26 @@ class SiameseEfficientNetB0(BaseSiameseNetwork):
 
 class SiameseEfficientNetB1(BaseSiameseNetwork):
     """Siamese network based on EfficientNet-B1"""
-    
+
     def __init__(self, in_channels: int = 1, projection_dim: int = 512,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         effnet = models.efficientnet_b1(weights=models.EfficientNet_B1_Weights.DEFAULT)
-        
+
         # Adapt first conv with weight transfer
         if in_channels != 3:
             effnet.features[0][0] = adapt_conv_layer_for_grayscale(
                 effnet.features[0][0], in_channels
             )
-        
-        encoder = nn.Sequential(effnet.features, nn.AdaptiveAvgPool2d(1))
-        
+
+        encoder = nn.Sequential(
+            effnet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+
         super().__init__(
-            encoder=encoder, 
-            feature_dim=1280, 
+            encoder=encoder,
+            feature_dim=1280,
             projection_dim=projection_dim,
             freeze_backbone_layers=freeze_backbone_layers,
             dropout=dropout
@@ -2051,22 +1911,26 @@ class SiameseEfficientNetB1(BaseSiameseNetwork):
 
 class SiameseEfficientNetV2(BaseSiameseNetwork):
     """Siamese network based on EfficientNetV2-S"""
-    
+
     def __init__(self, in_channels: int = 1, projection_dim: int = 512,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         backbone = models.efficientnet_v2_s(weights=models.EfficientNet_V2_S_Weights.DEFAULT)
-        
+
         # Adapt first conv with weight transfer
         if in_channels != 3:
             backbone.features[0][0] = adapt_conv_layer_for_grayscale(
                 backbone.features[0][0], in_channels
             )
-        
-        encoder = nn.Sequential(backbone.features, nn.AdaptiveAvgPool2d(1))
-        
+
+        encoder = nn.Sequential(
+            backbone.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+
         super().__init__(
-            encoder=encoder, 
-            feature_dim=1280, 
+            encoder=encoder,
+            feature_dim=1280,
             projection_dim=projection_dim,
             freeze_backbone_layers=freeze_backbone_layers,
             dropout=dropout
@@ -2075,22 +1939,26 @@ class SiameseEfficientNetV2(BaseSiameseNetwork):
 
 class SiameseMobileNetV3Small(BaseSiameseNetwork):
     """Siamese network based on MobileNetV3-Small"""
-    
+
     def __init__(self, in_channels: int = 1, projection_dim: int = 512,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         mobilenet = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
-        
+
         # Adapt first conv with weight transfer
         if in_channels != 3:
             mobilenet.features[0][0] = adapt_conv_layer_for_grayscale(
                 mobilenet.features[0][0], in_channels
             )
-        
-        encoder = nn.Sequential(mobilenet.features, nn.AdaptiveAvgPool2d(1))
-        
+
+        encoder = nn.Sequential(
+            mobilenet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+
         super().__init__(
-            encoder=encoder, 
-            feature_dim=576, 
+            encoder=encoder,
+            feature_dim=576,
             projection_dim=projection_dim,
             freeze_backbone_layers=freeze_backbone_layers,
             dropout=dropout
@@ -2099,22 +1967,26 @@ class SiameseMobileNetV3Small(BaseSiameseNetwork):
 
 class SiameseMobileNetV3Large(BaseSiameseNetwork):
     """Siamese network based on MobileNetV3-Large"""
-    
+
     def __init__(self, in_channels: int = 1, projection_dim: int = 512,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         mobilenet = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT)
-        
+
         # Adapt first conv with weight transfer
         if in_channels != 3:
             mobilenet.features[0][0] = adapt_conv_layer_for_grayscale(
                 mobilenet.features[0][0], in_channels
             )
-        
-        encoder = nn.Sequential(mobilenet.features, nn.AdaptiveAvgPool2d(1))
-        
+
+        encoder = nn.Sequential(
+            mobilenet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+
         super().__init__(
-            encoder=encoder, 
-            feature_dim=960, 
+            encoder=encoder,
+            feature_dim=960,
             projection_dim=projection_dim,
             freeze_backbone_layers=freeze_backbone_layers,
             dropout=dropout
@@ -2123,22 +1995,26 @@ class SiameseMobileNetV3Large(BaseSiameseNetwork):
 
 class SiameseDenseNet121(BaseSiameseNetwork):
     """Siamese network based on DenseNet121"""
-    
+
     def __init__(self, in_channels: int = 1, projection_dim: int = 512,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         densenet = models.densenet121(weights=models.DenseNet121_Weights.DEFAULT)
-        
+
         # Adapt first conv (conv0) with weight transfer
         if in_channels != 3:
             densenet.features.conv0 = adapt_conv_layer_for_grayscale(
                 densenet.features.conv0, in_channels
             )
-        
-        encoder = nn.Sequential(densenet.features, nn.AdaptiveAvgPool2d(1))
-        
+
+        encoder = nn.Sequential(
+            densenet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+
         super().__init__(
-            encoder=encoder, 
-            feature_dim=1024, 
+            encoder=encoder,
+            feature_dim=1024,
             projection_dim=projection_dim,
             freeze_backbone_layers=freeze_backbone_layers,
             dropout=dropout
@@ -2147,247 +2023,32 @@ class SiameseDenseNet121(BaseSiameseNetwork):
 
 class SiameseRegNetY400MF(BaseSiameseNetwork):
     """Siamese network based on RegNet-Y-400MF"""
-    
+
     def __init__(self, in_channels: int = 1, projection_dim: int = 512,
                  freeze_backbone_layers: int = 2, dropout: float = 0.5):
         regnet = models.regnet_y_400mf(weights=models.RegNet_Y_400MF_Weights.DEFAULT)
-        
+
         # Adapt first conv in stem with weight transfer
         if in_channels != 3:
             regnet.stem[0] = adapt_conv_layer_for_grayscale(
                 regnet.stem[0], in_channels
             )
-        
-        encoder = nn.Sequential(*list(regnet.children())[:-1], nn.AdaptiveAvgPool2d(1))
-        
+
+        # NOTA: qui manteniamo la struttura "flat" perché RegNet non ha un
+        # blocco contenitore unico equivalente a resnet.layer1..4: i suoi
+        # children (stem, trunk_output, avgpool) sono già i blocchi giusti
+        # su cui contare/congelare i "layer". encoder[0] è regnet.stem,
+        # anch'esso un Sequential con più children, quindi compatibile con
+        # _freeze_encoder_layers.
+        encoder = nn.Sequential(
+            *list(regnet.children())[:-1],
+            nn.AdaptiveAvgPool2d(1)
+        )
+
         super().__init__(
-            encoder=encoder, 
-            feature_dim=440, 
+            encoder=encoder,
+            feature_dim=440,
             projection_dim=projection_dim,
-            freeze_backbone_layers=freeze_backbone_layers,
-            dropout=dropout
-        )
--e 
-
-===== ./src/models/old_contrastive_backbones.py =====
-
-"""
-Contrastive Network Backbones
-Implementation of various backbone architectures for contrastive learning.
-Updated with layer freezing support and increased regularization.
-"""
-
-import torch.nn as nn
-import torch.nn.functional as F
-from torchvision import models
-
-from .base import BaseContrastiveNetwork
-
-
-class ContrastiveMobileNetV3Small(BaseContrastiveNetwork):
-    """Contrastive network based on MobileNetV3-Small"""
-    
-    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
-                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
-        mobilenet = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
-        mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
-        
-        encoder = nn.Sequential(
-            mobilenet.features,
-            nn.AdaptiveAvgPool2d(1),
-            nn.Flatten()
-        )
-        
-        super().__init__(
-            encoder=encoder, 
-            feature_dim=576, 
-            embedding_dim=embedding_dim,
-            freeze_backbone_layers=freeze_backbone_layers,
-            dropout=dropout
-        )
-
-
-class ContrastiveMobileNetV3Large(BaseContrastiveNetwork):
-    """Contrastive network based on MobileNetV3-Large"""
-    
-    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
-                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
-        mobilenet = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT)
-        mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
-        
-        encoder = nn.Sequential(
-            mobilenet.features,
-            nn.AdaptiveAvgPool2d(1),
-            nn.Flatten()
-        )
-        
-        super().__init__(
-            encoder=encoder, 
-            feature_dim=960, 
-            embedding_dim=embedding_dim,
-            freeze_backbone_layers=freeze_backbone_layers,
-            dropout=dropout
-        )
-
-
-class ContrastiveResNet18(BaseContrastiveNetwork):
-    """Contrastive network based on ResNet18"""
-    
-    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
-                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
-        resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
-        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        
-        encoder = nn.Sequential(
-            nn.Sequential(
-                resnet.conv1,
-                resnet.bn1,
-                resnet.relu,
-                resnet.maxpool,
-                resnet.layer1,
-                resnet.layer2,
-                resnet.layer3,
-                resnet.layer4,
-                resnet.avgpool
-            ),
-            nn.Flatten()
-        )
-        
-        super().__init__(
-            encoder=encoder, 
-            feature_dim=512, 
-            embedding_dim=embedding_dim,
-            freeze_backbone_layers=freeze_backbone_layers,
-            dropout=dropout
-        )
-
-
-class ContrastiveResNet34(BaseContrastiveNetwork):
-    """Contrastive network based on ResNet34"""
-    
-    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
-                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
-        resnet = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
-        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        
-        encoder = nn.Sequential(
-            nn.Sequential(
-                resnet.conv1,
-                resnet.bn1,
-                resnet.relu,
-                resnet.maxpool,
-                resnet.layer1,
-                resnet.layer2,
-                resnet.layer3,
-                resnet.layer4,
-                resnet.avgpool
-            ),
-            nn.Flatten()
-        )
-        
-        super().__init__(
-            encoder=encoder, 
-            feature_dim=512, 
-            embedding_dim=embedding_dim,
-            freeze_backbone_layers=freeze_backbone_layers,
-            dropout=dropout
-        )
-
-
-class ContrastiveResNet50(BaseContrastiveNetwork):
-    """Contrastive network based on ResNet50"""
-    
-    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
-                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
-        resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        
-        encoder = nn.Sequential(
-            nn.Sequential(
-                resnet.conv1,
-                resnet.bn1,
-                resnet.relu,
-                resnet.maxpool,
-                resnet.layer1,
-                resnet.layer2,
-                resnet.layer3,
-                resnet.layer4,
-                resnet.avgpool
-            ),
-            nn.Flatten()
-        )
-        
-        super().__init__(
-            encoder=encoder, 
-            feature_dim=2048, 
-            embedding_dim=embedding_dim,
-            freeze_backbone_layers=freeze_backbone_layers,
-            dropout=dropout
-        )
-
-
-class ContrastiveEfficientNetB0(BaseContrastiveNetwork):
-    """Contrastive network based on EfficientNet-B0"""
-    
-    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
-                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
-        effnet = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.DEFAULT)
-        effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
-        
-        encoder = nn.Sequential(
-            effnet.features,
-            nn.AdaptiveAvgPool2d(1),
-            nn.Flatten()
-        )
-        
-        super().__init__(
-            encoder=encoder, 
-            feature_dim=1280, 
-            embedding_dim=embedding_dim,
-            freeze_backbone_layers=freeze_backbone_layers,
-            dropout=dropout
-        )
-
-class ContrastiveEfficientNetB1(BaseContrastiveNetwork):
-    """Contrastive network based on EfficientNet-B1"""
-    
-    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
-                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
-        effnet = models.efficientnet_b1(weights=models.EfficientNet_B1_Weights.DEFAULT)
-        effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
-        
-        encoder = nn.Sequential(
-            effnet.features,
-            nn.AdaptiveAvgPool2d(1),
-            nn.Flatten()
-        )
-        
-        super().__init__(
-            encoder=encoder, 
-            feature_dim=1280, 
-            embedding_dim=embedding_dim,
-            freeze_backbone_layers=freeze_backbone_layers,
-            dropout=dropout
-        )
-
-class ContrastiveDenseNet121(BaseContrastiveNetwork):
-    """Contrastive network based on DenseNet121"""
-    
-    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
-                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
-        densenet = models.densenet121(weights=models.DenseNet121_Weights.DEFAULT)
-        densenet.features.conv0 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        
-        encoder = nn.Sequential(
-            densenet.features,
-            nn.AdaptiveAvgPool2d(1),
-            nn.Flatten()
-        )
-        
-        super().__init__(
-            encoder=encoder, 
-            feature_dim=1024, 
-            embedding_dim=embedding_dim,
             freeze_backbone_layers=freeze_backbone_layers,
             dropout=dropout
         )-e 
@@ -3152,208 +2813,6 @@ __all__ = [
     'ContrastiveEfficientNetB1',
     'ContrastiveDenseNet121',
 ]-e 
-
-===== ./src/models/old_triplet_backbones.py =====
-
-"""
-Triplet Network Backbones
-Implementation of various backbone architectures for triplet learning.
-Updated with layer freezing support and increased regularization.
-"""
-
-import torch.nn as nn
-import torch.nn.functional as F
-from torchvision import models
-
-from .base import BaseTripletNetwork
-
-
-class TripletMobileNetV3Small(BaseTripletNetwork):
-    """Triplet network based on MobileNetV3-Small"""
-    
-    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
-                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
-        mobilenet = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
-        mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
-        
-        encoder = nn.Sequential(
-            mobilenet.features,
-            nn.AdaptiveAvgPool2d(1),
-            nn.Flatten()
-        )
-        
-        super().__init__(
-            encoder=encoder, 
-            feature_dim=576, 
-            embedding_dim=embedding_dim,
-            freeze_backbone_layers=freeze_backbone_layers,
-            dropout=dropout
-        )
-
-
-class TripletMobileNetV3Large(BaseTripletNetwork):
-    """Triplet network based on MobileNetV3-Large"""
-    
-    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
-                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
-        mobilenet = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT)
-        mobilenet.features[0][0] = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)
-        
-        encoder = nn.Sequential(
-            mobilenet.features,
-            nn.AdaptiveAvgPool2d(1),
-            nn.Flatten()
-        )
-        
-        super().__init__(
-            encoder=encoder, 
-            feature_dim=960, 
-            embedding_dim=embedding_dim,
-            freeze_backbone_layers=freeze_backbone_layers,
-            dropout=dropout
-        )
-
-
-class TripletResNet18(BaseTripletNetwork):
-    """Triplet network based on ResNet18"""
-    
-    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
-                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
-        resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
-        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        
-        encoder = nn.Sequential(
-            nn.Sequential(
-                resnet.conv1,
-                resnet.bn1,
-                resnet.relu,
-                resnet.maxpool,
-                resnet.layer1,
-                resnet.layer2,
-                resnet.layer3,
-                resnet.layer4,
-                resnet.avgpool
-            ),
-            nn.Flatten()
-        )
-        
-        super().__init__(
-            encoder=encoder, 
-            feature_dim=512, 
-            embedding_dim=embedding_dim,
-            freeze_backbone_layers=freeze_backbone_layers,
-            dropout=dropout
-        )
-
-
-class TripletResNet34(BaseTripletNetwork):
-    """Triplet network based on ResNet34"""
-    
-    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
-                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
-        resnet = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
-        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        
-        encoder = nn.Sequential(
-            nn.Sequential(
-                resnet.conv1,
-                resnet.bn1,
-                resnet.relu,
-                resnet.maxpool,
-                resnet.layer1,
-                resnet.layer2,
-                resnet.layer3,
-                resnet.layer4,
-                resnet.avgpool
-            ),
-            nn.Flatten()
-        )
-        
-        super().__init__(
-            encoder=encoder, 
-            feature_dim=512, 
-            embedding_dim=embedding_dim,
-            freeze_backbone_layers=freeze_backbone_layers,
-            dropout=dropout
-        )
-
-
-class TripletResNet50(BaseTripletNetwork):
-    """Triplet network based on ResNet50"""
-    
-    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
-                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
-        resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-        resnet.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        
-        encoder = nn.Sequential(
-            nn.Sequential(
-                resnet.conv1,
-                resnet.bn1,
-                resnet.relu,
-                resnet.maxpool,
-                resnet.layer1,
-                resnet.layer2,
-                resnet.layer3,
-                resnet.layer4,
-                resnet.avgpool
-            ),
-            nn.Flatten()
-        )
-        
-        super().__init__(
-            encoder=encoder, 
-            feature_dim=2048, 
-            embedding_dim=embedding_dim,
-            freeze_backbone_layers=freeze_backbone_layers,
-            dropout=dropout
-        )
-
-
-class TripletEfficientNetB0(BaseTripletNetwork):
-    """Triplet network based on EfficientNet-B0"""
-    
-    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
-                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
-        effnet = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.DEFAULT)
-        effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
-        
-        encoder = nn.Sequential(
-            effnet.features,
-            nn.AdaptiveAvgPool2d(1),
-            nn.Flatten()
-        )
-        
-        super().__init__(
-            encoder=encoder, 
-            feature_dim=1280, 
-            embedding_dim=embedding_dim,
-            freeze_backbone_layers=freeze_backbone_layers,
-            dropout=dropout
-        )
-
-
-class TripletEfficientNetB1(BaseTripletNetwork):
-    """Triplet network based on EfficientNet-B1"""
-    
-    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
-                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
-        effnet = models.efficientnet_b1(weights=models.EfficientNet_B1_Weights.DEFAULT)
-        effnet.features[0][0] = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1, bias=False)
-        
-        encoder = nn.Sequential(
-            effnet.features,
-            nn.AdaptiveAvgPool2d(1),
-            nn.Flatten()
-        )
-        
-        super().__init__(
-            encoder=encoder, 
-            feature_dim=1280, 
-            embedding_dim=embedding_dim,
-            freeze_backbone_layers=freeze_backbone_layers,
-            dropout=dropout
-        )-e 
 
 ===== ./src/__init__.py =====
 
@@ -4585,6 +4044,1325 @@ __all__ = [
 ]
 -e 
 
+===== ./webcam-demo/demo/webcam_demo.py =====
+
+"""
+Demo live: verifica biometrica della scrittura a mano da webcam.
+
+Due modalita' di acquisizione:
+
+  DOPPIA  (default) i due post-it stanno insieme nel frame, uno per riquadro.
+          Comoda per la demo, ma ogni post-it occupa meta' inquadratura.
+
+  SINGOLA un post-it alla volta che riempie tutto il frame: piu' pixel sul
+          tratto e messa a fuoco migliore. Si cattura A, si cambia post-it,
+          si cattura B, poi si confronta. E' la modalita' da usare se i
+          risultati in doppia non convincono.
+
+Architettura del modello:
+  Il backbone (efficientnet_b1, resnet18, mobilenet_v3_large, densenet121,
+  regnet_y_400mf, ...) viene dedotto automaticamente dal nome del file del
+  checkpoint, es. "efficientnet_b1_triplet_iam_to_iam_best.pth" ->
+  efficientnet_b1. Se il nome non e' chiaro (o si vuole forzare comunque
+  un'architettura diversa da quella dedotta), si puo' usare --arch.
+
+Tasti:
+    SPAZIO        cattura (doppia: entrambi + confronto | singola: slot libero)
+    1 / 2         cattura nello slot A / nello slot B
+    INVIO         confronta gli slot A e B
+    M             cambia modalita' (doppia <-> singola)
+    C             svuota gli slot
+    R             torna al live
+    B             cambia preprocessing (scan <-> raw)
+    D             attiva/disattiva il ritaglio automatico del post-it
+    T             cambia soglia
+    X             salva il dettaglio degli stadi di preprocessing
+    S             salva l'ultimo confronto in demo/captures/
+    Q / ESC       esci
+"""
+
+import argparse
+import os
+import time
+
+import cv2
+import numpy as np
+
+from engine import HandwritingVerifier, DEFAULT_THRESHOLDS, DEFAULT_CHECKPOINT
+
+# Usato solo per stampare a schermo l'architettura dedotta *prima* di
+# costruire il modello (HandwritingVerifier/engine.py fa comunque la sua
+# stessa deduzione internamente quando arch=None). Se il file con la
+# definizione dei backbone si chiama diversamente, aggiornare l'import qui
+# sotto di conseguenza.
+from model_defs import guess_arch, guess_net_type, BACKBONES, NET_TYPES
+from preprocess import debug_sheet, quality_stats, quality_warnings
+
+FONT = cv2.FONT_HERSHEY_SIMPLEX
+GREEN = (80, 220, 100)
+RED = (60, 60, 235)
+AMBER = (0, 190, 250)
+GREY = (170, 170, 170)
+WHITE = (255, 255, 255)
+DARK = (35, 35, 35)
+
+CAPTURES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "captures")
+
+NO_KEY = 255          # valore restituito da waitKey quando non e' stato premuto nulla
+DEBUG_KEYS = False    # True per stampare il codice di ogni tasto premuto
+
+
+def read_key(delay=20):
+    """
+    Legge un tasto dalla finestra OpenCV.
+
+    Normalizza le maiuscole: con il Caps Lock attivo (o tenendo Shift) waitKey
+    restituisce 'Q' = 81 invece di 'q' = 113, e nessuna scorciatoia a lettera
+    verrebbe riconosciuta. Il delay di 20 ms lascia alla finestra il tempo di
+    smaltire gli eventi senza rallentare il video.
+    """
+    key = cv2.waitKey(delay) & 0xFF
+    if key == NO_KEY:
+        return NO_KEY
+    if ord('A') <= key <= ord('Z'):       # maiuscola -> minuscola
+        key += 32
+    if DEBUG_KEYS:
+        print("  [tasto] codice {} = {!r}".format(
+            key, chr(key) if 32 <= key < 127 else ""))
+    return key
+
+
+def roi_boxes(w, h, mode):
+    """Riquadri di acquisizione: due affiancati in doppia, uno solo in singola."""
+    top, bottom = int(0.14 * h), int(0.93 * h)
+    if mode == "singola":
+        return [(int(0.06 * w), top, int(0.94 * w), bottom)]
+    return [(int(0.03 * w), top, int(0.48 * w), bottom),
+            (int(0.52 * w), top, int(0.97 * w), bottom)]
+
+
+PANEL_W = 190
+
+
+def draw_thumb(canvas, img_448, x, y, size, label, sublabel=None, sub_color=GREY):
+    """Miniatura di un'immagine preprocessata con etichetta."""
+    thumb = cv2.cvtColor(cv2.resize(img_448, (size, size)), cv2.COLOR_GRAY2BGR)
+    canvas[y:y + size, x:x + size] = thumb
+    cv2.rectangle(canvas, (x - 1, y - 1), (x + size, y + size), GREY, 1)
+    cv2.putText(canvas, label, (x, y - 7), FONT, 0.42, WHITE, 1, cv2.LINE_AA)
+    if sublabel:
+        cv2.putText(canvas, sublabel, (x, y + size + 14), FONT, 0.38,
+                    sub_color, 1, cv2.LINE_AA)
+
+
+def side_panel(height, preview, slots):
+    """Colonna a destra del video: cosa vede la rete adesso e cosa e' catturato."""
+    panel = np.full((height, PANEL_W, 3), (25, 25, 25), np.uint8)
+    size = PANEL_W - 32
+    x = 16
+    y = 34
+
+    if preview is not None:
+        focus, ink = quality_stats(preview)
+        warns = quality_warnings(preview)
+        draw_thumb(panel, preview, x, y, size, "anteprima live",
+                   "focus {:.0f}  inchiostro {:.1f}%".format(focus, ink),
+                   AMBER if warns else GREEN)
+    else:
+        cv2.putText(panel, "anteprima live", (x, y - 7), FONT, 0.42, GREY, 1, cv2.LINE_AA)
+        cv2.rectangle(panel, (x, y), (x + size, y + size), (60, 60, 60), 1)
+
+    y += size + 42
+    for name in ("A", "B"):
+        img = slots[name]
+        if img is not None:
+            draw_thumb(panel, img, x, y, size, "slot " + name, "catturato", GREEN)
+        else:
+            cv2.putText(panel, "slot " + name, (x, y - 7), FONT, 0.42, GREY, 1, cv2.LINE_AA)
+            cv2.rectangle(panel, (x, y), (x + size, y + size), (60, 60, 60), 1)
+            cv2.putText(panel, "vuoto", (x, y + size + 14), FONT, 0.38,
+                        (110, 110, 110), 1, cv2.LINE_AA)
+        y += size + 42
+
+    return panel
+
+
+def draw_live_overlay(frame, boxes, verifier, thr_key, acq_mode, slots, preview):
+    out = frame.copy()
+    h, w = out.shape[:2]
+
+    labels = ("INQUADRA QUI",) if acq_mode == "singola" else ("SCRITTURA A", "SCRITTURA B")
+    for (x1, y1, x2, y2), label in zip(boxes, labels):
+        cv2.rectangle(out, (x1, y1), (x2, y2), GREY, 2)
+        cv2.putText(out, label, (x1 + 8, y1 - 12), FONT, 0.6, DARK, 4, cv2.LINE_AA)
+        cv2.putText(out, label, (x1 + 8, y1 - 12), FONT, 0.6, WHITE, 1, cv2.LINE_AA)
+
+    band = int(0.09 * h)
+    out[0:band, :] = cv2.addWeighted(out[0:band, :], 0.35,
+                                     np.zeros((band, w, 3), np.uint8), 0.65, 0)
+    cv2.putText(out, "SPAZIO = cattura   1/2 = slot A/B   INVIO = confronta   "
+                     "M = modalita'   X = debug   Q = esci",
+                (14, int(0.055 * h)), FONT, 0.52, WHITE, 1, cv2.LINE_AA)
+
+    status = "modalita': {} | slot: A={} B={} | preproc: {} | auto-crop: {} | soglia: {} ({:.3f})".format(
+        acq_mode,
+        "ok" if slots["A"] is not None else "-",
+        "ok" if slots["B"] is not None else "-",
+        verifier.mode, "on" if verifier.detect else "off",
+        thr_key, verifier.thresholds[thr_key])
+    cv2.putText(out, status, (14, h - 12), FONT, 0.52, WHITE, 1, cv2.LINE_AA)
+
+    return np.hstack([out, side_panel(h, preview, slots)])
+
+
+def score_bar(width, score, threshold, ok):
+    """Barra della cosine similarity da -1 a 1 con il marker della soglia."""
+    bar = np.full((70, width, 3), DARK, np.uint8)
+    pad = 30
+    inner = width - 2 * pad
+
+    def to_x(value):
+        return int(pad + (value + 1.0) / 2.0 * inner)
+
+    cv2.rectangle(bar, (pad, 26), (pad + inner, 44), (70, 70, 70), -1)
+    x_score = max(pad, min(to_x(score), pad + inner))
+    cv2.rectangle(bar, (pad, 26), (x_score, 44), GREEN if ok else RED, -1)
+
+    tx = to_x(threshold)
+    cv2.line(bar, (tx, 18), (tx, 52), AMBER, 2)
+    cv2.putText(bar, "soglia", (tx - 22, 14), FONT, 0.4, AMBER, 1, cv2.LINE_AA)
+    cv2.putText(bar, "-1", (6, 42), FONT, 0.45, GREY, 1, cv2.LINE_AA)
+    cv2.putText(bar, "+1", (width - 24, 42), FONT, 0.45, GREY, 1, cv2.LINE_AA)
+    cv2.putText(bar, "cos = {:+.4f}".format(score), (pad, 66), FONT, 0.5, WHITE, 1, cv2.LINE_AA)
+    return bar
+
+
+def build_result_view(prep_a, prep_b, result, mode, thr_key, width=1000):
+    """Schermata di esito: le due immagini che vede la rete + verdetto."""
+    tile = 330
+    a = cv2.cvtColor(cv2.resize(prep_a, (tile, tile)), cv2.COLOR_GRAY2BGR)
+    b = cv2.cvtColor(cv2.resize(prep_b, (tile, tile)), cv2.COLOR_GRAY2BGR)
+
+    ok = result["same_writer"]
+    color = GREEN if ok else RED
+
+    canvas = np.full((tile + 240, width, 3), DARK, np.uint8)
+
+    gap = (width - 2 * tile) // 3
+    for img, prep, x, label in ((a, prep_a, gap, "A"), (b, prep_b, 2 * gap + tile, "B")):
+        canvas[95:95 + tile, x:x + tile] = img
+        cv2.rectangle(canvas, (x - 2, 93), (x + tile + 2, 95 + tile + 2), GREY, 1)
+        focus, ink = quality_stats(prep)
+        cv2.putText(canvas, "{}   focus {:.0f} | inchiostro {:.1f}%".format(label, focus, ink),
+                    (x + 4, 88), FONT, 0.5, GREY, 1, cv2.LINE_AA)
+
+    verdict = "CALLIGRAFIA UGUALE" if ok else "CALLIGRAFIE DIVERSE"
+    cv2.rectangle(canvas, (0, 0), (width, 62), color, -1)
+    cv2.putText(canvas, verdict, (24, 44), FONT, 1.2, (20, 20, 20), 3, cv2.LINE_AA)
+    cv2.putText(canvas, "margine dalla soglia: {:+.4f}".format(result["margin"]),
+                (width - 340, 40), FONT, 0.6, (20, 20, 20), 2, cv2.LINE_AA)
+
+    canvas[tile + 105:tile + 175, :] = score_bar(width, result["score"],
+                                                 result["threshold"], ok)
+
+    warns = []
+    for label, prep in (("A", prep_a), ("B", prep_b)):
+        for wmsg in quality_warnings(prep):
+            warns.append("{}: {}".format(label, wmsg))
+    if warns:
+        cv2.putText(canvas, "qualita' scarsa -> " + "   ".join(warns),
+                    (30, tile + 196), FONT, 0.5, AMBER, 1, cv2.LINE_AA)
+
+    cv2.putText(canvas, "preproc: {}   soglia {} = {:.4f}   |   "
+                        "R = live, X = debug, S = salva, Q = esci".format(
+                            mode, thr_key, result["threshold"]),
+                (30, tile + 224), FONT, 0.5, GREY, 1, cv2.LINE_AA)
+    return canvas
+
+
+def capture(verifier, frame, box, name):
+    """Preprocessa una ROI e stampa gli avvisi di qualita'."""
+    x1, y1, x2, y2 = box
+    out, stages = verifier.prepare(frame[y1:y2, x1:x2])
+    if out is None:
+        print("  [{}] nessuna scrittura leggibile.".format(name))
+        return None, None
+    if not stages.get("found_text", True):
+        print("  [{}] testo non rilevato, uso tutto il riquadro.".format(name))
+    for wmsg in quality_warnings(out):
+        print("  [{}] attenzione: {}".format(name, wmsg))
+    return out, stages
+
+
+def announce_architecture(checkpoint_path, forced_arch, forced_net_type):
+    """
+    Stampa a schermo, prima ancora di costruire il modello, quale backbone e
+    quale tipologia (triplet/contrastive/siamese) verranno usati: quelli
+    forzati da riga di comando, oppure quelli dedotti dal nome del file del
+    checkpoint. E' solo informativo: il caricamento vero e proprio (con
+    eventuale fallback su tutte le combinazioni) avviene dentro
+    HandwritingVerifier / model_defs.load_model.
+    """
+    name = os.path.basename(checkpoint_path)
+
+    if forced_net_type is not None:
+        print("Tipologia forzata da riga di comando: {}".format(forced_net_type))
+    else:
+        guess_t = guess_net_type(checkpoint_path)
+        if guess_t is not None:
+            print("Tipologia dedotta dal nome del checkpoint '{}': {}".format(name, guess_t))
+        else:
+            print("Impossibile dedurre la tipologia dal nome '{}'; "
+                  "verranno provate triplet/contrastive/siamese.".format(name))
+
+    if forced_arch is not None:
+        print("Backbone forzato da riga di comando: {}".format(forced_arch))
+    else:
+        guess_a = guess_arch(checkpoint_path)
+        if guess_a is not None:
+            print("Backbone dedotto dal nome del checkpoint '{}': {}".format(name, guess_a))
+        else:
+            print("Impossibile dedurre il backbone dal nome '{}'; "
+                  "verranno provati tutti.".format(name))
+
+    if forced_net_type == "siamese" or (forced_net_type is None and guess_net_type(checkpoint_path) == "siamese"):
+        print("ATTENZIONE: checkpoint 'siamese' rilevato/forzato. Questa demo confronta "
+              "embedding via cosine similarity, ma la rete siamese e' stata addestrata "
+              "come classificatore su coppie. Il confronto potrebbe non essere accurato "
+              "a meno che engine.py non usi SiameseNetwork.predict_pair() invece della "
+              "cosine similarity per questa tipologia.")
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--camera", type=int, default=1)
+    ap.add_argument("--checkpoint", default=DEFAULT_CHECKPOINT)
+    ap.add_argument("--width", type=int, default=1280)
+    ap.add_argument("--height", type=int, default=720)
+    ap.add_argument("--mode", choices=["scan", "raw"], default="scan")
+    ap.add_argument("--threshold", choices=list(DEFAULT_THRESHOLDS), default="eer")
+    ap.add_argument("--threshold-value", type=float,
+                    help="soglia numerica personalizzata (da calibrate.py)")
+    ap.add_argument("--acquisition", choices=["doppia", "singola"], default="doppia")
+    ap.add_argument("--arch", choices=sorted(BACKBONES), default=None,
+                    help="forza il backbone invece di dedurlo dal nome del "
+                    "checkpoint (es. 'efficientnet_b1_triplet_iam_to_iam_best.pth' "
+                    "-> efficientnet_b1 automaticamente). Disponibili: {}".format(
+                        ", ".join(sorted(BACKBONES))))
+    ap.add_argument("--net-type", choices=NET_TYPES, default=None,
+                    help="forza la tipologia di rete (triplet, contrastive, "
+                    "siamese) invece di dedurla dal nome del checkpoint "
+                    "(es. '..._contrastive_...' -> contrastive automaticamente). "
+                    "NOTA: se il tuo engine.py non conosce ancora questo "
+                    "parametro, va aggiornato per passarlo a model_defs.load_model.")
+    ap.add_argument("--no-detect", action="store_true")
+    ap.add_argument("--mirror", action="store_true",
+                    help="specchia l'anteprima (comodo con webcam frontali)")
+    ap.add_argument("--debug-keys", action="store_true",
+                    help="stampa il codice di ogni tasto premuto")
+    args = ap.parse_args()
+
+    global DEBUG_KEYS
+    DEBUG_KEYS = args.debug_keys
+
+    announce_architecture(args.checkpoint, args.arch, args.net_type)
+
+    print("Carico il modello...")
+    verifier = HandwritingVerifier(args.checkpoint, mode=args.mode,
+                                   detect=not args.no_detect, arch=args.arch)
+    print("Modello pronto su {} -> {}".format(verifier.device, verifier.describe()))
+
+    thr_key = args.threshold
+    if args.threshold_value is not None:
+        verifier.thresholds["custom"] = args.threshold_value
+        thr_key = "custom"
+        print("Soglia personalizzata: {:.4f}".format(args.threshold_value))
+
+    cap = cv2.VideoCapture(args.camera, cv2.CAP_DSHOW if os.name == "nt" else cv2.CAP_ANY)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
+    if not cap.isOpened():
+        raise SystemExit("Webcam {} non disponibile (prova --camera 0)".format(args.camera))
+
+    win = "HandVerify - demo webcam"
+    cv2.namedWindow(win, cv2.WINDOW_NORMAL)
+
+    acq_mode = args.acquisition
+    slots = {"A": None, "B": None}
+    stages_cache = {"A": None, "B": None}
+    result_view = None
+    last = None
+    preview = None
+    frame_idx = 0
+
+    def compare():
+        if slots["A"] is None or slots["B"] is None:
+            print("  Servono entrambi gli slot: cattura con 1 e 2 (o SPAZIO).")
+            return None, None
+        t0 = time.time()
+        res = verifier.verify(slots["A"], slots["B"], thr_key)
+        print("  cos={:+.4f}  soglia={:.4f}  -> {}  ({:.0f} ms)".format(
+            res["score"], res["threshold"],
+            "STESSA PERSONA" if res["same_writer"] else "PERSONE DIVERSE",
+            (time.time() - t0) * 1000))
+        return res, build_result_view(slots["A"], slots["B"], res, verifier.mode, thr_key)
+
+    while True:
+        ok, frame = cap.read()
+        if not ok:
+            print("Frame non letto dalla webcam.")
+            break
+        if args.mirror:
+            frame = cv2.flip(frame, 1)
+
+        h, w = frame.shape[:2]
+        boxes = roi_boxes(w, h, acq_mode)
+        frame_idx += 1
+
+        if result_view is None:
+            # anteprima aggiornata ogni 4 frame per non rallentare il video
+            if frame_idx % 4 == 0:
+                x1, y1, x2, y2 = boxes[0]
+                out, _ = verifier.prepare(frame[y1:y2, x1:x2])
+                preview = out if out is not None else preview
+            cv2.imshow(win, draw_live_overlay(frame, boxes, verifier, thr_key,
+                                              acq_mode, slots, preview))
+        else:
+            cv2.imshow(win, result_view)
+
+        # chiusura con la X della finestra: senza questo controllo il loop
+        # continuerebbe a riaprirla a ogni imshow
+        if cv2.getWindowProperty(win, cv2.WND_PROP_VISIBLE) < 1:
+            break
+
+        key = read_key()
+
+        if key in (ord('q'), 27):
+            break
+
+        elif key == 32:  # spazio
+            if acq_mode == "doppia":
+                got = []
+                for box, name in zip(boxes, ("A", "B")):
+                    out, st = capture(verifier, frame, box, name)
+                    if out is None:
+                        got = []
+                        break
+                    got.append((name, out, st))
+                for name, out, st in got:
+                    slots[name], stages_cache[name] = out, st
+                if got:
+                    res, result_view = compare()
+                    if res is not None:
+                        last = (frame.copy(), slots["A"], slots["B"], res)
+            else:
+                target = "A" if slots["A"] is None else "B"
+                out, st = capture(verifier, frame, boxes[0], target)
+                if out is not None:
+                    slots[target], stages_cache[target] = out, st
+                    print("  slot {} catturato.".format(target))
+                    if slots["A"] is not None and slots["B"] is not None:
+                        res, result_view = compare()
+                        if res is not None:
+                            last = (frame.copy(), slots["A"], slots["B"], res)
+
+        elif key in (ord('1'), ord('2')):
+            target = "A" if key == ord('1') else "B"
+            box = boxes[0] if acq_mode == "singola" else boxes[0 if target == "A" else 1]
+            out, st = capture(verifier, frame, box, target)
+            if out is not None:
+                slots[target], stages_cache[target] = out, st
+                print("  slot {} catturato.".format(target))
+
+        elif key in (13, 10):  # invio
+            res, view = compare()
+            if res is not None:
+                result_view = view
+                last = (frame.copy(), slots["A"], slots["B"], res)
+
+        elif key == ord('m'):
+            acq_mode = "singola" if acq_mode == "doppia" else "doppia"
+            print("  modalita' di acquisizione: {}".format(acq_mode))
+            result_view = None
+
+        elif key == ord('c'):
+            slots["A"] = slots["B"] = None
+            stages_cache["A"] = stages_cache["B"] = None
+            result_view = None
+            print("  slot svuotati.")
+
+        elif key == ord('r'):
+            result_view = None
+
+        elif key == ord('b'):
+            verifier.mode = "raw" if verifier.mode == "scan" else "scan"
+            print("  preprocessing: {}".format(verifier.mode))
+            result_view = None
+
+        elif key == ord('d'):
+            verifier.detect = not verifier.detect
+            print("  auto-crop post-it: {}".format("on" if verifier.detect else "off"))
+            result_view = None
+
+        elif key == ord('t'):
+            keys = list(verifier.thresholds)
+            thr_key = keys[(keys.index(thr_key) + 1) % len(keys)]
+            print("  soglia: {} = {:.4f}".format(thr_key, verifier.thresholds[thr_key]))
+            if slots["A"] is not None and slots["B"] is not None:
+                res, result_view = compare()
+                if res is not None:
+                    last = (last[0] if last else frame.copy(), slots["A"], slots["B"], res)
+
+        elif key == ord('x'):
+            os.makedirs(CAPTURES_DIR, exist_ok=True)
+            stamp = time.strftime("%Y%m%d_%H%M%S")
+            saved = False
+            for name in ("A", "B"):
+                if stages_cache[name] is None:
+                    continue
+                sheet = debug_sheet(stages_cache[name])
+                if sheet is not None:
+                    path = os.path.join(CAPTURES_DIR, "{}_debug_{}.png".format(stamp, name))
+                    cv2.imwrite(path, sheet)
+                    print("  stadi di preprocessing salvati: {}".format(path))
+                    saved = True
+            if not saved:
+                print("  niente da salvare: cattura prima con 1 / 2 / SPAZIO.")
+
+        elif key == ord('s') and last is not None:
+            os.makedirs(CAPTURES_DIR, exist_ok=True)
+            stamp = time.strftime("%Y%m%d_%H%M%S")
+            frame_img, pa, pb, res = last
+            cv2.imwrite(os.path.join(CAPTURES_DIR, stamp + "_frame.png"), frame_img)
+            cv2.imwrite(os.path.join(CAPTURES_DIR, stamp + "_A.png"), pa)
+            cv2.imwrite(os.path.join(CAPTURES_DIR, stamp + "_B.png"), pb)
+            if result_view is not None:
+                cv2.imwrite(os.path.join(CAPTURES_DIR, stamp + "_result.png"), result_view)
+            log_path = os.path.join(CAPTURES_DIR, "log.csv")
+            new_file = not os.path.exists(log_path)
+            with open(log_path, "a", encoding="utf-8") as f:
+                if new_file:
+                    f.write("timestamp,score,threshold,same_writer,mode,detect,acquisition\n")
+                f.write("{},{:.6f},{:.6f},{},{},{},{}\n".format(
+                    stamp, res["score"], res["threshold"],
+                    int(res["same_writer"]), verifier.mode,
+                    int(verifier.detect), acq_mode))
+            print("  salvato in {} ({})".format(CAPTURES_DIR, stamp))
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+
+if __name__ == "__main__":
+    main()-e 
+
+===== ./webcam-demo/demo/preprocess.py =====
+
+"""
+Preprocessing delle immagini da webcam, allineato alla pipeline usata per IAM
+(notebooks/Datasets Preprocessing.ipynb del repo HandVerify):
+
+    grayscale -> binarizzazione Otsu -> tight crop sul testo ->
+    padding a quadrato su sfondo bianco -> resize 448x448 -> ToTensor [0,1]
+
+In piu', rispetto al dataset (scansioni pulite), qui serve compensare la
+webcam: rimozione dell'ombreggiatura, sbiancamento dello sfondo e ritaglio
+automatico del post-it dentro la ROI.
+"""
+
+import cv2
+import numpy as np
+import torch
+
+TARGET_SIZE = 448
+
+
+# ----------------------------------------------------------------------------
+# funzioni prese dalla pipeline IAM originale
+# ----------------------------------------------------------------------------
+def compute_tight_crop_coords(binary_image, padding=5, min_pixel_ratio=0.02):
+    """Coordinate di crop aggressive attorno al testo: (y1, y2, x1, x2)."""
+    binary_inv = 255 - binary_image
+    h, w = binary_image.shape
+
+    min_row_threshold = max(10, int(w * min_pixel_ratio))
+    min_col_threshold = max(10, int(h * min_pixel_ratio))
+
+    row_sums = np.sum(binary_inv > 0, axis=1)
+    col_sums = np.sum(binary_inv > 0, axis=0)
+
+    text_rows = np.where(row_sums > min_row_threshold)[0]
+    text_cols = np.where(col_sums > min_col_threshold)[0]
+
+    if len(text_rows) == 0 or len(text_cols) == 0:
+        return None
+
+    y1, y2 = text_rows[0], text_rows[-1]
+    x1, x2 = text_cols[0], text_cols[-1]
+
+    extra_trim = 3
+    y1 = min(y1 + extra_trim, y2 - 1)
+    y2 = max(y2 - extra_trim, y1 + 1)
+
+    y1 = max(0, y1 - padding)
+    y2 = min(h, y2 + padding)
+    x1 = max(0, x1 - padding)
+    x2 = min(w, x2 + padding)
+
+    return (y1, y2, x1, x2)
+
+
+def resize_to_square(image, size=TARGET_SIZE):
+    """Resize mantenendo l'aspect ratio dentro un canvas quadrato bianco."""
+    h, w = image.shape
+    side = max(h, w)
+
+    square = np.full((side, side), 255, dtype=np.uint8)
+    y_off, x_off = (side - h) // 2, (side - w) // 2
+    square[y_off:y_off + h, x_off:x_off + w] = image
+
+    return cv2.resize(square, (size, size), interpolation=cv2.INTER_AREA)
+
+
+# ----------------------------------------------------------------------------
+# adattamenti per la webcam
+# ----------------------------------------------------------------------------
+def remove_shading(gray, ksize=51):
+    """
+    Divide per lo sfondo stimato: toglie ombre e gradienti di luce.
+    Lo sfondo viene stimato su un'immagine ridotta a 1/4 (il median blur su
+    kernel grandi e' costoso) e poi riportato alla dimensione originale.
+    """
+    small = cv2.resize(gray, None, fx=0.25, fy=0.25, interpolation=cv2.INTER_AREA)
+    k = max(3, int(ksize * 0.25) | 1)
+    background = cv2.medianBlur(small, k)
+    background = cv2.resize(background, (gray.shape[1], gray.shape[0]),
+                            interpolation=cv2.INTER_LINEAR)
+    background = np.maximum(background, 1).astype(np.float32)
+    normalized = (gray.astype(np.float32) / background) * 220.0
+    return np.clip(normalized, 0, 255).astype(np.uint8)
+
+
+def detect_note(gray, min_area_ratio=0.05, inset=0.04):
+    """
+    Trova il post-it (regione chiara piu' grande) dentro la ROI.
+    Ritorna (y1, y2, x1, x2) oppure None se non trova nulla di sensato.
+    """
+    h, w = gray.shape
+    blurred = cv2.GaussianBlur(gray, (9, 9), 0)
+    _, bright = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+    kernel = np.ones((15, 15), np.uint8)
+    bright = cv2.morphologyEx(bright, cv2.MORPH_CLOSE, kernel)
+    bright = cv2.morphologyEx(bright, cv2.MORPH_OPEN, kernel)
+
+    contours, _ = cv2.findContours(bright, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return None
+
+    c = max(contours, key=cv2.contourArea)
+    if cv2.contourArea(c) < min_area_ratio * h * w:
+        return None
+
+    x, y, cw, ch = cv2.boundingRect(c)
+    if cw < 0.15 * w or ch < 0.15 * h:
+        return None
+
+    # rientra un po' per togliere bordo e ombra del post-it
+    dx, dy = int(cw * inset), int(ch * inset)
+    return (y + dy, y + ch - dy, x + dx, x + cw - dx)
+
+
+def whiten_background(gray, binary):
+    """Porta a bianco puro tutto cio' che Otsu considera sfondo (carta colorata,
+    texture del post-it), lasciando i tratti d'inchiostro in grayscale."""
+    out = gray.copy()
+    out[binary == 255] = 255
+    return out
+
+
+def preprocess_roi(roi_bgr, mode="scan", detect=True, return_stages=False):
+    """
+    Da ritaglio della webcam (BGR) a immagine 448x448 in stile IAM.
+
+    mode:
+        "scan" -> rimozione ombre + sfondo sbiancato (consigliato con la webcam)
+        "raw"  -> solo grayscale, come una scansione gia' pulita
+    detect:
+        True -> cerca il post-it dentro la ROI prima del crop sul testo
+
+    Ritorna l'immagine uint8 448x448 (None se non trova testo), oppure
+    (immagine, dict_di_stage) se return_stages=True.
+    """
+    stages = {}
+    gray = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2GRAY) if roi_bgr.ndim == 3 else roi_bgr.copy()
+    stages["gray"] = gray
+
+    if detect:
+        box = detect_note(gray)
+        if box is not None:
+            y1, y2, x1, x2 = box
+            gray = gray[y1:y2, x1:x2]
+    stages["note"] = gray
+
+    work = remove_shading(gray) if mode == "scan" else gray
+
+    # se l'inchiostro risultasse piu' chiaro della carta (foto in negativo,
+    # lavagna scura...) si inverte, il modello si aspetta nero su bianco
+    if np.median(work) < 110:
+        work = 255 - work
+
+    _, binary = cv2.threshold(work, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    stages["binary"] = binary
+
+    cleaned = whiten_background(work, binary) if mode == "scan" else work
+
+    coords = compute_tight_crop_coords(binary, padding=5, min_pixel_ratio=0.02)
+    if coords is None:
+        # nessun testo trovato: si usa tutta la ROI invece di fallire
+        cropped = cleaned
+    else:
+        y1, y2, x1, x2 = coords
+        cropped = cleaned[y1:y2, x1:x2]
+
+    if cropped.size == 0:
+        return (None, stages) if return_stages else None
+
+    final = resize_to_square(cropped, TARGET_SIZE)
+    stages["final"] = final
+    stages["found_text"] = coords is not None
+
+    return (final, stages) if return_stages else final
+
+
+def to_tensor(img_448):
+    """448x448 uint8 -> tensore (1, 1, 448, 448) in [0, 1], come ToTensor()."""
+    t = torch.from_numpy(img_448.astype(np.float32) / 255.0)
+    return t.unsqueeze(0).unsqueeze(0)
+
+
+# ----------------------------------------------------------------------------
+# diagnostica
+# ----------------------------------------------------------------------------
+def quality_stats(img_448):
+    """
+    Due indicatori per capire se l'acquisizione e' buona:
+      focus = varianza del laplaciano (bassa = immagine sfocata)
+      ink   = percentuale di pixel scuri (poco inchiostro = troppo poco testo)
+    """
+    focus = float(cv2.Laplacian(img_448, cv2.CV_64F).var())
+    ink = float((img_448 < 128).mean() * 100.0)
+    return focus, ink
+
+
+def quality_warnings(img_448, focus_min=150.0, ink_min=2.5, ink_max=25.0):
+    """Lista di problemi rilevati sull'immagine preprocessata (vuota = ok)."""
+    focus, ink = quality_stats(img_448)
+    warns = []
+    if focus < focus_min:
+        warns.append("sfocata (focus {:.0f})".format(focus))
+    if ink < ink_min:
+        warns.append("poco testo ({:.1f}% inchiostro)".format(ink))
+    elif ink > ink_max:
+        warns.append("troppo scura ({:.1f}% inchiostro)".format(ink))
+    return warns
+
+
+def debug_sheet(stages, height=260):
+    """Composito con gli stadi del preprocessing, per capire dove sbaglia."""
+    order = [("gray", "1. grayscale"), ("note", "2. post-it"),
+             ("binary", "3. Otsu"), ("final", "4. 448x448")]
+    tiles = []
+    for key, label in order:
+        img = stages.get(key)
+        if img is None:
+            continue
+        scale = height / img.shape[0]
+        tile = cv2.resize(img, (max(1, int(img.shape[1] * scale)), height))
+        tile = cv2.cvtColor(tile, cv2.COLOR_GRAY2BGR)
+        tile = cv2.copyMakeBorder(tile, 26, 6, 4, 4, cv2.BORDER_CONSTANT, value=(35, 35, 35))
+        cv2.putText(tile, label, (8, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.45,
+                    (255, 255, 255), 1, cv2.LINE_AA)
+        tiles.append(tile)
+
+    if not tiles:
+        return None
+    return np.hstack(tiles)
+-e 
+
+===== ./webcam-demo/demo/model_defs.py =====
+
+"""
+Definizione stand-alone delle reti di HandVerify.
+
+Replica esattamente `src/models/base.py` (BaseTripletNetwork,
+BaseContrastiveNetwork, BaseSiameseNetwork) + i vari `*_backbones.py` del
+repo lorenzo-arcioni/HandVerify, ma senza scaricare i pesi ImageNet (qui
+arrivano tutti dal checkpoint .pth) e senza dipendenze dal repo.
+
+Backbone supportati (stessa lista per tutte e tre le tipologie):
+    efficientnet_b0, efficientnet_b1, efficientnet_v2_s,
+    resnet18, resnet34, resnet50,
+    mobilenet_v3_small, mobilenet_v3_large,
+    densenet121,
+    regnet_y_400mf
+
+Tipologie supportate: triplet, contrastive, siamese.
+
+Sia il backbone che la tipologia vengono dedotti dal nome del file del
+checkpoint (convenzione del repo: "<backbone>_<tipologia>_<da>_to_<a>_..pth",
+es. "efficientnet_b1_triplet_iam_to_iam_best.pth" o
+"resnet18_contrastive_rimes_to_iam_best.pth"). Se il nome non aiuta, si
+prova ogni combinazione finche' lo state_dict combacia esattamente. Si
+puo' sempre forzare con arch=... e/o net_type=...
+
+IMPORTANTE sulla rete Siamese: a differenza di Triplet e Contrastive, non
+e' pensata per il confronto via cosine similarity tra due embedding. Il
+repo la addestra come classificatore binario su coppie: incapsula le due
+immagini nello stesso encoder, concatena le feature e le passa in un MLP
+con uscita Sigmoid che stima direttamente P(stesso scrivente). Per un
+confronto "fedele" con un checkpoint siamese va usato
+`SiameseNetwork.predict_pair(imgA, imgB)`, non `get_embedding` + cosine
+similarity (che qui e' comunque offerto come fallback/approssimazione,
+vedi il metodo `get_embedding`, ma non e' il modo in cui la rete e' stata
+addestrata).
+"""
+
+import os
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torchvision import models
+
+EMBEDDING_DIM = 32
+PROJECTION_DIM = 512
+
+# nome -> (costruttore torchvision, dimensione delle feature in uscita)
+BACKBONES = {
+    "efficientnet_b0":    (models.efficientnet_b0, 1280),
+    "efficientnet_b1":    (models.efficientnet_b1, 1280),
+    "efficientnet_v2_s":  (models.efficientnet_v2_s, 1280),
+    "resnet18":           (models.resnet18, 512),
+    "resnet34":           (models.resnet34, 512),
+    "resnet50":           (models.resnet50, 2048),
+    "mobilenet_v3_small": (models.mobilenet_v3_small, 576),
+    "mobilenet_v3_large": (models.mobilenet_v3_large, 960),
+    "densenet121":        (models.densenet121, 1024),
+    "regnet_y_400mf":     (models.regnet_y_400mf, 440),
+}
+
+NET_TYPES = ("triplet", "contrastive", "siamese")
+
+_RESNET_PREFIX = "resnet"
+_DENSENET_PREFIX = "densenet"
+_REGNET_PREFIX = "regnet"
+# tutto il resto (efficientnet*, mobilenet*) condivide lo schema features[0][0]
+
+
+# --------------------------------------------------------------------------
+# Encoder (condiviso dalle tre tipologie)
+# --------------------------------------------------------------------------
+
+def _to_grayscale(conv: nn.Conv2d, in_channels: int) -> nn.Conv2d:
+    """Ricrea il conv con in_channels diversi (nessun weights=None da trasferire)."""
+    if conv.in_channels == in_channels:
+        return conv
+    return nn.Conv2d(in_channels, conv.out_channels,
+                     kernel_size=conv.kernel_size, stride=conv.stride,
+                     padding=conv.padding, dilation=conv.dilation,
+                     groups=conv.groups, bias=conv.bias is not None,
+                     padding_mode=conv.padding_mode)
+
+
+def _build_encoder(arch: str, in_channels: int) -> nn.Sequential:
+    """Costruisce l'encoder con la stessa struttura del repo (chiavi identiche)."""
+    ctor, _ = BACKBONES[arch]
+    net = ctor(weights=None)
+
+    if arch.startswith(_RESNET_PREFIX):
+        net.conv1 = _to_grayscale(net.conv1, in_channels)
+        return nn.Sequential(
+            nn.Sequential(
+                net.conv1, net.bn1, net.relu, net.maxpool,
+                net.layer1, net.layer2, net.layer3, net.layer4,
+                net.avgpool
+            ),
+            nn.Flatten()
+        )
+
+    if arch.startswith(_DENSENET_PREFIX):
+        net.features.conv0 = _to_grayscale(net.features.conv0, in_channels)
+        return nn.Sequential(
+            net.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+
+    if arch.startswith(_REGNET_PREFIX):
+        net.stem[0] = _to_grayscale(net.stem[0], in_channels)
+        return nn.Sequential(
+            *list(net.children())[:-1],   # scarta il classifier (fc)
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+
+    # efficientnet* e mobilenet* condividono la stessa forma
+    net.features[0][0] = _to_grayscale(net.features[0][0], in_channels)
+    return nn.Sequential(net.features, nn.AdaptiveAvgPool2d(1), nn.Flatten())
+
+
+class _FreezeMixin:
+    """
+    Replica _freeze_encoder_layers del repo. Non influisce sui pesi salvati
+    (requires_grad non e' nello state_dict), quindi per il solo caricamento
+    di un checkpoint in inferenza e' innocuo lasciare freeze_backbone_layers=0
+    (default) e non chiamarlo mai.
+    """
+
+    def _freeze_encoder_layers(self, num_layers: int):
+        frozen_count = 0
+        for child in self.encoder[0].children():
+            if frozen_count < num_layers:
+                for param in child.parameters():
+                    param.requires_grad = False
+                frozen_count += 1
+            else:
+                break
+        frozen_params = sum(p.numel() for p in self.encoder[0].parameters() if not p.requires_grad)
+        total_params = sum(p.numel() for p in self.encoder[0].parameters())
+        print("Total encoder layers:", len(self.encoder[0]))
+        print("  frozen {} encoder layers".format(frozen_count))
+        print("  frozen parameters: {:,} / {:,} ({:.1f}%)".format(
+            frozen_params, total_params,
+            100 * frozen_params / total_params if total_params else 0))
+
+
+# --------------------------------------------------------------------------
+# Triplet
+# --------------------------------------------------------------------------
+
+class TripletNetwork(nn.Module, _FreezeMixin):
+    """Encoder condiviso + testa 'fc', output L2-normalizzato a 128-D."""
+
+    def __init__(self, arch: str = "efficientnet_b1", in_channels: int = 1,
+                 embedding_dim: int = EMBEDDING_DIM,
+                 freeze_backbone_layers: int = 0, dropout: float = 0.5):
+        super().__init__()
+        _require_arch(arch)
+        self.arch = arch
+        self.net_type = "triplet"
+        self.encoder = _build_encoder(arch, in_channels)
+        self.feature_dim = BACKBONES[arch][1]
+        self.embedding_dim = embedding_dim
+        if freeze_backbone_layers > 0:
+            self._freeze_encoder_layers(freeze_backbone_layers)
+        self.fc = _build_mlp_head(self.feature_dim, embedding_dim, dropout)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.encoder(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+        return F.normalize(x, p=2, dim=1)
+
+    get_embedding = forward
+
+
+# --------------------------------------------------------------------------
+# Contrastive
+# --------------------------------------------------------------------------
+
+class ContrastiveNetwork(nn.Module, _FreezeMixin):
+    """Encoder condiviso + testa 'projection' (NON 'fc'!), output L2-normalizzato."""
+
+    def __init__(self, arch: str = "efficientnet_b1", in_channels: int = 1,
+                 embedding_dim: int = EMBEDDING_DIM,
+                 freeze_backbone_layers: int = 0, dropout: float = 0.5):
+        super().__init__()
+        _require_arch(arch)
+        self.arch = arch
+        self.net_type = "contrastive"
+        self.encoder = _build_encoder(arch, in_channels)
+        self.feature_dim = BACKBONES[arch][1]
+        self.embedding_dim = embedding_dim
+        if freeze_backbone_layers > 0:
+            self._freeze_encoder_layers(freeze_backbone_layers)
+        self.projection = _build_mlp_head(self.feature_dim, embedding_dim, dropout)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        features = self.encoder(x)
+        features = features.view(features.size(0), -1)
+        embedding = self.projection(features)
+        return F.normalize(embedding, p=2, dim=1)
+
+    def get_embedding(self, x: torch.Tensor) -> torch.Tensor:
+        return self.forward(x)
+
+
+def _build_mlp_head(feature_dim: int, embedding_dim: int, dropout: float) -> nn.Sequential:
+    """Testa condivisa da Triplet e Contrastive (stessa forma, nomi di attributo diversi)."""
+    hidden1, hidden2, hidden3 = 1024, 512, 256
+    return nn.Sequential(
+        nn.Linear(feature_dim, hidden1),
+        nn.BatchNorm1d(hidden1),
+        nn.ReLU(inplace=True),
+        nn.Dropout(dropout),
+
+        nn.Linear(hidden1, hidden2),
+        nn.BatchNorm1d(hidden2),
+        nn.ReLU(inplace=True),
+        nn.Dropout(dropout),
+
+        nn.Linear(hidden2, hidden3),
+        nn.BatchNorm1d(hidden3),
+        nn.ReLU(inplace=True),
+        nn.Dropout(dropout * 0.8),
+
+        nn.Linear(hidden3, embedding_dim)
+    )
+
+
+# --------------------------------------------------------------------------
+# Siamese
+# --------------------------------------------------------------------------
+
+class SiameseNetwork(nn.Module, _FreezeMixin):
+    """
+    Encoder condiviso + classificatore 'fc' su coppie concatenate.
+    ATTENZIONE: non e' un embedding a cosine similarity, vedi docstring
+    del modulo. forward(img1, img2) restituisce una probabilita' [0,1]
+    (dopo Sigmoid) di "stesso scrivente".
+    """
+
+    def __init__(self, arch: str = "efficientnet_b1", in_channels: int = 1,
+                 projection_dim: int = PROJECTION_DIM,
+                 freeze_backbone_layers: int = 0, dropout: float = 0.5):
+        super().__init__()
+        _require_arch(arch)
+        self.arch = arch
+        self.net_type = "siamese"
+        self.encoder = _build_encoder(arch, in_channels)
+        self.feature_dim = BACKBONES[arch][1]
+        self.projection_dim = projection_dim
+        if freeze_backbone_layers > 0:
+            self._freeze_encoder_layers(freeze_backbone_layers)
+        self.fc = self._build_fc_block(self.feature_dim * 2, projection_dim, dropout)
+
+    @staticmethod
+    def _build_fc_block(input_dim: int, projection_dim: int, dropout: float) -> nn.Sequential:
+        layer1 = projection_dim
+        layer2 = projection_dim // 2
+        layer3 = projection_dim // 4
+        layer4 = projection_dim // 8
+        layer5 = projection_dim // 16
+
+        return nn.Sequential(
+            nn.Linear(input_dim, layer1),
+            nn.BatchNorm1d(layer1),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout),
+
+            nn.Linear(layer1, layer2),
+            nn.BatchNorm1d(layer2),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout),
+
+            nn.Linear(layer2, layer3),
+            nn.BatchNorm1d(layer3),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout * 0.9),
+
+            nn.Linear(layer3, layer4),
+            nn.BatchNorm1d(layer4),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout * 0.8),
+
+            nn.Linear(layer4, layer5),
+            nn.BatchNorm1d(layer5),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout * 0.6),
+
+            nn.Linear(layer5, 1),
+            nn.Sigmoid()
+        )
+
+    def forward_one(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.encoder(x)
+        return x.view(x.size(0), -1)
+
+    def forward(self, img1: torch.Tensor, img2: torch.Tensor,
+               return_embeddings: bool = False):
+        feat1 = self.forward_one(img1)
+        feat2 = self.forward_one(img2)
+        if return_embeddings:
+            feat1 = F.normalize(feat1, p=2, dim=1)
+            feat2 = F.normalize(feat2, p=2, dim=1)
+            return feat1, feat2
+        combined = torch.cat([feat1, feat2], dim=1)
+        return self.fc(combined)
+
+    def predict_pair(self, img1: torch.Tensor, img2: torch.Tensor) -> torch.Tensor:
+        """Modo corretto/fedele al training: probabilita' [0,1] via classificatore."""
+        with torch.no_grad():
+            return self.forward(img1, img2)
+
+    def get_embedding(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Fallback SOLO per compatibilita' di interfaccia con Triplet/Contrastive
+        (feature grezze dell'encoder, L2-normalizzate). Il classificatore 'fc'
+        NON viene usato qui: la rete non e' stata addestrata per essere
+        confrontata cosi', quindi i punteggi di cosine similarity ottenuti
+        da questo embedding sono solo un'APPROSSIMAZIONE, non equivalenti a
+        predict_pair().
+        """
+        return F.normalize(self.forward_one(x), p=2, dim=1)
+
+
+def _require_arch(arch: str):
+    if arch not in BACKBONES:
+        raise ValueError("Backbone '{}' non supportato. Disponibili: {}".format(
+            arch, ", ".join(sorted(BACKBONES))))
+
+
+_NET_CLASSES = {
+    "triplet": TripletNetwork,
+    "contrastive": ContrastiveNetwork,
+    "siamese": SiameseNetwork,
+}
+
+
+def build_network(arch: str, net_type: str, in_channels: int = 1):
+    if net_type not in _NET_CLASSES:
+        raise ValueError("Tipologia '{}' non supportata. Disponibili: {}".format(
+            net_type, ", ".join(NET_TYPES)))
+    return _NET_CLASSES[net_type](arch=arch, in_channels=in_channels)
+
+
+# --------------------------------------------------------------------------
+# Riconoscimento dal nome del file + caricamento
+# --------------------------------------------------------------------------
+
+def guess_arch(checkpoint_path: str):
+    """Ricava il backbone dal nome del file, es. 'resnet18_contrastive_...' -> 'resnet18'."""
+    name = os.path.basename(checkpoint_path).lower()
+    for arch in sorted(BACKBONES, key=len, reverse=True):
+        if arch in name:
+            return arch
+    return None
+
+
+def guess_net_type(checkpoint_path: str):
+    """Ricava la tipologia dal nome del file, es. '..._contrastive_...' -> 'contrastive'."""
+    name = os.path.basename(checkpoint_path).lower()
+    for net_type in NET_TYPES:
+        if net_type in name:
+            return net_type
+    return None
+
+
+def load_model(checkpoint_path: str, device: torch.device = None,
+               arch: str = None, net_type: str = None, verbose: bool = True):
+    """
+    Costruisce la rete giusta (backbone + tipologia) e ci carica dentro lo
+    state_dict del checkpoint.
+
+    arch=None / net_type=None -> dedotti dal nome del file; se il nome non
+    aiuta, o se il primo tentativo non combacia, si prova ogni combinazione
+    (tipologia dedotta per prima, poi le altre) finche' una fa match esatto.
+    """
+    device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    state = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+    for key in ("state_dict", "model_state_dict"):
+        if isinstance(state, dict) and key in state:
+            state = state[key]
+
+    if net_type is not None:
+        if verbose:
+            print("[model_defs] Tipologia forzata da --net-type: {}".format(net_type))
+        type_candidates = [net_type]
+    else:
+        guess_t = guess_net_type(checkpoint_path)
+        if verbose:
+            print("[model_defs] Tipologia dedotta dal nome del file: {}".format(
+                guess_t if guess_t else "non riconosciuta, provo tutte"))
+        type_candidates = ([guess_t] if guess_t else []) + \
+                          [t for t in NET_TYPES if t != guess_t]
+
+    if arch is not None:
+        if verbose:
+            print("[model_defs] Backbone forzato da --arch: {}".format(arch))
+        arch_candidates = [arch]
+    else:
+        guess_a = guess_arch(checkpoint_path)
+        if verbose:
+            print("[model_defs] Backbone dedotto dal nome del file: {}".format(
+                guess_a if guess_a else "non riconosciuto, provo tutti"))
+        arch_candidates = ([guess_a] if guess_a else []) + \
+                          [a for a in sorted(BACKBONES) if a != guess_a]
+
+    errors = []
+    for t in type_candidates:
+        for a in arch_candidates:
+            model = build_network(a, t)
+            try:
+                model.load_state_dict(state, strict=True)
+            except RuntimeError as exc:
+                errors.append("  {}/{}: {}".format(t, a, str(exc).split("\n")[0]))
+                continue
+            if verbose:
+                print("[model_defs] Checkpoint caricato correttamente: "
+                     "tipologia={}, backbone={}".format(t, a))
+            model.to(device).eval()
+            return model
+
+    raise RuntimeError(
+        "Nessuna combinazione tipologia/backbone combacia con {}.\n"
+        "Tentativi:\n{}".format(os.path.basename(checkpoint_path), "\n".join(errors))
+    )-e 
+
+===== ./webcam-demo/demo/engine.py =====
+
+"""
+Wrapper di inferenza: carica il checkpoint triplet e confronta due scritture.
+
+Lo score e' la cosine similarity fra i due embedding L2-normalizzati, esattamente
+come in `BaseTrainer._evaluate_verification` del repo HandVerify; di conseguenza
+le soglie salvate nei CSV degli esperimenti sono direttamente riutilizzabili.
+
+Cambiare i pesi = passare un altro file .pth (opzione --checkpoint di tutti gli
+script). L'architettura viene riconosciuta dal nome del file e le soglie vengono
+lette dal CSV delle metriche di quell'esperimento, se lo si trova accanto al
+checkpoint o dentro triplet_experiments/.
+"""
+
+import csv
+import os
+import sys
+
+import torch
+import torch.nn.functional as F
+
+from model_defs import load_model
+from preprocess import preprocess_roi, to_tensor
+
+csv.field_size_limit(min(sys.maxsize, 2 ** 31 - 1))
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Soglie di riferimento: esperimento efficientnet_b1_triplet_iam_to_iam
+# (AUC 0.956, EER 0.115). Usate quando il CSV delle metriche non si trova.
+DEFAULT_THRESHOLDS = {
+    "eer": 0.7912201881408691,   # bilanciato: FAR ~ FRR ~ 11.5%
+    "far1": 0.9312598705291748,  # severo: FAR 1%, ma GAR solo ~43%
+}
+
+# alias di comodo, usato da chi importa solo le chiavi disponibili
+THRESHOLDS = dict(DEFAULT_THRESHOLDS)
+
+DEFAULT_CHECKPOINT = os.path.join(
+    PROJECT_ROOT, "efficientnet_b1_triplet_iam_to_iam_best.pth"
+)
+
+
+def find_metrics_csv(checkpoint_path):
+    """
+    Cerca il CSV delle metriche dell'esperimento a cui appartiene il checkpoint.
+    I file seguono la convenzione '<esperimento>_best.pth' / '<esperimento>_final.pth'
+    e '<esperimento>_final_metrics.csv'.
+    """
+    name = os.path.basename(checkpoint_path)
+    stem = os.path.splitext(name)[0]
+    for suffix in ("_best", "_final"):
+        if stem.endswith(suffix):
+            stem = stem[: -len(suffix)]
+            break
+
+    candidates = [
+        os.path.join(os.path.dirname(os.path.abspath(checkpoint_path)),
+                     stem + "_final_metrics.csv"),
+        os.path.join(PROJECT_ROOT, "triplet_experiments", stem,
+                     stem + "_final_metrics.csv"),
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            return path
+    return None
+
+
+def thresholds_for_checkpoint(checkpoint_path):
+    """
+    Ritorna (soglie, descrizione_origine) per il checkpoint dato.
+    Se il CSV non si trova, ricade sulle soglie di riferimento IAM.
+    """
+    path = find_metrics_csv(checkpoint_path)
+    if path is None:
+        return dict(DEFAULT_THRESHOLDS), "soglie di riferimento IAM (CSV non trovato)"
+
+    try:
+        row = next(csv.DictReader(open(path, encoding="utf-8")))
+        thresholds = {"eer": float(row["eer_threshold"])}
+        far1 = row.get("threshold_at_far_0.01")
+        if far1 not in (None, "", "None"):
+            thresholds["far1"] = float(far1)
+        else:
+            thresholds["far1"] = float(row["eer_threshold"])
+        return thresholds, os.path.basename(path)
+    except Exception as exc:  # CSV illeggibile o senza le colonne attese
+        return dict(DEFAULT_THRESHOLDS), "soglie IAM ({} non leggibile: {})".format(
+            os.path.basename(path), exc)
+
+
+class HandwritingVerifier:
+    def __init__(self, checkpoint=DEFAULT_CHECKPOINT, device=None, mode="scan",
+                 detect=True, arch=None):
+        self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.checkpoint = checkpoint
+        self.model = load_model(checkpoint, self.device, arch=arch)
+        self.arch = self.model.arch
+        self.mode = mode
+        self.detect = detect
+        self.thresholds, self.threshold_source = thresholds_for_checkpoint(checkpoint)
+
+    def describe(self):
+        return "{}  |  backbone: {}  |  soglie da: {}".format(
+            os.path.basename(self.checkpoint), self.arch, self.threshold_source)
+
+    def resolve_threshold(self, threshold):
+        """Accetta una chiave ('eer', 'far1', ...) oppure un valore numerico."""
+        if isinstance(threshold, (int, float)):
+            return float(threshold)
+        return self.thresholds[threshold]
+
+    def prepare(self, roi_bgr):
+        """ROI webcam -> (immagine 448 preprocessata, stage intermedi)."""
+        return preprocess_roi(roi_bgr, mode=self.mode, detect=self.detect,
+                              return_stages=True)
+
+    @torch.no_grad()
+    def embed(self, img_448):
+        x = to_tensor(img_448).to(self.device)
+        return self.model(x)
+
+    @torch.no_grad()
+    def similarity(self, img_a_448, img_b_448):
+        """Cosine similarity in [-1, 1] fra le due scritture."""
+        emb = self.model(torch.cat([
+            to_tensor(img_a_448), to_tensor(img_b_448)
+        ]).to(self.device))
+        return F.cosine_similarity(emb[0:1], emb[1:2]).item()
+
+    def verify(self, img_a_448, img_b_448, threshold="eer"):
+        score = self.similarity(img_a_448, img_b_448)
+        thr = self.resolve_threshold(threshold)
+        return {
+            "score": score,
+            "threshold": thr,
+            "same_writer": score >= thr,
+            "margin": score - thr,
+        }
+-e 
+
 ===== ./main.py =====
 
 def main():
@@ -4877,7 +5655,7 @@ def main():
 if __name__ == "__main__":
     main()-e 
 
-===== ./notebooks/biometric_results_analysis.py =====
+===== ./notebooks/biometric_results_analysis_v2.py =====
 
 # %% [markdown]
 # # Analisi biometrica per la sezione Results
@@ -5041,6 +5819,49 @@ print("Tabella di protocollo (riassunto per split, aggregato su loss e backbone)
 print(protocol_df.groupby('split')[['n_genuine', 'n_impostor', 'n_total']].agg(['mean', 'min', 'max']).round(1))
 
 # %% [markdown]
+# ## 1b. Statistiche writer per dataset (Tabella mancante #7)
+#
+# Questi numeri NON sono nei CSV di output della valutazione (che
+# contengono solo score e conteggio coppie): vanno presi dai log di
+# training. Sono gia' stati estratti dai log forniti (esperimenti
+# resnet18_bce_*) e sono qui pre-compilati. Se rilanci lo sweep con altri
+# seed/split, aggiorna questo dizionario di conseguenza (i conteggi writer
+# dipendono solo dallo split dei dati, non da backbone/loss, quindi restano
+# validi per tutte le 72 configurazioni finche' lo split non cambia).
+
+# %%
+WRITER_STATS = {
+    'IAM': {
+        'total_writers': 657,
+        'train_pool_writers': 525,   # split 80% per IAM->IAM
+        'test_pool_writers': 132,
+        'source_full_writers': 657,  # writer usati quando IAM e' sorgente/target cross-dataset
+    },
+    'RIMES': {
+        'total_writers': 1500,
+        'train_pool_writers': 1200,  # split 80% per RIMES->RIMES
+        'test_pool_writers': 300,
+        'source_full_writers': 1500,
+    },
+}
+
+writer_stats_df = pd.DataFrame(WRITER_STATS).T
+writer_stats_df.index.name = 'dataset'
+writer_stats_df.to_csv('./writer_stats.csv')
+
+print("=" * 80)
+print("STATISTICHE WRITER PER DATASET (estratte dai log di training)")
+print("=" * 80)
+print(writer_stats_df.to_string())
+print("""
+Nota: il numero di immagini/righe per writer non e' presente nei log
+forniti (solo il conteggio writer e il numero di coppie genuine/impostor
+generate). Se disponibile nei metadata del dataset, aggiungere una colonna
+'images_per_writer' (media/min/max) a WRITER_STATS per completare la
+tabella nei Results.
+""")
+
+# %% [markdown]
 # ## 2. Metriche biometriche + Bootstrap CI
 #
 # `d_prime`/`decidability` sono calcolati direttamente sugli score raw
@@ -5082,8 +5903,18 @@ def calculate_biometric_metrics(genuine_scores, impostor_scores):
         idx = idxs[-1]
         return dict(far_eff=fpr[idx], frr=fnr[idx], gar=tpr[idx], thr=thresholds[idx])
 
-    op_001 = operating_point(0.001)
-    op_01 = operating_point(0.01)
+    op_0001 = operating_point(0.0001)   # FAR target 0.01%
+    op_001 = operating_point(0.001)     # FAR target 0.1%
+    op_01 = operating_point(0.01)       # FAR target 1%
+
+    # A FAR=0.01% serve almeno ~1/0.0001 = 10.000 coppie impostor per una
+    # stima non degenere (regola del pollice standard in biometria: servono
+    # almeno 1/FAR confronti impostor). Sotto questa soglia il punto e'
+    # segnato invalido piuttosto che riportato come se fosse affidabile.
+    n_impostor_local = len(impostor_scores)
+    op_0001_valid = n_impostor_local >= int(1 / 0.0001)
+    if not op_0001_valid:
+        op_0001 = dict(far_eff=np.nan, frr=np.nan, gar=np.nan, thr=np.nan)
 
     predictions = (y_scores >= eer_threshold).astype(int)
     accuracy = np.mean(predictions == y_true)
@@ -5099,8 +5930,14 @@ def calculate_biometric_metrics(genuine_scores, impostor_scores):
         'mu_genuine': mu_genuine, 'mu_impostor': mu_impostor,
         'sigma_genuine': sigma_genuine, 'sigma_impostor': sigma_impostor,
         'fpr': fpr, 'tpr': tpr, 'thresholds': thresholds,
+        # FAR target = 0.01% (invalido se n_impostor insufficiente, vedi sopra)
+        'far_0001_effective': op_0001['far_eff'], 'frr_at_far_0001': op_0001['frr'],
+        'gar_at_far_0001': op_0001['gar'], 'threshold_at_far_0001': op_0001['thr'],
+        'far_0001_valid': op_0001_valid,
+        # FAR target = 0.1%
         'far_001_effective': op_001['far_eff'], 'frr_at_far_001': op_001['frr'],
         'gar_at_far_001': op_001['gar'], 'threshold_at_far_001': op_001['thr'],
+        # FAR target = 1%
         'far_01_effective': op_01['far_eff'], 'frr_at_far_01': op_01['frr'],
         'gar_at_far_01': op_01['gar'], 'threshold_at_far_01': op_01['thr'],
     }
@@ -5287,14 +6124,14 @@ def plot_roc_curves(model_name):
             train_ds, test_ds = dataset_comb.split('_to_')
             ax.set_title(f"{loss.upper()} | {train_ds.upper()}\u2192{test_ds.upper()}",
                          fontsize=10, fontweight='bold')
-            ax.set_xlabel('FMR (False Match Rate)', fontsize=9)
-            ax.set_ylabel('1 - FNMR', fontsize=9)
+            ax.set_xlabel('FAR (False Acceptance Rate)', fontsize=9)
+            ax.set_ylabel('1 - FRR', fontsize=9)
             ax.legend(fontsize=8, loc='lower right')
             ax.grid(True, alpha=0.3)
             ax.set_xlim([-0.02, 1.02])
             ax.set_ylim([-0.02, 1.02])
 
-    fig.suptitle(f"Curve ROC (FMR/FNMR) \u2014 backbone: {model_name}", fontsize=13, y=1.01)
+    fig.suptitle(f"Curve ROC (FAR/FRR) \u2014 backbone: {model_name}", fontsize=13, y=1.01)
     plt.tight_layout()
     plt.savefig(f'./images/roc_curves_{model_name}.png', dpi=300, bbox_inches='tight')
     plt.show()
@@ -5333,8 +6170,8 @@ def plot_det_curves(model_name):
             train_ds, test_ds = dataset_comb.split('_to_')
             ax.set_title(f"{loss.upper()} | {train_ds.upper()}\u2192{test_ds.upper()}",
                          fontsize=10, fontweight='bold')
-            ax.set_xlabel('FMR (log)', fontsize=9)
-            ax.set_ylabel('FNMR (log)', fontsize=9)
+            ax.set_xlabel('FAR (log)', fontsize=9)
+            ax.set_ylabel('FRR (log)', fontsize=9)
             ax.legend(fontsize=8, loc='lower left')
             ax.grid(True, alpha=0.3, which='both')
             ax.set_xlim([1e-4, 1])
@@ -5691,7 +6528,344 @@ with open('./known_confounds.txt', 'w', encoding='utf-8') as f:
     f.write(KNOWN_CONFOUNDS)
 
 # %% [markdown]
-# ## 13. Export riassuntivo per la stesura dei Results
+# ## 13. Tabella performance ai punti operativi FAR (Tabella mancante #1)
+#
+# EER e' un buon riassunto quando FAR e FRR contano allo stesso modo, ma
+# non e' il regime tipico di un deployment di sicurezza (dove si fissa FAR
+# basso e si guarda quanto FRR/GAR ne risulta). Qui aggreghiamo su tutti i
+# backbone lo stesso modo delle tabelle same/cross-dataset, ma per i tre
+# target FAR = 1%, 0.1%, 0.01% invece che per EER.
+
+# %%
+def aggregate_operating_points(splits_to_include):
+    far_targets = [
+        ('1%', 'far_01_effective', 'frr_at_far_01', 'gar_at_far_01', None),
+        ('0.1%', 'far_001_effective', 'frr_at_far_001', 'gar_at_far_001', None),
+        ('0.01%', 'far_0001_effective', 'frr_at_far_0001', 'gar_at_far_0001', 'far_0001_valid'),
+    ]
+    rows = []
+    for loss in loss_types:
+        for dataset_comb in splits_to_include:
+            for label, far_key, frr_key, gar_key, valid_key in far_targets:
+                frr_vals, gar_vals = [], []
+                for model_name in computed_metrics.get(loss, {}):
+                    m = computed_metrics[loss][model_name].get(dataset_comb)
+                    if m is None:
+                        continue
+                    if valid_key is not None and not m.get(valid_key, True):
+                        continue
+                    if np.isnan(m[frr_key]):
+                        continue
+                    frr_vals.append(m[frr_key])
+                    gar_vals.append(m[gar_key])
+
+                n = len(frr_vals)
+                row = {'loss': loss.upper(), 'split': dataset_comb,
+                       'far_target': label, 'n_backbones_valid': n}
+                if n > 0:
+                    frr_arr, gar_arr = np.array(frr_vals), np.array(gar_vals)
+                    row['frr_mean'] = frr_arr.mean()
+                    row['frr_std'] = frr_arr.std(ddof=1) if n > 1 else 0.0
+                    row['gar_mean'] = gar_arr.mean()
+                    row['gar_std'] = gar_arr.std(ddof=1) if n > 1 else 0.0
+                else:
+                    row['frr_mean'] = row['frr_std'] = row['gar_mean'] = row['gar_std'] = np.nan
+                rows.append(row)
+    return pd.DataFrame(rows)
+
+
+operating_point_table = pd.concat([
+    aggregate_operating_points(['iam_to_iam', 'rimes_to_rimes']),
+    aggregate_operating_points(['iam_to_rimes', 'rimes_to_iam']),
+], ignore_index=True)
+operating_point_table.to_csv('./operating_point_table.csv', index=False)
+
+print("=" * 100)
+print("PERFORMANCE AI PUNTI OPERATIVI FAR (aggregato su tutti i backbone)")
+print("Nota: n_backbones_valid < 6 significa che per alcuni backbone il punto")
+print("a quel FAR e' degenere (0 coppie impostor sotto la soglia) o, per")
+print("FAR=0.01%%, che gli impostor disponibili sono sotto la soglia minima")
+print("(1/FAR) per una stima non degenere: quei backbone sono esclusi dalla")
+print("media invece di essere riportati come se il punto fosse affidabile.")
+print("=" * 100)
+print(operating_point_table.round(4).to_string(index=False))
+
+# %% [markdown]
+# ## 14. Tabella completa per-backbone (Tabella mancante #4, oltre alla heatmap)
+#
+# La heatmap aggregata (Sezione 10) e' utile per la sezione Results, ma un
+# reviewer puo' chiedere il dettaglio: quale architettura beneficia di piu'
+# di ciascuna loss. Qui si esporta la tabella lunga completa
+# backbone x loss x split, da mettere in supplementare.
+
+# %%
+per_backbone_rows = []
+for loss in loss_types:
+    for model_name, splits in computed_metrics.get(loss, {}).items():
+        for dataset_comb, m in splits.items():
+            per_backbone_rows.append({
+                'loss': loss, 'backbone': model_name, 'split': dataset_comb,
+                'auc': m['auc'], 'eer': m['eer'], 'd_prime': m['d_prime'],
+            })
+
+per_backbone_df = pd.DataFrame(per_backbone_rows)
+per_backbone_df.to_csv('./per_backbone_table.csv', index=False)
+
+# Pivot leggibile: per ogni split, backbone x loss
+for dataset_comb in dataset_combinations:
+    sub = per_backbone_df[per_backbone_df['split'] == dataset_comb]
+    if sub.empty:
+        continue
+    pivot = sub.pivot(index='backbone', columns='loss', values='auc')
+    print(f"\nAUC per backbone x loss \u2014 split {dataset_comb}:")
+    print(pivot.round(3).to_string())
+
+# %% [markdown]
+# ## 15. Confronto con lo stato dell'arte (Tabella mancante #3)
+#
+# I valori di letteratura NON sono calcolabili dai file di output: sono
+# presi da una ricerca bibliografica mirata (writer identification/
+# verification su IAM/RIMES o task metodologicamente affini) e vanno
+# verificati/aggiornati manualmente. La comparabilita' e' limitata: la
+# maggior parte della letteratura su IAM riporta identification accuracy/
+# mAP (closed-set), non EER di verifica pairwise open-set come qui; i
+# pochi lavori Siamese-verification con EER/AUC comparabili sono su script
+# diversi da IAM/RIMES. Aggiornare SOTA_LITERATURE se hai riferimenti piu'
+# specifici (in particolare per Afzali et al. 2024, il valore esatto non è
+# stato estratto con sufficiente confidenza dagli abstract disponibili).
+
+# %%
+SOTA_LITERATURE = [
+    {'method': 'Fiel & Sablatnig (2015), CNN activation features',
+     'task': 'Writer identification (closed-set)', 'dataset': 'IAM (train), ICDAR13/CVL (eval)',
+     'metric': 'Accuracy/mAP', 'value': 'SOTA al momento della pubblicazione',
+     'comparable': 'NO - task diverso (identification, non verification)'},
+    {'method': 'Christlein et al. (2017), GMM supervector + KL-kernel',
+     'task': 'Writer identification (closed-set)', 'dataset': 'ICDAR13, CVL',
+     'metric': 'mAP', 'value': '+0.21 assoluto su ICDAR13 vs. SOTA precedente',
+     'comparable': 'NO - task diverso'},
+    {'method': 'Afzali et al. (2024), CSCNN (Siamese + combined loss)',
+     'task': 'Writer verification', 'dataset': 'IAM, IFN/ENIT',
+     'metric': 'EER/Accuracy', 'value': '[DA VERIFICARE SUL PDF ORIGINALE]',
+     'comparable': 'PARZIALE - stesso task (verification) e IAM, script/loss diversi'},
+    {'method': 'CAE + Siamese, text-independent writer verification (2019)',
+     'task': 'Writer verification', 'dataset': 'non IAM/RIMES (script non confermato)',
+     'metric': 'EER / AUC', 'value': 'EER=26.4%, AUC=0.818',
+     'comparable': 'PARZIALE - stesse metriche, dataset diverso'},
+    {'method': 'Scribe verification, Siamese/Triplet (ResNet18/34, MobileNetV3, ecc.)',
+     'task': 'Writer/scribe verification (stessa famiglia protocollare)',
+     'dataset': 'Tsinghua Bamboo Slips, MCCD (manoscritti cinesi)',
+     'metric': 'AUC / errore tipo-EER',
+     'value': 'AUC 0.86-0.96; errore ~7.8-21% a seconda di backbone/corpus',
+     'comparable': 'PARZIALE - stessi backbone e protocollo, dominio/script diverso'},
+]
+sota_df = pd.DataFrame(SOTA_LITERATURE)
+
+# Best-of-ours, calcolato dinamicamente dai dati effettivamente caricati
+best_rows = []
+for dataset_comb in dataset_combinations:
+    best = None
+    for loss in loss_types:
+        for model_name in computed_metrics.get(loss, {}):
+            m = computed_metrics[loss][model_name].get(dataset_comb)
+            if m is None:
+                continue
+            if best is None or m['auc'] > best['auc']:
+                best = dict(loss=loss, backbone=model_name, split=dataset_comb,
+                            auc=m['auc'], eer=m['eer'])
+    if best:
+        best_rows.append(best)
+ours_best_df = pd.DataFrame(best_rows)
+
+sota_df.to_csv('./sota_literature.csv', index=False)
+ours_best_df.to_csv('./ours_best_per_split.csv', index=False)
+
+print("=" * 100)
+print("CONFRONTO CON LA LETTERATURA (vedi note di comparabilita' in ogni riga)")
+print("=" * 100)
+print(sota_df.to_string(index=False))
+print("\nMiglior configurazione nostra per split (calcolata dai dati caricati):")
+print(ours_best_df.round(3).to_string(index=False) if not ours_best_df.empty else "  (nessun dato caricato)")
+
+# %% [markdown]
+# ## 16. Analisi dei fallimenti: top-10 false accept / false reject (Tabella mancante #8)
+#
+# Prova prima a caricare metadata a livello di coppia (path immagine,
+# writer ID), se lo script di valutazione li salva in un file accanto ai
+# CSV di metriche. Se non li trova, esegue comunque il ranking sugli score
+# (senza immagini/writer ID) e stampa un messaggio esplicito su cosa
+# salvare in fase di valutazione per abilitare l'analisi completa con
+# immagini — verificare lo script di evaluation per questo.
+
+# %%
+def try_load_pair_metadata(experiment_path, experiment_name):
+    """Cerca un file di metadata a livello di coppia. Pattern tentati,
+    da adattare al nome reale usato dal tuo script di valutazione se
+    diverso da questi."""
+    candidates = [
+        experiment_path / f"{experiment_name}_pairs.csv",
+        experiment_path / f"{experiment_name}_pair_details.csv",
+        experiment_path / "pairs.csv",
+    ]
+    for c in candidates:
+        if c.exists():
+            return pd.read_csv(c)
+    return None
+
+
+def failure_case_analysis(loss, model_name, dataset_comb, top_n=10):
+    data = all_results.get(loss, {}).get(model_name, {}).get(dataset_comb)
+    if data is None:
+        return None, None, False
+
+    genuine = data['genuine_vals']
+    impostor = data['impostor_vals']
+    m = computed_metrics[loss][model_name][dataset_comb]
+    thr = m['eer_threshold']
+
+    experiment_path, experiment_name = resolve_experiment_path(loss, model_name, dataset_comb)
+    pair_meta = try_load_pair_metadata(experiment_path, experiment_name) if experiment_path else None
+    has_meta = pair_meta is not None and {'pair_type'}.issubset(pair_meta.columns)
+
+    if has_meta:
+        fa = pair_meta[(pair_meta['pair_type'] == 'impostor') & (pair_meta['score'] >= thr)]
+        fa = fa.sort_values('score', ascending=False).head(top_n)
+        fr = pair_meta[(pair_meta['pair_type'] == 'genuine') & (pair_meta['score'] < thr)]
+        fr = fr.sort_values('score', ascending=True).head(top_n)
+        return fa, fr, True
+
+    # Fallback: solo score, senza path/writer ID
+    fa_scores = np.sort(impostor[impostor >= thr])[::-1][:top_n]
+    fr_scores = np.sort(genuine[genuine < thr])[:top_n]
+    fa = pd.DataFrame({'rank': range(1, len(fa_scores) + 1), 'score': fa_scores})
+    fr = pd.DataFrame({'rank': range(1, len(fr_scores) + 1), 'score': fr_scores})
+    return fa, fr, False
+
+
+print("=" * 100)
+print("FAILURE CASE ANALYSIS: top false accept / top false reject")
+print("=" * 100)
+
+failure_meta_available = False
+for dataset_comb in dataset_combinations:
+    if not ours_best_df.empty:
+        row = ours_best_df[ours_best_df['split'] == dataset_comb]
+        if row.empty:
+            continue
+        loss, model_name = row.iloc[0]['loss'], row.iloc[0]['backbone']
+    else:
+        continue
+
+    fa, fr, has_meta = failure_case_analysis(loss, model_name, dataset_comb)
+    failure_meta_available = failure_meta_available or has_meta
+    print(f"\n--- {dataset_comb} | miglior config: {loss}/{model_name} ---")
+    if fa is not None:
+        fa.to_csv(f'./top_false_accepts_{dataset_comb}.csv', index=False)
+        fr.to_csv(f'./top_false_rejects_{dataset_comb}.csv', index=False)
+        print(f"Top false accepts (n={len(fa)}) e top false rejects (n={len(fr)}) "
+              f"salvati in CSV. Metadata path/writer ID {'TROVATI' if has_meta else 'NON TROVATI'}.")
+
+if not failure_meta_available:
+    print("""
+ATTENZIONE: nessun file di metadata a livello di coppia (path immagine,
+writer ID) e' stato trovato per nessuna configurazione: la failure
+analysis sopra e' basata solo sugli score, senza poter mostrare le
+immagini ne' identificare quali writer causano piu' errori.
+Per abilitare l'analisi completa con immagini (richiesta nel punto #8),
+lo script di VALUTAZIONE (non questo notebook di analisi) deve salvare,
+per ogni coppia genuine/impostor valutata, almeno: path immagine 1, path
+immagine 2, writer ID 1, writer ID 2, score, pair_type — in un file
+tipo '<experiment_name>_pairs.csv' accanto ai file gia' salvati
+('..._final_metrics.csv', '..._history.csv'). Una volta disponibile,
+questo notebook lo user\u00e0 automaticamente (vedi try_load_pair_metadata)
+per produrre anche le figure con le immagini affiancate.
+""")
+
+# %% [markdown]
+# ## 17. DET aggregata: miglior modello vs. media sui backbone (Figura mancante #6)
+#
+# Invece di scegliere un solo backbone "rappresentativo" (ResNet-34) per
+# le curve DET, qui si sovrappone la curva DET del miglior modello per
+# ogni split alla curva media (+/- 1 std) calcolata punto per punto su una
+# griglia comune di FAR, per tutti i backbone disponibili sotto la loss
+# migliore di quello split.
+
+# %%
+def det_curve_on_grid(m, far_grid):
+    """Interpola FRR sulla griglia di FAR comune (necessario per poter
+    fare media/std punto per punto tra backbone diversi, che hanno soglie
+    e quindi punti (FAR, FRR) non allineati)."""
+    fpr, frr = m['fpr'], 1 - m['tpr']
+    order = np.argsort(fpr)
+    fpr_sorted, frr_sorted = fpr[order], frr[order]
+    fpr_sorted, unique_idx = np.unique(fpr_sorted, return_index=True)
+    frr_sorted = frr_sorted[unique_idx]
+    return np.interp(far_grid, fpr_sorted, frr_sorted)
+
+
+far_grid = np.logspace(-4, 0, 100)
+fig, axes = plt.subplots(1, len(dataset_combinations), figsize=(22, 5))
+
+for j, dataset_comb in enumerate(dataset_combinations):
+    ax = axes[j]
+
+    # loss migliore per questo split, in base all'AUC medio aggregato
+    best_loss, best_auc = None, -np.inf
+    for loss in loss_types:
+        vals = [computed_metrics[loss][mn][dataset_comb]['auc']
+                for mn in computed_metrics.get(loss, {}) if dataset_comb in computed_metrics[loss][mn]]
+        if vals and np.mean(vals) > best_auc:
+            best_auc, best_loss = np.mean(vals), loss
+
+    if best_loss is None:
+        ax.axis('off')
+        continue
+
+    frr_curves, backbone_eers = [], {}
+    for model_name in computed_metrics.get(best_loss, {}):
+        m = computed_metrics[best_loss][model_name].get(dataset_comb)
+        if m is None:
+            continue
+        frr_curves.append(det_curve_on_grid(m, far_grid))
+        backbone_eers[model_name] = m['eer']
+
+    if not frr_curves:
+        ax.axis('off')
+        continue
+
+    frr_curves = np.array(frr_curves)
+    frr_mean = frr_curves.mean(axis=0)
+    frr_std = frr_curves.std(axis=0, ddof=1) if len(frr_curves) > 1 else np.zeros_like(frr_mean)
+
+    best_backbone = min(backbone_eers, key=backbone_eers.get)
+    m_best = computed_metrics[best_loss][best_backbone][dataset_comb]
+
+    ax.loglog(far_grid, frr_mean, '--', color='gray', linewidth=1.5,
+              label=f'Media su {len(frr_curves)} backbone')
+    ax.fill_between(far_grid, np.clip(frr_mean - frr_std, 1e-4, 1), np.clip(frr_mean + frr_std, 1e-4, 1),
+                     color='gray', alpha=0.2)
+    ax.loglog(m_best['fpr'], 1 - m_best['tpr'], color='crimson', linewidth=2,
+              label=f'Migliore: {best_backbone} (EER={m_best["eer"]:.3f})')
+    ax.loglog([1e-4, 1], [1e-4, 1], 'k:', linewidth=1, alpha=0.4)
+
+    train_ds, test_ds = dataset_comb.split('_to_')
+    ax.set_title(f"{train_ds.upper()}\u2192{test_ds.upper()}\nloss migliore: {best_loss.upper()}",
+                 fontsize=10, fontweight='bold')
+    ax.set_xlabel('FAR (log)', fontsize=9)
+    ax.set_ylabel('FRR (log)', fontsize=9)
+    ax.legend(fontsize=7, loc='lower left')
+    ax.grid(True, alpha=0.3, which='both')
+    ax.set_xlim([1e-4, 1])
+    ax.set_ylim([1e-4, 1])
+
+fig.suptitle("DET: miglior (backbone, loss) per split vs. media \u00b1 std su tutti i backbone "
+             "(sotto la loss migliore di quello split)", fontsize=12, y=1.03)
+plt.tight_layout()
+plt.savefig('./images/det_best_vs_aggregated.png', dpi=300, bbox_inches='tight')
+plt.show()
+
+# %% [markdown]
+# ## 18. Export riassuntivo per la stesura dei Results
 #
 # Un'unica tabella "lunga" con tutte le configurazioni, metriche puntuali
 # e CI bootstrap: e' la base dati da cui estrarre le tabelle del paper.
@@ -5710,10 +6884,237 @@ for loss in loss_types:
                 'd_prime': m['d_prime'], 'decidability': m['decidability'],
                 'accuracy_at_eer': m['accuracy'], 'precision_at_eer': m['precision'],
                 'recall_at_eer': m['recall'], 'f1_at_eer': m['f1'],
-                'gar_at_far_0.1pct': m['gar_at_far_001'], 'gar_at_far_1pct': m['gar_at_far_01'],
+                'frr_at_far_1pct': m['frr_at_far_01'], 'gar_at_far_1pct': m['gar_at_far_01'],
+                'frr_at_far_0.1pct': m['frr_at_far_001'], 'gar_at_far_0.1pct': m['gar_at_far_001'],
+                'frr_at_far_0.01pct': m['frr_at_far_0001'], 'gar_at_far_0.01pct': m['gar_at_far_0001'],
+                'far_0.01pct_valid': m['far_0001_valid'],
             })
 
 final_export = pd.DataFrame(export_rows).sort_values(['loss', 'backbone', 'split'])
 final_export.to_csv('./results_full_export.csv', index=False)
 print(f"Esportate {len(final_export)} configurazioni in results_full_export.csv")
 print(final_export.head(10).to_string(index=False))
+
+print("\n" + "=" * 100)
+print("RIEPILOGO FILE GENERATI PER LA STESURA DEI RESULTS")
+print("=" * 100)
+print("""
+  protocol_table.csv              -> Tabella 1 (protocollo)
+  writer_stats.csv                -> Tabella 2 (writer/dataset)      [NUOVO]
+  same_dataset_aggregated.csv     -> Tabella same-dataset
+  cross_dataset_aggregated.csv    -> Tabella cross-dataset
+  operating_point_table.csv       -> Tabella FAR/FRR/GAR operativi   [NUOVO]
+  per_backbone_table.csv          -> Tabella completa per backbone   [NUOVO]
+  wilcoxon_loss_comparison.csv    -> Test di significativita'
+  sota_literature.csv             -> Confronto con la letteratura    [NUOVO]
+  ours_best_per_split.csv         -> Nostra miglior config per split [NUOVO]
+  top_false_accepts_<split>.csv   -> Failure analysis                [NUOVO]
+  top_false_rejects_<split>.csv   -> Failure analysis                [NUOVO]
+  known_confounds.txt             -> Blocco Limitations
+  results_full_export.csv         -> Tabella lunga completa (tutte le config)
+  images/metrics_heatmap_aggregated.png    -> Heatmap per-backbone
+  images/det_best_vs_aggregated.png        -> DET migliore vs. media [NUOVO]
+""")
+-e 
+
+===== ./notebooks/final_validation_best_model.py =====
+
+# %% [markdown]
+# # Final Validation — Best Model on New Dataset
+#
+# Questo notebook:
+# 1. Scarica il checkpoint (.pth) del modello migliore da un link GitHub (raw).
+# 2. Ricostruisce l'architettura esatta con cui è stato addestrato.
+# 3. Costruisce un validation set ESAUSTIVO sul nuovo dataset: TUTTE le
+#    coppie genuine + TUTTE le coppie impostor, senza sotto-campionare per
+#    rispettare un positive_ratio (a differenza del training/validation
+#    "standard" usato negli esperimenti precedenti).
+# 4. Calcola le metriche complete (EER, AUC, FAR/FRR, d-prime, ecc.) con
+#    la stessa pipeline (`BaseTrainer.validate_comprehensive`) usata negli
+#    esperimenti originali, per restare comparabile con le tabelle già
+#    prodotte in `biometric_results_analysis.py`.
+#
+# ⚠️ Compila i placeholder nella cella CONFIG prima di eseguire.
+
+# %%
+import sys
+sys.path.append('/kaggle/working/HandVerify')  # <-- placeholder: path del repo
+
+import os
+import urllib.request
+
+import torch
+import numpy as np
+
+from src.models import get_model
+from src.training import BCETrainer, ContrastiveTrainer, TripletTrainer
+from src.data import create_dataloaders, SiameseDataset, ContrastiveDataset, TripletDataset
+from src.evaluation import print_results
+from src.utils import set_seed, get_device, ensure_dir
+
+# %% [markdown]
+# ## CONFIG — da compilare in base al modello scelto (vedi analisi cross-dataset)
+
+# %%
+RANDOM_STATE = 42
+
+# --- Checkpoint del modello migliore (caricato a mano su GitHub) ---
+# Esempio: "https://raw.githubusercontent.com/<user>/<repo>/main/checkpoints/resnet34_contrastive_best.pth"
+CHECKPOINT_URL = "<PLACEHOLDER: raw.githubusercontent.com URL del .pth>"
+CHECKPOINT_LOCAL_PATH = "/kaggle/working/best_model.pth"
+
+# --- Architettura / loss del modello scelto (deve combaciare col training originale) ---
+MODEL_TYPE = "<PLACEHOLDER: 'bce' | 'contrastive' | 'triplet'>"
+MODEL_NAME = "<PLACEHOLDER: es. 'resnet34', 'mobilenet_v3_small', ...>"
+
+# Iperparametri architetturali usati in fase di training del checkpoint
+# (devono essere IDENTICI, altrimenti load_state_dict fallisce o è inconsistente)
+MODEL_HPARAMS = {
+    'in_channels': 1,
+    'freeze_backbone_layers': 3,   # <-- placeholder: quello usato nel training originale
+    'dropout': 0.2,                # <-- placeholder
+    # BCE usa 'projection_dim', Contrastive/Triplet usano 'embedding_dim':
+    # get_model si occupa già di mappare il nome giusto.
+    'embedding_dim': 32,           # <-- placeholder (o projection_dim, vedi sopra)
+}
+
+# --- Dataset target su cui validare (quello NUOVO, non ancora deciso) ---
+TARGET_DATASET_PATH = "<PLACEHOLDER: path del nuovo dataset con sottocartelle per writer>"
+TARGET_DATASET_NAME = "<PLACEHOLDER: nome breve, es. 'new_dataset'>"
+
+TARGET_SIZE = 448
+NUM_WORKERS = 4
+RESULTS_DIR = f"/kaggle/working/final_validation_{TARGET_DATASET_NAME}"
+
+# Mappa loss -> classe Dataset e classe Trainer
+DATASET_CLASS_BY_TYPE = {
+    'bce': SiameseDataset,
+    'contrastive': ContrastiveDataset,
+    'triplet': TripletDataset,
+}
+TRAINER_CLASS_BY_TYPE = {
+    'bce': BCETrainer,
+    'contrastive': ContrastiveTrainer,
+    'triplet': TripletTrainer,
+}
+
+# %%
+set_seed(RANDOM_STATE)
+device = get_device()
+ensure_dir(RESULTS_DIR)
+
+# %% [markdown]
+# ## 1. Download del checkpoint da GitHub
+
+# %%
+if not os.path.exists(CHECKPOINT_LOCAL_PATH):
+    print(f"⬇️  Downloading checkpoint from:\n  {CHECKPOINT_URL}")
+    urllib.request.urlretrieve(CHECKPOINT_URL, CHECKPOINT_LOCAL_PATH)
+    print(f"✓ Saved to {CHECKPOINT_LOCAL_PATH}")
+else:
+    print(f"✓ Checkpoint già presente in {CHECKPOINT_LOCAL_PATH}")
+
+# %% [markdown]
+# ## 2. Ricostruzione dell'architettura + caricamento pesi
+
+# %%
+model = get_model(
+    MODEL_NAME,
+    model_type=MODEL_TYPE,
+    **MODEL_HPARAMS
+)
+
+state_dict = torch.load(CHECKPOINT_LOCAL_PATH, map_location=device)
+model.load_state_dict(state_dict)
+model = model.to(device)
+model.eval()
+
+print(f"✓ Loaded {MODEL_TYPE.upper()} / {MODEL_NAME} from checkpoint")
+
+# %% [markdown]
+# ## 3. Dataset di validazione ESAUSTIVO (tutte le genuine + tutte le impostor)
+#
+# Trucco: le classi dataset del progetto (`BaseWriterDataset` e sottoclassi)
+# usano sempre TUTTE le coppie genuine, ma campionano un sottoinsieme di
+# impostor per rispettare `positive_ratio`. Per ottenere il protocollo
+# "esaustivo" (nessun campionamento) basta passare un `positive_ratio`
+# estremamente piccolo: il numero di impostor "necessari" per quel ratio
+# supera sempre la dimensione del pool disponibile, quindi il codice
+# ripiega automaticamente sull'uso di TUTTE le impostor pairs
+# (vedi `_resample_negatives` in `base_dataset.py`).
+#
+# Per TripletDataset la stessa logica si applica a `_create_validation_pairs`.
+
+# %%
+EXHAUSTIVE_POSITIVE_RATIO = 1e-9  # forza l'uso di tutte le impostor pairs
+
+dataset_class = DATASET_CLASS_BY_TYPE[MODEL_TYPE]
+
+_, val_loader, _, val_dataset = create_dataloaders(
+    dataset_class,
+    data_root=TARGET_DATASET_PATH,
+    batch_size=16,
+    num_workers=NUM_WORKERS,
+    test_size=1.0,  # tutto il dataset target va in validazione, niente training
+    target_size=TARGET_SIZE,
+    random_state=RANDOM_STATE,
+    positive_ratio=EXHAUSTIVE_POSITIVE_RATIO,
+    resample_negatives_every_n_epochs=0,  # nessun resampling: è già "tutto"
+)
+
+n_genuine = len(val_dataset.all_genuine_pairs)
+if hasattr(val_dataset, 'validation_pairs'):
+    n_total = len(val_dataset.validation_pairs)
+else:
+    n_total = len(val_dataset.samples)
+n_impostor = n_total - n_genuine
+
+print(f"\n📊 Protocollo di validazione esaustivo su '{TARGET_DATASET_NAME}':")
+print(f"  Genuine pairs:  {n_genuine}")
+print(f"  Impostor pairs: {n_impostor}")
+print(f"  Totale:         {n_total}")
+
+# %% [markdown]
+# ## 4. Validazione completa (riusa `BaseTrainer.validate_comprehensive`)
+#
+# Istanziamo il Trainer solo per riusare la logica di valutazione già
+# scritta e testata (compute_metrics, gestione BCE vs embeddings). Non
+# chiamiamo mai `.train()`.
+
+# %%
+trainer_class = TRAINER_CLASS_BY_TYPE[MODEL_TYPE]
+
+trainer_kwargs = dict(
+    model=model,
+    model_name=f"{MODEL_NAME}_{MODEL_TYPE}_{TARGET_DATASET_NAME}_exhaustive",
+    device=device,
+    results_dir=RESULTS_DIR,
+)
+if MODEL_TYPE == 'contrastive':
+    trainer_kwargs['margin'] = 1.0   # placeholder: stesso margin del training originale
+elif MODEL_TYPE == 'triplet':
+    trainer_kwargs['margin'] = 0.5   # placeholder: stesso margin del training originale
+
+trainer = trainer_class(**trainer_kwargs)
+
+# %%
+metrics = trainer.validate_comprehensive(val_dataset)
+print_results(metrics, dataset_name=f"{TARGET_DATASET_NAME} (exhaustive protocol)")
+
+# %% [markdown]
+# ## 5. Salvataggio risultati
+
+# %%
+import pandas as pd
+
+metrics_to_save = {}
+for key, value in metrics.items():
+    if isinstance(value, np.ndarray):
+        np.set_printoptions(threshold=np.inf, linewidth=np.inf)
+        metrics_to_save[key] = str(value.tolist())
+    else:
+        metrics_to_save[key] = value
+
+out_path = os.path.join(RESULTS_DIR, f"{TARGET_DATASET_NAME}_exhaustive_metrics.csv")
+pd.DataFrame([metrics_to_save]).to_csv(out_path, index=False)
+print(f"\n✓ Metriche salvate in {out_path}")
