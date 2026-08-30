@@ -267,3 +267,49 @@ def create_kfold_dataloaders(
     )
 
     return train_loader, val_loader, train_dataset, val_dataset
+
+
+# ============================================================================
+# Convenience wrappers (backward compatibility)
+# ============================================================================
+
+# Siamese
+def create_siamese_dataloaders(*args, **kwargs):
+    """Create Siamese dataloaders (train/val/test, stesso dominio)."""
+    return create_dataloaders(SiameseDataset, *args, **kwargs)
+
+def create_siamese_cross_dataset_dataloaders(*args, **kwargs):
+    """Create Siamese dataloaders (train/val/test, cross-dataset)."""
+    return create_cross_dataset_dataloaders(SiameseDataset, *args, **kwargs)
+
+def create_siamese_kfold_dataloaders(*args, **kwargs):
+    """Create Siamese K-Fold dataloaders."""
+    return create_kfold_dataloaders(SiameseDataset, *args, **kwargs)
+
+
+# Contrastive
+def create_contrastive_dataloaders(*args, **kwargs):
+    """Create Contrastive dataloaders (train/val/test, stesso dominio)."""
+    return create_dataloaders(ContrastiveDataset, *args, **kwargs)
+
+def create_contrastive_cross_dataset_dataloaders(*args, **kwargs):
+    """Create Contrastive dataloaders (train/val/test, cross-dataset)."""
+    return create_cross_dataset_dataloaders(ContrastiveDataset, *args, **kwargs)
+
+def create_contrastive_kfold_dataloaders(*args, **kwargs):
+    """Create Contrastive K-Fold dataloaders."""
+    return create_kfold_dataloaders(ContrastiveDataset, *args, **kwargs)
+
+
+# Triplet
+def create_triplet_dataloaders(*args, **kwargs):
+    """Create Triplet dataloaders (train/val/test, stesso dominio)."""
+    return create_dataloaders(TripletDataset, *args, **kwargs)
+
+def create_triplet_cross_dataset_dataloaders(*args, **kwargs):
+    """Create Triplet dataloaders (train/val/test, cross-dataset)."""
+    return create_cross_dataset_dataloaders(TripletDataset, *args, **kwargs)
+
+def create_triplet_kfold_dataloaders(*args, **kwargs):
+    """Create Triplet K-Fold dataloaders."""
+    return create_kfold_dataloaders(TripletDataset, *args, **kwargs)
