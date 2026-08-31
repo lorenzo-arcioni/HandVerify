@@ -1,6 +1,13 @@
 """
 Demo live: verifica biometrica della scrittura a mano da webcam.
 
+Versione ottimizzata: la lettura della webcam e il preprocessing dell'anteprima
+girano su thread separati, cosi' il rendering del video non viene mai bloccato
+dal costo di verifier.prepare(). La cattura vera e propria (SPAZIO/1/2/INVIO)
+resta invece sincrona: e' un'azione occasionale dell'utente, non deve essere
+ottimizzata e cosi' e' piu' semplice da ragionare (nessuna race condition sui
+risultati mostrati a schermo).
+
 Due modalita' di acquisizione:
 
   DOPPIA  (default) i due post-it stanno insieme nel frame, uno per riquadro.
@@ -35,6 +42,7 @@ Tasti:
 
 import argparse
 import os
+import threading
 import time
 
 import cv2
@@ -63,6 +71,103 @@ CAPTURES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "capture
 NO_KEY = 255          # valore restituito da waitKey quando non e' stato premuto nulla
 DEBUG_KEYS = False    # True per stampare il codice di ogni tasto premuto
 
+PANEL_W = 190
+
+
+# --------------------------------------------------------------------------- #
+# Threading: cattura webcam e preprocessing dell'anteprima disaccoppiati
+# --------------------------------------------------------------------------- #
+
+class FrameGrabber:
+    """
+    Legge continuamente dalla webcam in un thread dedicato e tiene sempre
+    pronto l'ultimo frame. Senza questo, cap.read() blocca il loop principale
+    per tutta la durata dell'esposizione/USB transfer della camera, che su
+    alcune webcam puo' costare piu' di un semplice resize.
+    """
+
+    def __init__(self, cap):
+        self.cap = cap
+        self._frame = None
+        self._lock = threading.Lock()
+        self._running = True
+        self._ok = True
+        self._thread = threading.Thread(target=self._loop, daemon=True)
+        self._thread.start()
+
+    def _loop(self):
+        while self._running:
+            ok, frame = self.cap.read()
+            if not ok:
+                self._ok = False
+                break
+            with self._lock:
+                self._frame = frame
+
+    def read(self):
+        """Ritorna (ok, ultimo_frame_disponibile) senza mai bloccare."""
+        with self._lock:
+            frame = None if self._frame is None else self._frame.copy()
+        return self._ok, frame
+
+    def stop(self):
+        self._running = False
+        self._thread.join(timeout=1.0)
+
+
+class PreviewWorker:
+    """
+    Calcola in background l'anteprima preprocessata (quella mostrata nel
+    pannello laterale) usando sempre il frame piu' recente disponibile.
+
+    Se il calcolo precedente non e' ancora finito, il nuovo frame viene
+    semplicemente scartato invece di essere accodato: questo evita che il
+    lavoro si accumuli se la macchina e' piu' lenta della webcam, a costo di
+    mostrare un'anteprima leggermente meno "fresca" nei momenti di carico.
+    """
+
+    def __init__(self, verifier):
+        self.verifier = verifier
+        self._pending = None
+        self._result = None
+        self._lock = threading.Lock()
+        self._wakeup = threading.Event()
+        self._running = True
+        self._thread = threading.Thread(target=self._loop, daemon=True)
+        self._thread.start()
+
+    def submit(self, roi):
+        """Propone una nuova ROI da preprocessare (sovrascrive la precedente)."""
+        with self._lock:
+            self._pending = roi
+        self._wakeup.set()
+
+    def latest(self):
+        with self._lock:
+            return self._result
+
+    def _loop(self):
+        while self._running:
+            self._wakeup.wait(timeout=0.1)
+            self._wakeup.clear()
+            with self._lock:
+                roi, self._pending = self._pending, None
+            if roi is None:
+                continue
+            out, _ = self.verifier.prepare(roi)
+            if out is not None:
+                with self._lock:
+                    self._result = out
+
+    def stop(self):
+        self._running = False
+        self._wakeup.set()
+        self._thread.join(timeout=1.0)
+
+
+# --------------------------------------------------------------------------- #
+# Disegno
+# --------------------------------------------------------------------------- #
 
 def read_key(delay=20):
     """
@@ -91,9 +196,6 @@ def roi_boxes(w, h, mode):
         return [(int(0.06 * w), top, int(0.94 * w), bottom)]
     return [(int(0.03 * w), top, int(0.48 * w), bottom),
             (int(0.52 * w), top, int(0.97 * w), bottom)]
-
-
-PANEL_W = 190
 
 
 def draw_thumb(canvas, img_448, x, y, size, label, sublabel=None, sub_color=GREY):
@@ -232,20 +334,6 @@ def build_result_view(prep_a, prep_b, result, mode, thr_key, width=1000):
     return canvas
 
 
-def capture(verifier, frame, box, name):
-    """Preprocessa una ROI e stampa gli avvisi di qualita'."""
-    x1, y1, x2, y2 = box
-    out, stages = verifier.prepare(frame[y1:y2, x1:x2])
-    if out is None:
-        print("  [{}] nessuna scrittura leggibile.".format(name))
-        return None, None
-    if not stages.get("found_text", True):
-        print("  [{}] testo non rilevato, uso tutto il riquadro.".format(name))
-    for wmsg in quality_warnings(out):
-        print("  [{}] attenzione: {}".format(name, wmsg))
-    return out, stages
-
-
 def announce_architecture(checkpoint_path, forced_arch, forced_net_type):
     """
     Stampa a schermo, prima ancora di costruire il modello, quale backbone e
@@ -285,6 +373,126 @@ def announce_architecture(checkpoint_path, forced_arch, forced_net_type):
               "cosine similarity per questa tipologia.")
 
 
+# --------------------------------------------------------------------------- #
+# Stato applicativo: cattura/confronto/salvataggio raccolti in un solo posto
+# --------------------------------------------------------------------------- #
+
+class AppState:
+    def __init__(self, verifier, thr_key, acq_mode):
+        self.verifier = verifier
+        self.thr_key = thr_key
+        self.acq_mode = acq_mode
+        self.slots = {"A": None, "B": None}
+        self.stages_cache = {"A": None, "B": None}
+        self.result_view = None
+        self.last = None  # (frame, prep_a, prep_b, result)
+
+    def capture_one(self, frame, box, name):
+        """Preprocessa una ROI e stampa gli avvisi di qualita'."""
+        x1, y1, x2, y2 = box
+        out, stages = self.verifier.prepare(frame[y1:y2, x1:x2])
+        if out is None:
+            print("  [{}] nessuna scrittura leggibile.".format(name))
+            return False
+        if not stages.get("found_text", True):
+            print("  [{}] testo non rilevato, uso tutto il riquadro.".format(name))
+        for wmsg in quality_warnings(out):
+            print("  [{}] attenzione: {}".format(name, wmsg))
+        self.slots[name], self.stages_cache[name] = out, stages
+        return True
+
+    def both_filled(self):
+        return self.slots["A"] is not None and self.slots["B"] is not None
+
+    def compare(self, frame_for_log):
+        if not self.both_filled():
+            print("  Servono entrambi gli slot: cattura con 1 e 2 (o SPAZIO).")
+            return
+        t0 = time.time()
+        res = self.verifier.verify(self.slots["A"], self.slots["B"], self.thr_key)
+        print("  cos={:+.4f}  soglia={:.4f}  -> {}  ({:.0f} ms)".format(
+            res["score"], res["threshold"],
+            "STESSA PERSONA" if res["same_writer"] else "PERSONE DIVERSE",
+            (time.time() - t0) * 1000))
+        self.result_view = build_result_view(
+            self.slots["A"], self.slots["B"], res, self.verifier.mode, self.thr_key)
+        self.last = (frame_for_log, self.slots["A"], self.slots["B"], res)
+
+    def handle_space(self, frame, boxes):
+        if self.acq_mode == "doppia":
+            ok_all = all(self.capture_one(frame, box, name)
+                        for box, name in zip(boxes, ("A", "B")))
+            if ok_all:
+                self.compare(frame.copy())
+        else:
+            target = "A" if self.slots["A"] is None else "B"
+            if self.capture_one(frame, boxes[0], target):
+                print("  slot {} catturato.".format(target))
+                if self.both_filled():
+                    self.compare(frame.copy())
+
+    def handle_slot_key(self, frame, boxes, target):
+        box = boxes[0] if self.acq_mode == "singola" else boxes[0 if target == "A" else 1]
+        if self.capture_one(frame, box, target):
+            print("  slot {} catturato.".format(target))
+
+    def clear_slots(self):
+        self.slots = {"A": None, "B": None}
+        self.stages_cache = {"A": None, "B": None}
+        self.result_view = None
+        print("  slot svuotati.")
+
+    def cycle_threshold(self):
+        keys = list(self.verifier.thresholds)
+        self.thr_key = keys[(keys.index(self.thr_key) + 1) % len(keys)]
+        print("  soglia: {} = {:.4f}".format(self.thr_key, self.verifier.thresholds[self.thr_key]))
+        if self.both_filled():
+            frame_for_log = self.last[0] if self.last else self.slots["A"]
+            self.compare(frame_for_log)
+
+    def save_debug(self):
+        os.makedirs(CAPTURES_DIR, exist_ok=True)
+        stamp = time.strftime("%Y%m%d_%H%M%S")
+        saved = False
+        for name in ("A", "B"):
+            if self.stages_cache[name] is None:
+                continue
+            sheet = debug_sheet(self.stages_cache[name])
+            if sheet is not None:
+                path = os.path.join(CAPTURES_DIR, "{}_debug_{}.png".format(stamp, name))
+                cv2.imwrite(path, sheet)
+                print("  stadi di preprocessing salvati: {}".format(path))
+                saved = True
+        if not saved:
+            print("  niente da salvare: cattura prima con 1 / 2 / SPAZIO.")
+
+    def save_result(self):
+        if self.last is None:
+            return
+        os.makedirs(CAPTURES_DIR, exist_ok=True)
+        stamp = time.strftime("%Y%m%d_%H%M%S")
+        frame_img, pa, pb, res = self.last
+        cv2.imwrite(os.path.join(CAPTURES_DIR, stamp + "_frame.png"), frame_img)
+        cv2.imwrite(os.path.join(CAPTURES_DIR, stamp + "_A.png"), pa)
+        cv2.imwrite(os.path.join(CAPTURES_DIR, stamp + "_B.png"), pb)
+        if self.result_view is not None:
+            cv2.imwrite(os.path.join(CAPTURES_DIR, stamp + "_result.png"), self.result_view)
+        log_path = os.path.join(CAPTURES_DIR, "log.csv")
+        new_file = not os.path.exists(log_path)
+        with open(log_path, "a", encoding="utf-8") as f:
+            if new_file:
+                f.write("timestamp,score,threshold,same_writer,mode,detect,acquisition\n")
+            f.write("{},{:.6f},{:.6f},{},{},{},{}\n".format(
+                stamp, res["score"], res["threshold"],
+                int(res["same_writer"]), self.verifier.mode,
+                int(self.verifier.detect), self.acq_mode))
+        print("  salvato in {} ({})".format(CAPTURES_DIR, stamp))
+
+
+# --------------------------------------------------------------------------- #
+# Main
+# --------------------------------------------------------------------------- #
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--camera", type=int, default=1)
@@ -310,6 +518,9 @@ def main():
     ap.add_argument("--no-detect", action="store_true")
     ap.add_argument("--mirror", action="store_true",
                     help="specchia l'anteprima (comodo con webcam frontali)")
+    ap.add_argument("--cv-threads", type=int, default=8,
+                    help="numero di thread interni di OpenCV (0 = default OpenCV, "
+                    "-1 = tutti i core disponibili)")
     ap.add_argument("--debug-keys", action="store_true",
                     help="stampa il codice di ogni tasto premuto")
     args = ap.parse_args()
@@ -317,12 +528,32 @@ def main():
     global DEBUG_KEYS
     DEBUG_KEYS = args.debug_keys
 
+    # Lascia che OpenCV usi piu' core per resize/cvtColor/ecc. Su molte
+    # distribuzioni il default e' gia' "tutti i core", ma alcuni ambienti
+    # (es. dentro container, o dopo che PyTorch ha gia' preso i thread) lo
+    # abbassano: -1 forza il numero di CPU disponibili.
+    if args.cv_threads != 0:
+        n = os.cpu_count() if args.cv_threads < 0 else args.cv_threads
+        cv2.setNumThreads(n)
+        print("cv2.setNumThreads({})".format(n))
+
     announce_architecture(args.checkpoint, args.arch, args.net_type)
 
     print("Carico il modello...")
     verifier = HandwritingVerifier(args.checkpoint, mode=args.mode,
                                    detect=not args.no_detect, arch=args.arch)
     print("Modello pronto su {} -> {}".format(verifier.device, verifier.describe()))
+
+    # Su CPU, PyTorch di default usa gia' piu' thread per le operazioni
+    # interne (conv, matmul...): se e' stato limitato altrove nel progetto lo
+    # segnaliamo soltanto, senza forzare nulla qui per non litigare con
+    # eventuali impostazioni gia' fatte in engine.py.
+    if str(verifier.device) == "cpu":
+        try:
+            import torch
+            print("torch.get_num_threads() = {}".format(torch.get_num_threads()))
+        except Exception:
+            pass
 
     thr_key = args.threshold
     if args.threshold_value is not None:
@@ -333,176 +564,87 @@ def main():
     cap = cv2.VideoCapture(args.camera, cv2.CAP_DSHOW if os.name == "nt" else cv2.CAP_ANY)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
+    # Buffer piccolo: evita che la queue interna della webcam accumuli frame
+    # vecchi quando il resto della pipeline rallenta anche solo per un attimo.
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
     if not cap.isOpened():
         raise SystemExit("Webcam {} non disponibile (prova --camera 0)".format(args.camera))
+
+    grabber = FrameGrabber(cap)
+    preview_worker = PreviewWorker(verifier)
 
     win = "HandVerify - demo webcam"
     cv2.namedWindow(win, cv2.WINDOW_NORMAL)
 
-    acq_mode = args.acquisition
-    slots = {"A": None, "B": None}
-    stages_cache = {"A": None, "B": None}
-    result_view = None
-    last = None
+    state = AppState(verifier, thr_key, args.acquisition)
     preview = None
-    frame_idx = 0
 
-    def compare():
-        if slots["A"] is None or slots["B"] is None:
-            print("  Servono entrambi gli slot: cattura con 1 e 2 (o SPAZIO).")
-            return None, None
-        t0 = time.time()
-        res = verifier.verify(slots["A"], slots["B"], thr_key)
-        print("  cos={:+.4f}  soglia={:.4f}  -> {}  ({:.0f} ms)".format(
-            res["score"], res["threshold"],
-            "STESSA PERSONA" if res["same_writer"] else "PERSONE DIVERSE",
-            (time.time() - t0) * 1000))
-        return res, build_result_view(slots["A"], slots["B"], res, verifier.mode, thr_key)
+    try:
+        while True:
+            ok, frame = grabber.read()
+            if not ok:
+                print("Frame non letto dalla webcam.")
+                break
+            if frame is None:
+                continue  # il grabber non ha ancora consegnato il primo frame
+            if args.mirror:
+                frame = cv2.flip(frame, 1)
 
-    while True:
-        ok, frame = cap.read()
-        if not ok:
-            print("Frame non letto dalla webcam.")
-            break
-        if args.mirror:
-            frame = cv2.flip(frame, 1)
+            h, w = frame.shape[:2]
+            boxes = roi_boxes(w, h, state.acq_mode)
 
-        h, w = frame.shape[:2]
-        boxes = roi_boxes(w, h, acq_mode)
-        frame_idx += 1
-
-        if result_view is None:
-            # anteprima aggiornata ogni 4 frame per non rallentare il video
-            if frame_idx % 4 == 0:
+            if state.result_view is None:
                 x1, y1, x2, y2 = boxes[0]
-                out, _ = verifier.prepare(frame[y1:y2, x1:x2])
-                preview = out if out is not None else preview
-            cv2.imshow(win, draw_live_overlay(frame, boxes, verifier, thr_key,
-                                              acq_mode, slots, preview))
-        else:
-            cv2.imshow(win, result_view)
-
-        # chiusura con la X della finestra: senza questo controllo il loop
-        # continuerebbe a riaprirla a ogni imshow
-        if cv2.getWindowProperty(win, cv2.WND_PROP_VISIBLE) < 1:
-            break
-
-        key = read_key()
-
-        if key in (ord('q'), 27):
-            break
-
-        elif key == 32:  # spazio
-            if acq_mode == "doppia":
-                got = []
-                for box, name in zip(boxes, ("A", "B")):
-                    out, st = capture(verifier, frame, box, name)
-                    if out is None:
-                        got = []
-                        break
-                    got.append((name, out, st))
-                for name, out, st in got:
-                    slots[name], stages_cache[name] = out, st
-                if got:
-                    res, result_view = compare()
-                    if res is not None:
-                        last = (frame.copy(), slots["A"], slots["B"], res)
+                preview_worker.submit(frame[y1:y2, x1:x2])
+                new_preview = preview_worker.latest()
+                preview = new_preview if new_preview is not None else preview
+                cv2.imshow(win, draw_live_overlay(frame, boxes, verifier, state.thr_key,
+                                                  state.acq_mode, state.slots, preview))
             else:
-                target = "A" if slots["A"] is None else "B"
-                out, st = capture(verifier, frame, boxes[0], target)
-                if out is not None:
-                    slots[target], stages_cache[target] = out, st
-                    print("  slot {} catturato.".format(target))
-                    if slots["A"] is not None and slots["B"] is not None:
-                        res, result_view = compare()
-                        if res is not None:
-                            last = (frame.copy(), slots["A"], slots["B"], res)
+                cv2.imshow(win, state.result_view)
 
-        elif key in (ord('1'), ord('2')):
-            target = "A" if key == ord('1') else "B"
-            box = boxes[0] if acq_mode == "singola" else boxes[0 if target == "A" else 1]
-            out, st = capture(verifier, frame, box, target)
-            if out is not None:
-                slots[target], stages_cache[target] = out, st
-                print("  slot {} catturato.".format(target))
+            # chiusura con la X della finestra: senza questo controllo il loop
+            # continuerebbe a riaprirla a ogni imshow
+            if cv2.getWindowProperty(win, cv2.WND_PROP_VISIBLE) < 1:
+                break
 
-        elif key in (13, 10):  # invio
-            res, view = compare()
-            if res is not None:
-                result_view = view
-                last = (frame.copy(), slots["A"], slots["B"], res)
+            key = read_key()
 
-        elif key == ord('m'):
-            acq_mode = "singola" if acq_mode == "doppia" else "doppia"
-            print("  modalita' di acquisizione: {}".format(acq_mode))
-            result_view = None
-
-        elif key == ord('c'):
-            slots["A"] = slots["B"] = None
-            stages_cache["A"] = stages_cache["B"] = None
-            result_view = None
-            print("  slot svuotati.")
-
-        elif key == ord('r'):
-            result_view = None
-
-        elif key == ord('b'):
-            verifier.mode = "raw" if verifier.mode == "scan" else "scan"
-            print("  preprocessing: {}".format(verifier.mode))
-            result_view = None
-
-        elif key == ord('d'):
-            verifier.detect = not verifier.detect
-            print("  auto-crop post-it: {}".format("on" if verifier.detect else "off"))
-            result_view = None
-
-        elif key == ord('t'):
-            keys = list(verifier.thresholds)
-            thr_key = keys[(keys.index(thr_key) + 1) % len(keys)]
-            print("  soglia: {} = {:.4f}".format(thr_key, verifier.thresholds[thr_key]))
-            if slots["A"] is not None and slots["B"] is not None:
-                res, result_view = compare()
-                if res is not None:
-                    last = (last[0] if last else frame.copy(), slots["A"], slots["B"], res)
-
-        elif key == ord('x'):
-            os.makedirs(CAPTURES_DIR, exist_ok=True)
-            stamp = time.strftime("%Y%m%d_%H%M%S")
-            saved = False
-            for name in ("A", "B"):
-                if stages_cache[name] is None:
-                    continue
-                sheet = debug_sheet(stages_cache[name])
-                if sheet is not None:
-                    path = os.path.join(CAPTURES_DIR, "{}_debug_{}.png".format(stamp, name))
-                    cv2.imwrite(path, sheet)
-                    print("  stadi di preprocessing salvati: {}".format(path))
-                    saved = True
-            if not saved:
-                print("  niente da salvare: cattura prima con 1 / 2 / SPAZIO.")
-
-        elif key == ord('s') and last is not None:
-            os.makedirs(CAPTURES_DIR, exist_ok=True)
-            stamp = time.strftime("%Y%m%d_%H%M%S")
-            frame_img, pa, pb, res = last
-            cv2.imwrite(os.path.join(CAPTURES_DIR, stamp + "_frame.png"), frame_img)
-            cv2.imwrite(os.path.join(CAPTURES_DIR, stamp + "_A.png"), pa)
-            cv2.imwrite(os.path.join(CAPTURES_DIR, stamp + "_B.png"), pb)
-            if result_view is not None:
-                cv2.imwrite(os.path.join(CAPTURES_DIR, stamp + "_result.png"), result_view)
-            log_path = os.path.join(CAPTURES_DIR, "log.csv")
-            new_file = not os.path.exists(log_path)
-            with open(log_path, "a", encoding="utf-8") as f:
-                if new_file:
-                    f.write("timestamp,score,threshold,same_writer,mode,detect,acquisition\n")
-                f.write("{},{:.6f},{:.6f},{},{},{},{}\n".format(
-                    stamp, res["score"], res["threshold"],
-                    int(res["same_writer"]), verifier.mode,
-                    int(verifier.detect), acq_mode))
-            print("  salvato in {} ({})".format(CAPTURES_DIR, stamp))
-
-    cap.release()
-    cv2.destroyAllWindows()
+            if key in (ord('q'), 27):
+                break
+            elif key == 32:  # spazio
+                state.handle_space(frame, boxes)
+            elif key in (ord('1'), ord('2')):
+                state.handle_slot_key(frame, boxes, "A" if key == ord('1') else "B")
+            elif key in (13, 10):  # invio
+                state.compare(frame.copy())
+            elif key == ord('m'):
+                state.acq_mode = "singola" if state.acq_mode == "doppia" else "doppia"
+                state.result_view = None
+                print("  modalita' di acquisizione: {}".format(state.acq_mode))
+            elif key == ord('c'):
+                state.clear_slots()
+            elif key == ord('r'):
+                state.result_view = None
+            elif key == ord('b'):
+                verifier.mode = "raw" if verifier.mode == "scan" else "scan"
+                state.result_view = None
+                print("  preprocessing: {}".format(verifier.mode))
+            elif key == ord('d'):
+                verifier.detect = not verifier.detect
+                state.result_view = None
+                print("  auto-crop post-it: {}".format("on" if verifier.detect else "off"))
+            elif key == ord('t'):
+                state.cycle_threshold()
+            elif key == ord('x'):
+                state.save_debug()
+            elif key == ord('s'):
+                state.save_result()
+    finally:
+        preview_worker.stop()
+        grabber.stop()
+        cap.release()
+        cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":

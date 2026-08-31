@@ -64,94 +64,181 @@ from sklearn.model_selection import train_test_split, KFold
 """
 DataLoader Factory
 Unified functions to create dataloaders for any dataset type.
+
+Split a 3 vie (train / val / test) sui writer:
+  - train: usato per il training vero e proprio
+  - val:   usato per l'early stopping / model selection durante il training
+  - test:  held-out, mai visto durante training o model selection.
+           Va usato SOLO per il report finale delle metriche, per evitare
+           che lo stesso set che sceglie il checkpoint migliore sia anche
+           quello su cui si dichiarano i risultati (bias di selezione).
 """
+
+
+def _list_writer_dirs(data_root: str):
+    return [
+        os.path.join(data_root, d)
+        for d in sorted(os.listdir(data_root))
+        if os.path.isdir(os.path.join(data_root, d))
+    ]
+
+
+def _worker_init_fn(worker_id):
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+
+
+def _make_loader(dataset, batch_size, shuffle, num_workers, random_state, drop_last=False):
+    if dataset is None:
+        return None
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        num_workers=num_workers,
+        worker_init_fn=_worker_init_fn,
+        generator=torch.Generator().manual_seed(random_state),
+        pin_memory=True,
+        drop_last=drop_last,
+    )
+
 
 def create_dataloaders(
     dataset_class,
     data_root: str,
     batch_size: int = 16,
     num_workers: int = 4,
-    test_size: float = 0.2,
+    val_size: float = 0.15,
+    test_size: float = 0.15,
     target_size: int = 448,
     random_state: int = 42,
     **dataset_kwargs
 ):
     """
-    Generic dataloader creator for any dataset type.
-    
+    Split a 3 vie (train/val/test) sui writer, stesso dominio dati.
+
     Args:
-        dataset_class: Dataset class to instantiate (SiameseDataset, etc.)
-        data_root: Root directory with writer subdirectories
+        dataset_class: Dataset class da istanziare (SiameseDataset, etc.)
+        data_root: Directory radice con le sottocartelle per writer
         batch_size: Batch size
-        num_workers: Number of workers
-        test_size: Train/test split ratio (0.0 = all train, 1.0 = all test)
-        target_size: Image size
-        random_state: Random seed
-        **dataset_kwargs: Additional args for dataset constructor
-    
+        num_workers: Numero di worker
+        val_size: Frazione di writer riservata a validation (early stopping)
+        test_size: Frazione di writer riservata a test (held-out, report finale)
+        target_size: Dimensione immagine
+        random_state: Seed
+        **dataset_kwargs: Argomenti aggiuntivi per il costruttore del dataset
+
     Returns:
-        (train_loader, test_loader, train_dataset, test_dataset)
+        (train_loader, val_loader, test_loader,
+         train_dataset, val_dataset, test_dataset)
+
+        Un loader/dataset è None se la relativa frazione è 0.0.
     """
-    # Get writer directories
-    writer_dirs = [
-        os.path.join(data_root, d) 
-        for d in sorted(os.listdir(data_root)) 
-        if os.path.isdir(os.path.join(data_root, d))
-    ]
-    
-    # Train/Test Split directories
-    if test_size == 0.0:
-        train_dirs, test_dirs = writer_dirs, []
-    elif test_size == 1.0:
-        train_dirs, test_dirs = [], writer_dirs
-    else:
-        train_dirs, test_dirs = train_test_split(
-            writer_dirs, test_size=test_size, random_state=random_state
+    if val_size < 0 or test_size < 0 or (val_size + test_size) >= 1.0:
+        raise ValueError(
+            f"val_size ({val_size}) + test_size ({test_size}) deve essere < 1.0 "
+            f"per lasciare una porzione di dati al training."
         )
 
-    def worker_init_fn(worker_id):
-        worker_seed = torch.initial_seed() % 2**32
-        np.random.seed(worker_seed)
-        random.seed(worker_seed)
-    
-    # Create datasets
+    writer_dirs = _list_writer_dirs(data_root)
+
+    holdout_size = val_size + test_size
+    if holdout_size == 0.0:
+        train_dirs, val_dirs, test_dirs = writer_dirs, [], []
+    else:
+        train_dirs, temp_dirs = train_test_split(
+            writer_dirs, test_size=holdout_size, random_state=random_state
+        )
+        if val_size == 0.0:
+            val_dirs, test_dirs = [], temp_dirs
+        elif test_size == 0.0:
+            val_dirs, test_dirs = temp_dirs, []
+        else:
+            rel_test = test_size / holdout_size
+            val_dirs, test_dirs = train_test_split(
+                temp_dirs, test_size=rel_test, random_state=random_state
+            )
+
     train_dataset = dataset_class(
-        train_dirs, 
-        train=True, 
-        target_size=target_size,
-        **dataset_kwargs
+        train_dirs, train=True, target_size=target_size, **dataset_kwargs
     ) if train_dirs else None
-    
+
+    val_dataset = dataset_class(
+        val_dirs, train=False, target_size=target_size, **dataset_kwargs
+    ) if val_dirs else None
+
     test_dataset = dataset_class(
-        test_dirs, 
-        train=False, 
-        target_size=target_size,
-        **dataset_kwargs
+        test_dirs, train=False, target_size=target_size, **dataset_kwargs
     ) if test_dirs else None
-    
-    # Create dataloaders
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=num_workers,
-        worker_init_fn=worker_init_fn,
-        generator=torch.Generator().manual_seed(random_state),
-        pin_memory=True,
-        drop_last=True
-    ) if train_dataset else None
-    
-    test_loader = DataLoader(
-        test_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        worker_init_fn=worker_init_fn,
-        generator=torch.Generator().manual_seed(random_state),
-        pin_memory=True
-    ) if test_dataset else None
-    
-    return train_loader, test_loader, train_dataset, test_dataset
+
+    train_loader = _make_loader(train_dataset, batch_size, True, num_workers,
+                                 random_state, drop_last=True)
+    val_loader = _make_loader(val_dataset, batch_size, False, num_workers, random_state)
+    test_loader = _make_loader(test_dataset, batch_size, False, num_workers, random_state)
+
+    return train_loader, val_loader, test_loader, train_dataset, val_dataset, test_dataset
+
+
+def create_cross_dataset_dataloaders(
+    dataset_class,
+    train_root: str,
+    target_root: str,
+    batch_size: int = 16,
+    num_workers: int = 4,
+    val_size: float = 0.5,
+    target_size: int = 448,
+    random_state: int = 42,
+    **dataset_kwargs
+):
+    """
+    Split per esperimenti cross-dataset: tutti i writer di train_root vanno
+    in training; i writer di target_root vengono divisi in val (early
+    stopping) e test (held-out, report finale), così il test set del
+    dominio target resta comunque mai visto prima della valutazione finale.
+
+    Args:
+        dataset_class: Dataset class da istanziare
+        train_root: Directory radice del dominio di training (usato per intero)
+        target_root: Directory radice del dominio target, diviso in val/test
+        batch_size: Batch size
+        num_workers: Numero di worker
+        val_size: Frazione dei writer di target_root riservata a val
+                  (il resto, 1 - val_size, va a test)
+        target_size: Dimensione immagine
+        random_state: Seed
+        **dataset_kwargs: Argomenti aggiuntivi per il costruttore del dataset
+
+    Returns:
+        (train_loader, val_loader, test_loader,
+         train_dataset, val_dataset, test_dataset)
+    """
+    if not (0.0 < val_size < 1.0):
+        raise ValueError(f"val_size deve essere strettamente tra 0 e 1, ricevuto {val_size}")
+
+    train_dirs = _list_writer_dirs(train_root)
+    target_dirs = _list_writer_dirs(target_root)
+
+    val_dirs, test_dirs = train_test_split(
+        target_dirs, test_size=(1.0 - val_size), random_state=random_state
+    )
+
+    train_dataset = dataset_class(
+        train_dirs, train=True, target_size=target_size, **dataset_kwargs
+    )
+    val_dataset = dataset_class(
+        val_dirs, train=False, target_size=target_size, **dataset_kwargs
+    )
+    test_dataset = dataset_class(
+        test_dirs, train=False, target_size=target_size, **dataset_kwargs
+    )
+
+    train_loader = _make_loader(train_dataset, batch_size, True, num_workers,
+                                 random_state, drop_last=True)
+    val_loader = _make_loader(val_dataset, batch_size, False, num_workers, random_state)
+    test_loader = _make_loader(test_dataset, batch_size, False, num_workers, random_state)
+
+    return train_loader, val_loader, test_loader, train_dataset, val_dataset, test_dataset
 
 
 def create_kfold_dataloaders(
@@ -167,7 +254,7 @@ def create_kfold_dataloaders(
 ):
     """
     Generic K-Fold dataloader creator.
-    
+
     Args:
         dataset_class: Dataset class to instantiate
         data_root: Root directory with writer subdirectories
@@ -178,40 +265,36 @@ def create_kfold_dataloaders(
         target_size: Image size
         random_state: Random seed
         **dataset_kwargs: Additional args for dataset constructor
-    
+
     Returns:
         (train_loader, val_loader, train_dataset, val_dataset)
     """
     # Get writer directories
-    writer_dirs = [
-        os.path.join(data_root, d) 
-        for d in sorted(os.listdir(data_root)) 
-        if os.path.isdir(os.path.join(data_root, d))
-    ]
-    
+    writer_dirs = _list_writer_dirs(data_root)
+
     # K-Fold split
     kfold = KFold(n_splits=n_splits, shuffle=True, random_state=random_state)
     splits = list(kfold.split(writer_dirs))
     train_idx, val_idx = splits[current_fold]
-    
+
     train_dirs = [writer_dirs[i] for i in train_idx]
     val_dirs = [writer_dirs[i] for i in val_idx]
-    
+
     # Create datasets
     train_dataset = dataset_class(
-        train_dirs, 
-        train=True, 
+        train_dirs,
+        train=True,
         target_size=target_size,
         **dataset_kwargs
     )
-    
+
     val_dataset = dataset_class(
-        val_dirs, 
-        train=False, 
+        val_dirs,
+        train=False,
         target_size=target_size,
         **dataset_kwargs
     )
-    
+
     # Create dataloaders
     train_loader = DataLoader(
         train_dataset,
@@ -221,7 +304,7 @@ def create_kfold_dataloaders(
         pin_memory=True,
         drop_last=True
     )
-    
+
     val_loader = DataLoader(
         val_dataset,
         batch_size=batch_size,
@@ -229,7 +312,7 @@ def create_kfold_dataloaders(
         num_workers=num_workers,
         pin_memory=True
     )
-    
+
     return train_loader, val_loader, train_dataset, val_dataset
 
 
@@ -239,8 +322,12 @@ def create_kfold_dataloaders(
 
 # Siamese
 def create_siamese_dataloaders(*args, **kwargs):
-    """Create Siamese dataloaders."""
+    """Create Siamese dataloaders (train/val/test, stesso dominio)."""
     return create_dataloaders(SiameseDataset, *args, **kwargs)
+
+def create_siamese_cross_dataset_dataloaders(*args, **kwargs):
+    """Create Siamese dataloaders (train/val/test, cross-dataset)."""
+    return create_cross_dataset_dataloaders(SiameseDataset, *args, **kwargs)
 
 def create_siamese_kfold_dataloaders(*args, **kwargs):
     """Create Siamese K-Fold dataloaders."""
@@ -249,8 +336,12 @@ def create_siamese_kfold_dataloaders(*args, **kwargs):
 
 # Contrastive
 def create_contrastive_dataloaders(*args, **kwargs):
-    """Create Contrastive dataloaders."""
+    """Create Contrastive dataloaders (train/val/test, stesso dominio)."""
     return create_dataloaders(ContrastiveDataset, *args, **kwargs)
+
+def create_contrastive_cross_dataset_dataloaders(*args, **kwargs):
+    """Create Contrastive dataloaders (train/val/test, cross-dataset)."""
+    return create_cross_dataset_dataloaders(ContrastiveDataset, *args, **kwargs)
 
 def create_contrastive_kfold_dataloaders(*args, **kwargs):
     """Create Contrastive K-Fold dataloaders."""
@@ -259,8 +350,12 @@ def create_contrastive_kfold_dataloaders(*args, **kwargs):
 
 # Triplet
 def create_triplet_dataloaders(*args, **kwargs):
-    """Create Triplet dataloaders."""
+    """Create Triplet dataloaders (train/val/test, stesso dominio)."""
     return create_dataloaders(TripletDataset, *args, **kwargs)
+
+def create_triplet_cross_dataset_dataloaders(*args, **kwargs):
+    """Create Triplet dataloaders (train/val/test, cross-dataset)."""
+    return create_cross_dataset_dataloaders(TripletDataset, *args, **kwargs)
 
 def create_triplet_kfold_dataloaders(*args, **kwargs):
     """Create Triplet K-Fold dataloaders."""
@@ -530,13 +625,19 @@ from .triplet_dataset import TripletDataset
 
 from .dataloader_factory import (
     create_dataloaders,
+    create_cross_dataset_dataloaders,
     create_kfold_dataloaders,
-    # Convenience wrappers
+    # Convenience wrappers - Siamese
     create_siamese_dataloaders,
+    create_siamese_cross_dataset_dataloaders,
     create_siamese_kfold_dataloaders,
+    # Convenience wrappers - Contrastive
     create_contrastive_dataloaders,
+    create_contrastive_cross_dataset_dataloaders,
     create_contrastive_kfold_dataloaders,
+    # Convenience wrappers - Triplet
     create_triplet_dataloaders,
+    create_triplet_cross_dataset_dataloaders,
     create_triplet_kfold_dataloaders,
 )
 
@@ -545,24 +646,28 @@ from .transforms import get_train_transforms, get_test_transforms
 __all__ = [
     # Base class
     'BaseWriterDataset',
-    
+
     # Dataset classes
     'SiameseDataset',
     'ContrastiveDataset',
     'TripletDataset',
-    
+
     # Generic factory functions
-    'create_dataloaders',
+    'create_dataloaders',                  # train/val/test, stesso dominio
+    'create_cross_dataset_dataloaders',    # train/val/test, cross-dataset
     'create_kfold_dataloaders',
-    
+
     # Type-specific convenience functions (backward compatibility)
     'create_siamese_dataloaders',
+    'create_siamese_cross_dataset_dataloaders',
     'create_siamese_kfold_dataloaders',
     'create_contrastive_dataloaders',
+    'create_contrastive_cross_dataset_dataloaders',
     'create_contrastive_kfold_dataloaders',
     'create_triplet_dataloaders',
+    'create_triplet_cross_dataset_dataloaders',
     'create_triplet_kfold_dataloaders',
-    
+
     # Transforms
     'get_train_transforms',
     'get_test_transforms',
@@ -2849,7 +2954,7 @@ from ..evaluation.metrics import compute_metrics, print_results
 
 class BaseTrainer(ABC):
     """Base class for all trainers with common validation and saving logic."""
-    
+
     def __init__(
         self,
         model: torch.nn.Module,
@@ -2861,59 +2966,63 @@ class BaseTrainer(ABC):
         self.model_name = model_name
         self.device = device
         self.results_dir = results_dir
-        
+
         os.makedirs(results_dir, exist_ok=True)
-        
+
         # Training history (only loss per epoch)
         self.history = {
             'epoch': [],
             'train_loss': [],
             'val_loss': [],
         }
-        
+
         self.best_loss = float('inf')
-    
+
     @abstractmethod
     def _setup_optimizer(self):
         """Setup optimizer and scheduler (implemented by subclasses)."""
         pass
-    
+
     @abstractmethod
     def train_epoch(self, train_loader):
         """Train for one epoch (implemented by subclasses)."""
         pass
-    
+
     @abstractmethod
     def validate_loss(self, val_loader) -> float:
         """
         Calculate validation loss (implemented by subclasses).
-        
+
         Args:
             val_loader: Validation dataloader
-            
+
         Returns:
             Average validation loss
         """
         pass
-    
+
     @torch.no_grad()
-    def validate_comprehensive(self, val_dataset) -> Dict[str, float]:
+    def validate_comprehensive(self, eval_dataset) -> Dict[str, float]:
         """
         Comprehensive validation computing all verification metrics.
-        Uses validation pairs from val_dataset.get_validation_pair().
+        Uses validation pairs from eval_dataset.get_validation_pair().
+
+        Il nome del parametro è generico (eval_dataset) perché questo metodo
+        viene usato sia per il monitoraggio sul validation set durante il
+        training, sia per il report finale su un test set held-out.
 
         If the subclass implements _get_embeddings, it's used for computing
         similarity metrics (contrastive/triplet). Otherwise, assumes BCE
         Siamese and uses model output directly.
-        
+
         Args:
-            val_dataset: Validation dataset with get_validation_pair() method
-        
+            eval_dataset: Dataset con metodo get_validation_pair()
+
         Returns:
             Dictionary with all metrics
         """
         self.model.eval()
-        
+
         genuine_scores = []
         impostor_scores = []
 
@@ -2922,23 +3031,23 @@ class BaseTrainer(ABC):
 
         # Determine total number of validation pairs
         # For TripletDataset, use validation_pairs; for others, use samples
-        if hasattr(val_dataset, 'validation_pairs'):
-            num_pairs = len(val_dataset.validation_pairs)
-        elif hasattr(val_dataset, 'samples'):
-            num_pairs = len(val_dataset.samples)
+        if hasattr(eval_dataset, 'validation_pairs'):
+            num_pairs = len(eval_dataset.validation_pairs)
+        elif hasattr(eval_dataset, 'samples'):
+            num_pairs = len(eval_dataset.samples)
         else:
             raise AttributeError("Dataset must have either 'validation_pairs' or 'samples' attribute")
 
         print(f"\n🔍 Computing verification metrics on {num_pairs} pairs...")
-        
+
         for idx in tqdm(range(num_pairs), desc="  Evaluating pairs"):
             # Use the unified interface
-            img1_path, img2_path, label = val_dataset.get_validation_pair(idx)
-            
+            img1_path, img2_path, label = eval_dataset.get_validation_pair(idx)
+
             # Load images
-            img1 = val_dataset.transform(Image.open(img1_path).convert("L")).unsqueeze(0).to(self.device)
-            img2 = val_dataset.transform(Image.open(img2_path).convert("L")).unsqueeze(0).to(self.device)
-            
+            img1 = eval_dataset.transform(Image.open(img1_path).convert("L")).unsqueeze(0).to(self.device)
+            img2 = eval_dataset.transform(Image.open(img2_path).convert("L")).unsqueeze(0).to(self.device)
+
             if use_embeddings:
                 # Metric learning: contrastive / triplet
                 emb1, emb2 = self._get_embeddings(img1, img2)
@@ -2946,12 +3055,12 @@ class BaseTrainer(ABC):
             else:
                 # BCE Siamese: direct output
                 score = self.model(img1, img2).item()
-            
+
             if label == 1.0:
                 genuine_scores.append(score)
             else:
                 impostor_scores.append(score)
-        
+
         # Decide if scores are already similarity or need to be inverted
         distances_are_similarity = not use_embeddings  # BCE → already similarity
 
@@ -2960,73 +3069,79 @@ class BaseTrainer(ABC):
             np.array(impostor_scores),
             distances_are_similarity=True #distances_are_similarity
         )
-        
+
         print(f"\n  ✓ Evaluated {len(genuine_scores)} genuine + {len(impostor_scores)} impostor pairs")
         actual_ratio = len(genuine_scores) / (len(genuine_scores) + len(impostor_scores)) * 100
         print(f"  Actual ratio: {actual_ratio:.1f}% genuine")
-        
+
         return metrics
-    
+
     def _update_history(self, epoch: int, train_loss: float, val_loss: float):
         """Update history with losses only."""
         self.history['epoch'].append(epoch)
         self.history['train_loss'].append(train_loss)
         self.history['val_loss'].append(val_loss)
-    
+
     def _print_epoch_summary(self, epoch: int, epochs: int, train_loss: float, val_loss: float):
         """Print formatted epoch summary."""
         print(f"\nEpoch {epoch+1}/{epochs} - Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
-    
+
     def train(
         self,
         train_loader,
         val_loader,
         val_dataset,
+        test_dataset=None,
         epochs: int = 50,
         patience: int = 7,
         fold: int = None,
     ) -> Dict:
         """
         Main training loop (same for all trainers).
-        
+
         Args:
             train_loader: Training dataloader
-            val_loader: Validation dataloader (for loss calculation)
-            val_dataset: Validation dataset (for metric calculation)
+            val_loader: Validation dataloader (for loss calculation / early stopping)
+            val_dataset: Validation dataset (per il monitoring/model selection)
+            test_dataset: Dataset held-out opzionale, mai visto in training né
+                per l'early stopping. Se fornito, le metriche finali
+                (validate_comprehensive) vengono calcolate su di esso invece
+                che su val_dataset, evitando di riportare come "risultato
+                finale" lo stesso set usato per scegliere il checkpoint.
             epochs: Number of epochs
             patience: Early stopping patience
             fold: Fold number (for K-Fold)
-            
+
         Returns:
-            Training history
+            (history, final_metrics)
         """
         print(f"\n{'='*60}")
         print(f"Training {self.model_name}")
         print(f"{'='*60}\n")
-        
+
         patience_counter = 0
         train_dataset = train_loader.dataset
-        
+
         for epoch in range(epochs):
             # Train
             train_loss = self.train_epoch(train_loader)
-            
+
             # Validate loss only
             val_loss = self.validate_loss(val_loader)
-            
+
             # Update scheduler (if exists)
             if hasattr(self, 'scheduler'):
                 if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
                     self.scheduler.step(val_loss)
                 else:
                     self.scheduler.step()
-            
+
             # Update history
             self._update_history(epoch + 1, train_loss, val_loss)
-            
+
             # Print summary
             self._print_epoch_summary(epoch, epochs, train_loss, val_loss)
-            
+
             # Early stopping on validation loss
             if val_loss < self.best_loss:
                 self.best_loss = val_loss
@@ -3036,7 +3151,7 @@ class BaseTrainer(ABC):
             else:
                 patience_counter += 1
                 print(f"  Patience: {patience_counter}/{patience}")
-                
+
                 if patience_counter >= patience:
                     print("  ⚠ Early stopping triggered")
                     break
@@ -3045,24 +3160,42 @@ class BaseTrainer(ABC):
             # Notify dataset that epoch has ended
             if hasattr(train_dataset, 'on_epoch_end'):
                 train_dataset.on_epoch_end(epoch)
-        
+
+        # ------------------------------------------------------------
+        # Ricarica esplicitamente il best checkpoint prima della
+        # valutazione finale. Senza questo, se scatta l'early stopping,
+        # self.model resta nello stato dell'ULTIMA epoca (peggiore),
+        # non del checkpoint effettivamente salvato come "best".
+        # ------------------------------------------------------------
+        self._load_best_checkpoint(fold=fold)
+
         # Final comprehensive validation
         print(f"\n{'='*60}")
         print("FINAL COMPREHENSIVE VALIDATION")
         print(f"{'='*60}")
-        
-        final_metrics = self.validate_comprehensive(val_dataset)
+
+        if test_dataset is not None:
+            print("ℹ️  Valutazione finale su TEST set held-out "
+                  "(non usato per training né per l'early stopping)")
+            eval_dataset = test_dataset
+        else:
+            print("⚠️  Nessun test_dataset fornito: valutazione finale sul val_dataset "
+                  "(stesso set usato per l'early stopping — il risultato è "
+                  "potenzialmente ottimistico, vedi model selection bias)")
+            eval_dataset = val_dataset
+
+        final_metrics = self.validate_comprehensive(eval_dataset)
         print_results(final_metrics)
-        
+
         # Save final checkpoint and metrics
         self.save_checkpoint(is_best=False, fold=fold)
         if fold is None: self.save_history()
         self.save_final_metrics(final_metrics, fold=fold)
-        
+
         print(f"\n✓ Training completed! Best Val Loss={self.best_loss:.4f}\n")
-        
+
         return self.history, final_metrics
-    
+
     def train_kfold(
         self,
         data_root: str,
@@ -3077,7 +3210,7 @@ class BaseTrainer(ABC):
     ) -> Dict:
         """K-Fold Cross-Validation (implemented by subclasses with specific dataloader)."""
         raise NotImplementedError("Subclasses must implement train_kfold with appropriate dataloader")
-    
+
     def _reset_weights(self, m):
         """Reset model weights."""
         if hasattr(m, 'reset_parameters'):
@@ -3091,20 +3224,44 @@ class BaseTrainer(ABC):
         else:
             path = os.path.join(self.results_dir, f"{self.model_name}_{suffix}.pth")
         torch.save(self.model.state_dict(), path)
-    
+
+    def _load_best_checkpoint(self, fold: int = None):
+        """
+        Ricarica in self.model i pesi del checkpoint 'best' salvato su disco.
+
+        Se il checkpoint non esiste (es. nessuna epoca ha migliorato
+        best_loss, caso limite ma possibile con patience molto bassa),
+        lascia self.model così com'è e avvisa a schermo invece di fallire.
+        """
+        suffix = "best"
+        if fold is not None:
+            path = os.path.join(self.results_dir, f"{self.model_name}_fold{fold}_{suffix}.pth")
+        else:
+            path = os.path.join(self.results_dir, f"{self.model_name}_{suffix}.pth")
+
+        if not os.path.exists(path):
+            print(f"  ⚠ Nessun checkpoint 'best' trovato in {path}: "
+                  f"uso lo stato corrente del modello.")
+            return
+
+        state_dict = torch.load(path, map_location=self.device)
+        self.model.load_state_dict(state_dict)
+        self.model.to(self.device).eval()
+        print(f"  ✓ Ricaricato best checkpoint da {path}")
+
     def save_history(self):
         """Save training history to CSV."""
         path = os.path.join(self.results_dir, f"{self.model_name}_history.csv")
         pd.DataFrame(self.history).to_csv(path, index=False)
-    
+
     def save_final_metrics(self, metrics: Dict, fold: int = None):
         """Save final comprehensive metrics to CSV."""
-        
+
         if fold is not None:
             path = os.path.join(self.results_dir, f"{self.model_name}_fold{fold}_final_metrics.csv")
         else:
             path = os.path.join(self.results_dir, f"{self.model_name}_final_metrics.csv")
-        
+
         # Prepara i dati da salvare
         metrics_to_save = {}
         for key, value in metrics.items():
@@ -3115,14 +3272,14 @@ class BaseTrainer(ABC):
                 metrics_to_save[key] = str(value.tolist())
             else:
                 metrics_to_save[key] = value
-        
+
         # Salva su CSV
         pd.DataFrame([metrics_to_save]).to_csv(path, index=False)
 
     def _init_history(self):
         """Initialize empty history dict."""
         return {k: [] for k in self.history.keys()}
-    
+
     def cleanup(self):
         """Cleanup resources."""
         self.model.cpu()
@@ -3151,7 +3308,7 @@ from .losses import TripletLoss
 
 class TripletTrainer(BaseTrainer):
     """Trainer for triplet networks."""
-    
+
     def __init__(
         self,
         model,
@@ -3164,12 +3321,12 @@ class TripletTrainer(BaseTrainer):
         self.margin = margin
         self.criterion = TripletLoss(margin=margin)
         self._setup_optimizer()
-    
+
     def _setup_optimizer(self):
         """Setup optimizer for triplet learning."""
         num_params = sum(p.numel() for p in self.model.parameters())
         lr = 5e-5 if num_params > 15e6 else 1e-4
-        
+
         self.optimizer = torch.optim.AdamW(
             self.model.parameters(),
             lr=lr,
@@ -3177,39 +3334,39 @@ class TripletTrainer(BaseTrainer):
             betas=(0.9, 0.999),
             eps=1e-8
         )
-        
+
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer,
             mode='min',
             factor=0.5,
             patience=2
         )
-    
+
     def train_epoch(self, train_loader: DataLoader) -> float:
         """Train for one epoch."""
         self.model.train()
         train_loss = 0.0
-        
+
         for anchor, positive, negative in tqdm(train_loader, desc="Training"):
             anchor = anchor.to(self.device)
             positive = positive.to(self.device)
             negative = negative.to(self.device)
-            
+
             self.optimizer.zero_grad()
-            
+
             anchor_emb = self.model(anchor)
             positive_emb = self.model(positive)
             negative_emb = self.model(negative)
-            
+
             loss = self.criterion(anchor_emb, positive_emb, negative_emb)
-            
+
             loss.backward()
             self.optimizer.step()
-            
+
             train_loss += loss.item()
-        
+
         return train_loss / len(train_loader)
-    
+
     @torch.no_grad()
     def validate_loss(self, val_loader: DataLoader) -> float:
         """Calculate Triplet validation loss."""
@@ -3220,16 +3377,16 @@ class TripletTrainer(BaseTrainer):
             anchor = anchor.to(self.device)
             positive = positive.to(self.device)
             negative = negative.to(self.device)
-            
+
             # Get embeddings
             anchor_emb = self.model(anchor)
             positive_emb = self.model(positive)
             negative_emb = self.model(negative)
-            
+
             # Triplet loss
             loss = self.criterion(anchor_emb, positive_emb, negative_emb)
             val_loss += loss.item()
-        
+
         return val_loss / len(val_loader)
 
     def _get_embeddings(self, img1, img2):
@@ -3252,19 +3409,19 @@ class TripletTrainer(BaseTrainer):
     ):
         """K-Fold Cross-Validation for Triplet."""
         from ..data import create_triplet_kfold_dataloaders
-        
+
         print(f"\n{'='*70}")
         print(f"K-FOLD TRAINING: {self.model_name} ({n_splits} folds)")
         print(f"{'='*70}\n")
-        
+
         all_fold_histories = []
         all_fold_metrics = []
-        
+
         for fold in range(n_splits):
             print(f"\n{'#'*70}")
             print(f"# FOLD {fold+1}/{n_splits}")
             print(f"{'#'*70}\n")
-            
+
             train_loader, val_loader, train_dataset, val_dataset = create_triplet_kfold_dataloaders(
                 data_root=data_root,
                 n_splits=n_splits,
@@ -3275,13 +3432,13 @@ class TripletTrainer(BaseTrainer):
                 resample_negatives_every_n_epochs=resample_negatives_every_n_epochs,
                 random_state=random_state
             )
-            
+
             # Reset model and optimizer
             self.model.apply(self._reset_weights)
             self._setup_optimizer()
             self.history = self._init_history()
             self.best_loss = float('inf')
-            
+
             # Train this fold
             fold_history, fold_metrics = self.train(
                 train_loader=train_loader,
@@ -3291,41 +3448,41 @@ class TripletTrainer(BaseTrainer):
                 patience=patience,
                 fold=fold + 1
             )
-            
+
             # Save fold results
             fold_df = pd.DataFrame(fold_history)
             fold_df['fold'] = fold + 1
             all_fold_histories.append(fold_df)
-            
+
             # Save fold metrics
             fold_metrics['fold'] = fold + 1
             all_fold_metrics.append(fold_metrics)
-            
+
             print(f"\n✓ Fold {fold+1} - Best Val Loss={self.best_loss:.4f}, Final EER={fold_metrics['eer']:.4f}\n")
-        
+
         # Save detailed results
         combined_history = pd.concat(all_fold_histories, ignore_index=True)
         combined_history.to_csv(
             f"{self.results_dir}/{self.model_name}_kfold_detailed.csv",
             index=False
         )
-        
+
         # Compute aggregated stats
         fold_eers = [m['eer'] for m in all_fold_metrics]
-        
+
         aggregated = {
             'mean_eer': np.mean(fold_eers),
             'std_eer': np.std(fold_eers),
             'all_folds_eer': fold_eers
         }
-        
+
         print(f"\n{'='*70}")
         print(f"K-FOLD RESULTS")
         print(f"{'='*70}")
         print(f"EER: {aggregated['mean_eer']:.4f} ± {aggregated['std_eer']:.4f}")
         print(f"Per-fold: {fold_eers}")
         print(f"{'='*70}\n")
-        
+
         return aggregated-e 
 
 ===== ./src/training/trainer_bce.py =====
@@ -3342,7 +3499,7 @@ from .losses import BCELoss
 
 class BCETrainer(BaseTrainer):
     """Trainer for Siamese networks using BCE loss."""
-    
+
     def __init__(
         self,
         model,
@@ -3353,12 +3510,12 @@ class BCETrainer(BaseTrainer):
         super().__init__(model, model_name, device, results_dir)
         self.criterion = BCELoss()
         self._setup_optimizer()
-    
+
     def _setup_optimizer(self):
         """Setup optimizer based on model size."""
         num_params = sum(p.numel() for p in self.model.parameters())
         lr = 5e-5 if num_params > 15e6 else 1e-4
-        
+
         self.optimizer = torch.optim.AdamW(
             self.model.parameters(),
             lr=lr,
@@ -3366,98 +3523,99 @@ class BCETrainer(BaseTrainer):
             betas=(0.9, 0.999),
             eps=1e-8
         )
-        
+
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer,
             mode='min',
             factor=0.5,
             patience=2
         )
-    
+
     def train_epoch(self, train_loader: DataLoader) -> float:
         """Train for one epoch."""
         self.model.train()
         train_loss = 0
-        
+
         for img1, img2, labels in tqdm(train_loader, desc="Training"):
             img1 = img1.to(self.device)
             img2 = img2.to(self.device)
             labels = labels.to(self.device)
-            
+
             self.optimizer.zero_grad()
             outputs = self.model(img1, img2).squeeze(1)
             loss = self.criterion(outputs, labels)
-            
+
             loss.backward()
             self.optimizer.step()
-            
+
             train_loss += loss.item()
-        
+
         return train_loss / len(train_loader)
-    
+
     @torch.no_grad()
     def validate_loss(self, val_loader: DataLoader) -> float:
         """Calculate BCE validation loss."""
         self.model.eval()
         val_loss = 0.0
-        
+
         for img1, img2, labels in tqdm(val_loader, desc="Validation"):
             img1, img2, labels = img1.to(self.device), img2.to(self.device), labels.to(self.device)
-            
+
             # Forward pass
             outputs = self.model(img1, img2).squeeze(1)
-            
+
             # BCE loss
             loss = self.criterion(outputs, labels)
             val_loss += loss.item()
-        
+
         return val_loss / len(val_loader)
-    
+
     def train_kfold(
         self,
         data_root: str,
         n_splits: int = 5,
         batch_size: int = 16,
         num_workers: int = 4,
-        pairs_per_writer: int = 100,
         target_size: int = 448,
         epochs: int = 50,
         patience: int = 5,
         random_state: int = 42,
     ):
         """K-Fold Cross-Validation for BCE."""
-        from ..data import create_dataloaders_kfold
-        
+        from ..data import create_siamese_kfold_dataloaders
+
         print(f"\n{'='*70}")
         print(f"K-FOLD TRAINING: {self.model_name} ({n_splits} folds)")
         print(f"{'='*70}\n")
-        
+
         all_fold_histories = []
         all_fold_metrics = []
-        
+
         for fold in range(n_splits):
             print(f"\n{'#'*70}")
             print(f"# FOLD {fold+1}/{n_splits}")
             print(f"{'#'*70}\n")
-            
-            train_loader, val_loader, train_dataset, val_dataset = create_dataloaders_kfold(
+
+            train_loader, val_loader, train_dataset, val_dataset = create_siamese_kfold_dataloaders(
                 data_root=data_root,
                 n_splits=n_splits,
                 current_fold=fold,
                 batch_size=batch_size,
                 num_workers=num_workers,
-                pairs_per_writer=pairs_per_writer,
                 target_size=target_size,
                 random_state=random_state
             )
-            
+
             # Reset model and optimizer
             self.model.apply(self._reset_weights)
             self._setup_optimizer()
             self.history = self._init_history()
             self.best_loss = float('inf')
-            
+
             # Train this fold
+            # Nota: il K-Fold non prevede un test set held-out separato (il
+            # "test" per ogni fold è, per costruzione, il fold di val stesso
+            # che ruota ad ogni iterazione): non passiamo test_dataset qui.
             fold_history, fold_metrics = self.train(
                 train_loader=train_loader,
                 val_loader=val_loader,
@@ -3466,41 +3624,41 @@ class BCETrainer(BaseTrainer):
                 patience=patience,
                 fold=fold + 1
             )
-            
+
             # Save fold results
             fold_df = pd.DataFrame(fold_history)
             fold_df['fold'] = fold + 1
             all_fold_histories.append(fold_df)
-            
+
             # Save fold metrics
             fold_metrics['fold'] = fold + 1
             all_fold_metrics.append(fold_metrics)
-            
+
             print(f"\n✓ Fold {fold+1} - Best Val Loss={self.best_loss:.4f}, Final EER={fold_metrics['eer']:.4f}\n")
-        
+
         # Save detailed results
         combined_history = pd.concat(all_fold_histories, ignore_index=True)
         combined_history.to_csv(
             f"{self.results_dir}/{self.model_name}_kfold_detailed.csv",
             index=False
         )
-        
+
         # Compute aggregated stats
         fold_eers = [m['eer'] for m in all_fold_metrics]
-        
+
         aggregated = {
             'mean_eer': np.mean(fold_eers),
             'std_eer': np.std(fold_eers),
             'all_folds_eer': fold_eers
         }
-        
+
         print(f"\n{'='*70}")
         print(f"K-FOLD RESULTS")
         print(f"{'='*70}")
         print(f"EER: {aggregated['mean_eer']:.4f} ± {aggregated['std_eer']:.4f}")
         print(f"Per-fold: {fold_eers}")
         print(f"{'='*70}\n")
-        
+
         return aggregated-e 
 
 ===== ./src/training/trainer_contrastive.py =====
@@ -3542,7 +3700,7 @@ class ContrastiveTrainer(BaseTrainer):
         """Setup optimizer for contrastive learning."""
         num_params = sum(p.numel() for p in self.model.parameters())
         lr = 5e-5 if num_params > 15e6 else 1e-4
-        
+
         self.optimizer = torch.optim.AdamW(
             self.model.parameters(),
             lr=lr,
@@ -3587,18 +3745,18 @@ class ContrastiveTrainer(BaseTrainer):
         """Calculate Contrastive validation loss."""
         self.model.eval()
         val_loss = 0.0
-        
+
         for img1, img2, labels in tqdm(val_loader, desc="Validation"):
             img1, img2, labels = img1.to(self.device), img2.to(self.device), labels.float().to(self.device)
-            
+
             # Get embeddings
             emb1 = self.model(img1)
             emb2 = self.model(img2)
-            
+
             # Contrastive loss
             loss = self.criterion(emb1, emb2, labels)
             val_loss += loss.item()
-        
+
         return val_loss / len(val_loader)
 
     def _get_embeddings(self, img1, img2):
@@ -4049,6 +4207,13 @@ __all__ = [
 """
 Demo live: verifica biometrica della scrittura a mano da webcam.
 
+Versione ottimizzata: la lettura della webcam e il preprocessing dell'anteprima
+girano su thread separati, cosi' il rendering del video non viene mai bloccato
+dal costo di verifier.prepare(). La cattura vera e propria (SPAZIO/1/2/INVIO)
+resta invece sincrona: e' un'azione occasionale dell'utente, non deve essere
+ottimizzata e cosi' e' piu' semplice da ragionare (nessuna race condition sui
+risultati mostrati a schermo).
+
 Due modalita' di acquisizione:
 
   DOPPIA  (default) i due post-it stanno insieme nel frame, uno per riquadro.
@@ -4083,6 +4248,7 @@ Tasti:
 
 import argparse
 import os
+import threading
 import time
 
 import cv2
@@ -4111,6 +4277,103 @@ CAPTURES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "capture
 NO_KEY = 255          # valore restituito da waitKey quando non e' stato premuto nulla
 DEBUG_KEYS = False    # True per stampare il codice di ogni tasto premuto
 
+PANEL_W = 190
+
+
+# --------------------------------------------------------------------------- #
+# Threading: cattura webcam e preprocessing dell'anteprima disaccoppiati
+# --------------------------------------------------------------------------- #
+
+class FrameGrabber:
+    """
+    Legge continuamente dalla webcam in un thread dedicato e tiene sempre
+    pronto l'ultimo frame. Senza questo, cap.read() blocca il loop principale
+    per tutta la durata dell'esposizione/USB transfer della camera, che su
+    alcune webcam puo' costare piu' di un semplice resize.
+    """
+
+    def __init__(self, cap):
+        self.cap = cap
+        self._frame = None
+        self._lock = threading.Lock()
+        self._running = True
+        self._ok = True
+        self._thread = threading.Thread(target=self._loop, daemon=True)
+        self._thread.start()
+
+    def _loop(self):
+        while self._running:
+            ok, frame = self.cap.read()
+            if not ok:
+                self._ok = False
+                break
+            with self._lock:
+                self._frame = frame
+
+    def read(self):
+        """Ritorna (ok, ultimo_frame_disponibile) senza mai bloccare."""
+        with self._lock:
+            frame = None if self._frame is None else self._frame.copy()
+        return self._ok, frame
+
+    def stop(self):
+        self._running = False
+        self._thread.join(timeout=1.0)
+
+
+class PreviewWorker:
+    """
+    Calcola in background l'anteprima preprocessata (quella mostrata nel
+    pannello laterale) usando sempre il frame piu' recente disponibile.
+
+    Se il calcolo precedente non e' ancora finito, il nuovo frame viene
+    semplicemente scartato invece di essere accodato: questo evita che il
+    lavoro si accumuli se la macchina e' piu' lenta della webcam, a costo di
+    mostrare un'anteprima leggermente meno "fresca" nei momenti di carico.
+    """
+
+    def __init__(self, verifier):
+        self.verifier = verifier
+        self._pending = None
+        self._result = None
+        self._lock = threading.Lock()
+        self._wakeup = threading.Event()
+        self._running = True
+        self._thread = threading.Thread(target=self._loop, daemon=True)
+        self._thread.start()
+
+    def submit(self, roi):
+        """Propone una nuova ROI da preprocessare (sovrascrive la precedente)."""
+        with self._lock:
+            self._pending = roi
+        self._wakeup.set()
+
+    def latest(self):
+        with self._lock:
+            return self._result
+
+    def _loop(self):
+        while self._running:
+            self._wakeup.wait(timeout=0.1)
+            self._wakeup.clear()
+            with self._lock:
+                roi, self._pending = self._pending, None
+            if roi is None:
+                continue
+            out, _ = self.verifier.prepare(roi)
+            if out is not None:
+                with self._lock:
+                    self._result = out
+
+    def stop(self):
+        self._running = False
+        self._wakeup.set()
+        self._thread.join(timeout=1.0)
+
+
+# --------------------------------------------------------------------------- #
+# Disegno
+# --------------------------------------------------------------------------- #
 
 def read_key(delay=20):
     """
@@ -4139,9 +4402,6 @@ def roi_boxes(w, h, mode):
         return [(int(0.06 * w), top, int(0.94 * w), bottom)]
     return [(int(0.03 * w), top, int(0.48 * w), bottom),
             (int(0.52 * w), top, int(0.97 * w), bottom)]
-
-
-PANEL_W = 190
 
 
 def draw_thumb(canvas, img_448, x, y, size, label, sublabel=None, sub_color=GREY):
@@ -4280,20 +4540,6 @@ def build_result_view(prep_a, prep_b, result, mode, thr_key, width=1000):
     return canvas
 
 
-def capture(verifier, frame, box, name):
-    """Preprocessa una ROI e stampa gli avvisi di qualita'."""
-    x1, y1, x2, y2 = box
-    out, stages = verifier.prepare(frame[y1:y2, x1:x2])
-    if out is None:
-        print("  [{}] nessuna scrittura leggibile.".format(name))
-        return None, None
-    if not stages.get("found_text", True):
-        print("  [{}] testo non rilevato, uso tutto il riquadro.".format(name))
-    for wmsg in quality_warnings(out):
-        print("  [{}] attenzione: {}".format(name, wmsg))
-    return out, stages
-
-
 def announce_architecture(checkpoint_path, forced_arch, forced_net_type):
     """
     Stampa a schermo, prima ancora di costruire il modello, quale backbone e
@@ -4333,6 +4579,126 @@ def announce_architecture(checkpoint_path, forced_arch, forced_net_type):
               "cosine similarity per questa tipologia.")
 
 
+# --------------------------------------------------------------------------- #
+# Stato applicativo: cattura/confronto/salvataggio raccolti in un solo posto
+# --------------------------------------------------------------------------- #
+
+class AppState:
+    def __init__(self, verifier, thr_key, acq_mode):
+        self.verifier = verifier
+        self.thr_key = thr_key
+        self.acq_mode = acq_mode
+        self.slots = {"A": None, "B": None}
+        self.stages_cache = {"A": None, "B": None}
+        self.result_view = None
+        self.last = None  # (frame, prep_a, prep_b, result)
+
+    def capture_one(self, frame, box, name):
+        """Preprocessa una ROI e stampa gli avvisi di qualita'."""
+        x1, y1, x2, y2 = box
+        out, stages = self.verifier.prepare(frame[y1:y2, x1:x2])
+        if out is None:
+            print("  [{}] nessuna scrittura leggibile.".format(name))
+            return False
+        if not stages.get("found_text", True):
+            print("  [{}] testo non rilevato, uso tutto il riquadro.".format(name))
+        for wmsg in quality_warnings(out):
+            print("  [{}] attenzione: {}".format(name, wmsg))
+        self.slots[name], self.stages_cache[name] = out, stages
+        return True
+
+    def both_filled(self):
+        return self.slots["A"] is not None and self.slots["B"] is not None
+
+    def compare(self, frame_for_log):
+        if not self.both_filled():
+            print("  Servono entrambi gli slot: cattura con 1 e 2 (o SPAZIO).")
+            return
+        t0 = time.time()
+        res = self.verifier.verify(self.slots["A"], self.slots["B"], self.thr_key)
+        print("  cos={:+.4f}  soglia={:.4f}  -> {}  ({:.0f} ms)".format(
+            res["score"], res["threshold"],
+            "STESSA PERSONA" if res["same_writer"] else "PERSONE DIVERSE",
+            (time.time() - t0) * 1000))
+        self.result_view = build_result_view(
+            self.slots["A"], self.slots["B"], res, self.verifier.mode, self.thr_key)
+        self.last = (frame_for_log, self.slots["A"], self.slots["B"], res)
+
+    def handle_space(self, frame, boxes):
+        if self.acq_mode == "doppia":
+            ok_all = all(self.capture_one(frame, box, name)
+                        for box, name in zip(boxes, ("A", "B")))
+            if ok_all:
+                self.compare(frame.copy())
+        else:
+            target = "A" if self.slots["A"] is None else "B"
+            if self.capture_one(frame, boxes[0], target):
+                print("  slot {} catturato.".format(target))
+                if self.both_filled():
+                    self.compare(frame.copy())
+
+    def handle_slot_key(self, frame, boxes, target):
+        box = boxes[0] if self.acq_mode == "singola" else boxes[0 if target == "A" else 1]
+        if self.capture_one(frame, box, target):
+            print("  slot {} catturato.".format(target))
+
+    def clear_slots(self):
+        self.slots = {"A": None, "B": None}
+        self.stages_cache = {"A": None, "B": None}
+        self.result_view = None
+        print("  slot svuotati.")
+
+    def cycle_threshold(self):
+        keys = list(self.verifier.thresholds)
+        self.thr_key = keys[(keys.index(self.thr_key) + 1) % len(keys)]
+        print("  soglia: {} = {:.4f}".format(self.thr_key, self.verifier.thresholds[self.thr_key]))
+        if self.both_filled():
+            frame_for_log = self.last[0] if self.last else self.slots["A"]
+            self.compare(frame_for_log)
+
+    def save_debug(self):
+        os.makedirs(CAPTURES_DIR, exist_ok=True)
+        stamp = time.strftime("%Y%m%d_%H%M%S")
+        saved = False
+        for name in ("A", "B"):
+            if self.stages_cache[name] is None:
+                continue
+            sheet = debug_sheet(self.stages_cache[name])
+            if sheet is not None:
+                path = os.path.join(CAPTURES_DIR, "{}_debug_{}.png".format(stamp, name))
+                cv2.imwrite(path, sheet)
+                print("  stadi di preprocessing salvati: {}".format(path))
+                saved = True
+        if not saved:
+            print("  niente da salvare: cattura prima con 1 / 2 / SPAZIO.")
+
+    def save_result(self):
+        if self.last is None:
+            return
+        os.makedirs(CAPTURES_DIR, exist_ok=True)
+        stamp = time.strftime("%Y%m%d_%H%M%S")
+        frame_img, pa, pb, res = self.last
+        cv2.imwrite(os.path.join(CAPTURES_DIR, stamp + "_frame.png"), frame_img)
+        cv2.imwrite(os.path.join(CAPTURES_DIR, stamp + "_A.png"), pa)
+        cv2.imwrite(os.path.join(CAPTURES_DIR, stamp + "_B.png"), pb)
+        if self.result_view is not None:
+            cv2.imwrite(os.path.join(CAPTURES_DIR, stamp + "_result.png"), self.result_view)
+        log_path = os.path.join(CAPTURES_DIR, "log.csv")
+        new_file = not os.path.exists(log_path)
+        with open(log_path, "a", encoding="utf-8") as f:
+            if new_file:
+                f.write("timestamp,score,threshold,same_writer,mode,detect,acquisition\n")
+            f.write("{},{:.6f},{:.6f},{},{},{},{}\n".format(
+                stamp, res["score"], res["threshold"],
+                int(res["same_writer"]), self.verifier.mode,
+                int(self.verifier.detect), self.acq_mode))
+        print("  salvato in {} ({})".format(CAPTURES_DIR, stamp))
+
+
+# --------------------------------------------------------------------------- #
+# Main
+# --------------------------------------------------------------------------- #
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--camera", type=int, default=1)
@@ -4358,6 +4724,9 @@ def main():
     ap.add_argument("--no-detect", action="store_true")
     ap.add_argument("--mirror", action="store_true",
                     help="specchia l'anteprima (comodo con webcam frontali)")
+    ap.add_argument("--cv-threads", type=int, default=8,
+                    help="numero di thread interni di OpenCV (0 = default OpenCV, "
+                    "-1 = tutti i core disponibili)")
     ap.add_argument("--debug-keys", action="store_true",
                     help="stampa il codice di ogni tasto premuto")
     args = ap.parse_args()
@@ -4365,12 +4734,32 @@ def main():
     global DEBUG_KEYS
     DEBUG_KEYS = args.debug_keys
 
+    # Lascia che OpenCV usi piu' core per resize/cvtColor/ecc. Su molte
+    # distribuzioni il default e' gia' "tutti i core", ma alcuni ambienti
+    # (es. dentro container, o dopo che PyTorch ha gia' preso i thread) lo
+    # abbassano: -1 forza il numero di CPU disponibili.
+    if args.cv_threads != 0:
+        n = os.cpu_count() if args.cv_threads < 0 else args.cv_threads
+        cv2.setNumThreads(n)
+        print("cv2.setNumThreads({})".format(n))
+
     announce_architecture(args.checkpoint, args.arch, args.net_type)
 
     print("Carico il modello...")
     verifier = HandwritingVerifier(args.checkpoint, mode=args.mode,
                                    detect=not args.no_detect, arch=args.arch)
     print("Modello pronto su {} -> {}".format(verifier.device, verifier.describe()))
+
+    # Su CPU, PyTorch di default usa gia' piu' thread per le operazioni
+    # interne (conv, matmul...): se e' stato limitato altrove nel progetto lo
+    # segnaliamo soltanto, senza forzare nulla qui per non litigare con
+    # eventuali impostazioni gia' fatte in engine.py.
+    if str(verifier.device) == "cpu":
+        try:
+            import torch
+            print("torch.get_num_threads() = {}".format(torch.get_num_threads()))
+        except Exception:
+            pass
 
     thr_key = args.threshold
     if args.threshold_value is not None:
@@ -4381,176 +4770,87 @@ def main():
     cap = cv2.VideoCapture(args.camera, cv2.CAP_DSHOW if os.name == "nt" else cv2.CAP_ANY)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
+    # Buffer piccolo: evita che la queue interna della webcam accumuli frame
+    # vecchi quando il resto della pipeline rallenta anche solo per un attimo.
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
     if not cap.isOpened():
         raise SystemExit("Webcam {} non disponibile (prova --camera 0)".format(args.camera))
+
+    grabber = FrameGrabber(cap)
+    preview_worker = PreviewWorker(verifier)
 
     win = "HandVerify - demo webcam"
     cv2.namedWindow(win, cv2.WINDOW_NORMAL)
 
-    acq_mode = args.acquisition
-    slots = {"A": None, "B": None}
-    stages_cache = {"A": None, "B": None}
-    result_view = None
-    last = None
+    state = AppState(verifier, thr_key, args.acquisition)
     preview = None
-    frame_idx = 0
 
-    def compare():
-        if slots["A"] is None or slots["B"] is None:
-            print("  Servono entrambi gli slot: cattura con 1 e 2 (o SPAZIO).")
-            return None, None
-        t0 = time.time()
-        res = verifier.verify(slots["A"], slots["B"], thr_key)
-        print("  cos={:+.4f}  soglia={:.4f}  -> {}  ({:.0f} ms)".format(
-            res["score"], res["threshold"],
-            "STESSA PERSONA" if res["same_writer"] else "PERSONE DIVERSE",
-            (time.time() - t0) * 1000))
-        return res, build_result_view(slots["A"], slots["B"], res, verifier.mode, thr_key)
+    try:
+        while True:
+            ok, frame = grabber.read()
+            if not ok:
+                print("Frame non letto dalla webcam.")
+                break
+            if frame is None:
+                continue  # il grabber non ha ancora consegnato il primo frame
+            if args.mirror:
+                frame = cv2.flip(frame, 1)
 
-    while True:
-        ok, frame = cap.read()
-        if not ok:
-            print("Frame non letto dalla webcam.")
-            break
-        if args.mirror:
-            frame = cv2.flip(frame, 1)
+            h, w = frame.shape[:2]
+            boxes = roi_boxes(w, h, state.acq_mode)
 
-        h, w = frame.shape[:2]
-        boxes = roi_boxes(w, h, acq_mode)
-        frame_idx += 1
-
-        if result_view is None:
-            # anteprima aggiornata ogni 4 frame per non rallentare il video
-            if frame_idx % 4 == 0:
+            if state.result_view is None:
                 x1, y1, x2, y2 = boxes[0]
-                out, _ = verifier.prepare(frame[y1:y2, x1:x2])
-                preview = out if out is not None else preview
-            cv2.imshow(win, draw_live_overlay(frame, boxes, verifier, thr_key,
-                                              acq_mode, slots, preview))
-        else:
-            cv2.imshow(win, result_view)
-
-        # chiusura con la X della finestra: senza questo controllo il loop
-        # continuerebbe a riaprirla a ogni imshow
-        if cv2.getWindowProperty(win, cv2.WND_PROP_VISIBLE) < 1:
-            break
-
-        key = read_key()
-
-        if key in (ord('q'), 27):
-            break
-
-        elif key == 32:  # spazio
-            if acq_mode == "doppia":
-                got = []
-                for box, name in zip(boxes, ("A", "B")):
-                    out, st = capture(verifier, frame, box, name)
-                    if out is None:
-                        got = []
-                        break
-                    got.append((name, out, st))
-                for name, out, st in got:
-                    slots[name], stages_cache[name] = out, st
-                if got:
-                    res, result_view = compare()
-                    if res is not None:
-                        last = (frame.copy(), slots["A"], slots["B"], res)
+                preview_worker.submit(frame[y1:y2, x1:x2])
+                new_preview = preview_worker.latest()
+                preview = new_preview if new_preview is not None else preview
+                cv2.imshow(win, draw_live_overlay(frame, boxes, verifier, state.thr_key,
+                                                  state.acq_mode, state.slots, preview))
             else:
-                target = "A" if slots["A"] is None else "B"
-                out, st = capture(verifier, frame, boxes[0], target)
-                if out is not None:
-                    slots[target], stages_cache[target] = out, st
-                    print("  slot {} catturato.".format(target))
-                    if slots["A"] is not None and slots["B"] is not None:
-                        res, result_view = compare()
-                        if res is not None:
-                            last = (frame.copy(), slots["A"], slots["B"], res)
+                cv2.imshow(win, state.result_view)
 
-        elif key in (ord('1'), ord('2')):
-            target = "A" if key == ord('1') else "B"
-            box = boxes[0] if acq_mode == "singola" else boxes[0 if target == "A" else 1]
-            out, st = capture(verifier, frame, box, target)
-            if out is not None:
-                slots[target], stages_cache[target] = out, st
-                print("  slot {} catturato.".format(target))
+            # chiusura con la X della finestra: senza questo controllo il loop
+            # continuerebbe a riaprirla a ogni imshow
+            if cv2.getWindowProperty(win, cv2.WND_PROP_VISIBLE) < 1:
+                break
 
-        elif key in (13, 10):  # invio
-            res, view = compare()
-            if res is not None:
-                result_view = view
-                last = (frame.copy(), slots["A"], slots["B"], res)
+            key = read_key()
 
-        elif key == ord('m'):
-            acq_mode = "singola" if acq_mode == "doppia" else "doppia"
-            print("  modalita' di acquisizione: {}".format(acq_mode))
-            result_view = None
-
-        elif key == ord('c'):
-            slots["A"] = slots["B"] = None
-            stages_cache["A"] = stages_cache["B"] = None
-            result_view = None
-            print("  slot svuotati.")
-
-        elif key == ord('r'):
-            result_view = None
-
-        elif key == ord('b'):
-            verifier.mode = "raw" if verifier.mode == "scan" else "scan"
-            print("  preprocessing: {}".format(verifier.mode))
-            result_view = None
-
-        elif key == ord('d'):
-            verifier.detect = not verifier.detect
-            print("  auto-crop post-it: {}".format("on" if verifier.detect else "off"))
-            result_view = None
-
-        elif key == ord('t'):
-            keys = list(verifier.thresholds)
-            thr_key = keys[(keys.index(thr_key) + 1) % len(keys)]
-            print("  soglia: {} = {:.4f}".format(thr_key, verifier.thresholds[thr_key]))
-            if slots["A"] is not None and slots["B"] is not None:
-                res, result_view = compare()
-                if res is not None:
-                    last = (last[0] if last else frame.copy(), slots["A"], slots["B"], res)
-
-        elif key == ord('x'):
-            os.makedirs(CAPTURES_DIR, exist_ok=True)
-            stamp = time.strftime("%Y%m%d_%H%M%S")
-            saved = False
-            for name in ("A", "B"):
-                if stages_cache[name] is None:
-                    continue
-                sheet = debug_sheet(stages_cache[name])
-                if sheet is not None:
-                    path = os.path.join(CAPTURES_DIR, "{}_debug_{}.png".format(stamp, name))
-                    cv2.imwrite(path, sheet)
-                    print("  stadi di preprocessing salvati: {}".format(path))
-                    saved = True
-            if not saved:
-                print("  niente da salvare: cattura prima con 1 / 2 / SPAZIO.")
-
-        elif key == ord('s') and last is not None:
-            os.makedirs(CAPTURES_DIR, exist_ok=True)
-            stamp = time.strftime("%Y%m%d_%H%M%S")
-            frame_img, pa, pb, res = last
-            cv2.imwrite(os.path.join(CAPTURES_DIR, stamp + "_frame.png"), frame_img)
-            cv2.imwrite(os.path.join(CAPTURES_DIR, stamp + "_A.png"), pa)
-            cv2.imwrite(os.path.join(CAPTURES_DIR, stamp + "_B.png"), pb)
-            if result_view is not None:
-                cv2.imwrite(os.path.join(CAPTURES_DIR, stamp + "_result.png"), result_view)
-            log_path = os.path.join(CAPTURES_DIR, "log.csv")
-            new_file = not os.path.exists(log_path)
-            with open(log_path, "a", encoding="utf-8") as f:
-                if new_file:
-                    f.write("timestamp,score,threshold,same_writer,mode,detect,acquisition\n")
-                f.write("{},{:.6f},{:.6f},{},{},{},{}\n".format(
-                    stamp, res["score"], res["threshold"],
-                    int(res["same_writer"]), verifier.mode,
-                    int(verifier.detect), acq_mode))
-            print("  salvato in {} ({})".format(CAPTURES_DIR, stamp))
-
-    cap.release()
-    cv2.destroyAllWindows()
+            if key in (ord('q'), 27):
+                break
+            elif key == 32:  # spazio
+                state.handle_space(frame, boxes)
+            elif key in (ord('1'), ord('2')):
+                state.handle_slot_key(frame, boxes, "A" if key == ord('1') else "B")
+            elif key in (13, 10):  # invio
+                state.compare(frame.copy())
+            elif key == ord('m'):
+                state.acq_mode = "singola" if state.acq_mode == "doppia" else "doppia"
+                state.result_view = None
+                print("  modalita' di acquisizione: {}".format(state.acq_mode))
+            elif key == ord('c'):
+                state.clear_slots()
+            elif key == ord('r'):
+                state.result_view = None
+            elif key == ord('b'):
+                verifier.mode = "raw" if verifier.mode == "scan" else "scan"
+                state.result_view = None
+                print("  preprocessing: {}".format(verifier.mode))
+            elif key == ord('d'):
+                verifier.detect = not verifier.detect
+                state.result_view = None
+                print("  auto-crop post-it: {}".format("on" if verifier.detect else "off"))
+            elif key == ord('t'):
+                state.cycle_threshold()
+            elif key == ord('x'):
+                state.save_debug()
+            elif key == ord('s'):
+                state.save_result()
+    finally:
+        preview_worker.stop()
+        grabber.stop()
+        cap.release()
+        cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
@@ -5253,8 +5553,9 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Soglie di riferimento: esperimento efficientnet_b1_triplet_iam_to_iam
 # (AUC 0.956, EER 0.115). Usate quando il CSV delle metriche non si trova.
 DEFAULT_THRESHOLDS = {
-    "eer": 0.7912201881408691,   # bilanciato: FAR ~ FRR ~ 11.5%
-    "far1": 0.9312598705291748,  # severo: FAR 1%, ma GAR solo ~43%
+    "eer": 0.7912201881408691,
+    "far1": 0.9312598705291748,
+    "far01": 0.95,   # <-- placeholder, aggiornalo con un valore di riferimento reale
 }
 
 # alias di comodo, usato da chi importa solo le chiavi disponibili
@@ -5291,10 +5592,6 @@ def find_metrics_csv(checkpoint_path):
 
 
 def thresholds_for_checkpoint(checkpoint_path):
-    """
-    Ritorna (soglie, descrizione_origine) per il checkpoint dato.
-    Se il CSV non si trova, ricade sulle soglie di riferimento IAM.
-    """
     path = find_metrics_csv(checkpoint_path)
     if path is None:
         return dict(DEFAULT_THRESHOLDS), "soglie di riferimento IAM (CSV non trovato)"
@@ -5302,13 +5599,17 @@ def thresholds_for_checkpoint(checkpoint_path):
     try:
         row = next(csv.DictReader(open(path, encoding="utf-8")))
         thresholds = {"eer": float(row["eer_threshold"])}
+
+        # FAR target = 1%
         far1 = row.get("threshold_at_far_0.01")
-        if far1 not in (None, "", "None"):
-            thresholds["far1"] = float(far1)
-        else:
-            thresholds["far1"] = float(row["eer_threshold"])
+        thresholds["far1"] = float(far1) if far1 not in (None, "", "None") else thresholds["eer"]
+
+        # FAR target = 0.1%  <-- NUOVO
+        far01 = row.get("threshold_at_far_0.001")
+        thresholds["far01"] = float(far01) if far01 not in (None, "", "None") else thresholds["eer"]
+
         return thresholds, os.path.basename(path)
-    except Exception as exc:  # CSV illeggibile o senza le colonne attese
+    except Exception as exc:
         return dict(DEFAULT_THRESHOLDS), "soglie IAM ({} non leggibile: {})".format(
             os.path.basename(path), exc)
 
@@ -5372,209 +5673,6 @@ def main():
 if __name__ == "__main__":
     main()
 -e 
-
-===== ./main_triplet.py =====
-
-"""
-Main script for running triplet loss experiments on handwriting verification.
-Replicates the notebook experiments in a single script.
-"""
-
-import os
-import torch
-import pandas as pd
-from sklearn.model_selection import train_test_split
-from torch.utils.data import DataLoader
-
-from src.data import TripletDataset
-from src.models import TripletMobileNetV3Small
-from src.training import TripletTrainer
-from src.evaluation import (
-    evaluate_comprehensive,
-    plot_comprehensive_results,
-    plot_training_history_triplet
-)
-from src.utils import set_seed, get_device
-
-
-def main():
-    # Configuration
-    IAM_ROOT = "datasets/processed-handwritten/iam_processed"
-    RIMES_ROOT = "datasets/processed-handwritten/rimes_processed"
-    RESULTS_DIR = "results/triplet"
-    
-    BATCH_SIZE = 16
-    NUM_WORKERS = 4
-    TARGET_SIZE = 448
-    EMBEDDING_DIM = 128
-    MARGIN = 0.5
-    EPOCHS = 10
-    PATIENCE = 7
-    TRIPLETS_PER_WRITER = 100
-    
-    # Setup
-    set_seed(42)
-    device = get_device()
-    os.makedirs(RESULTS_DIR, exist_ok=True)
-    
-    # Load datasets
-    print("Loading datasets...")
-    iam_dirs = [
-        os.path.join(IAM_ROOT, d)
-        for d in sorted(os.listdir(IAM_ROOT))
-        if os.path.isdir(os.path.join(IAM_ROOT, d))
-    ]
-    
-    rimes_dirs = [
-        os.path.join(RIMES_ROOT, d)
-        for d in sorted(os.listdir(RIMES_ROOT))
-        if os.path.isdir(os.path.join(RIMES_ROOT, d))
-    ]
-    
-    print(f"IAM writers: {len(iam_dirs)}")
-    print(f"RIMES writers: {len(rimes_dirs)}")
-    
-    # Split datasets
-    iam_train, iam_temp = train_test_split(iam_dirs, test_size=0.2, random_state=42)
-    iam_val, iam_test = train_test_split(iam_temp, test_size=0.5, random_state=42)
-    
-    rimes_train, rimes_temp = train_test_split(rimes_dirs, test_size=0.2, random_state=42)
-    rimes_val, rimes_test = train_test_split(rimes_temp, test_size=0.5, random_state=42)
-    
-    print(f"\nIAM: Train={len(iam_train)}, Val={len(iam_val)}, Test={len(iam_test)}")
-    print(f"RIMES: Train={len(rimes_train)}, Val={len(rimes_val)}, Test={len(rimes_test)}")
-    
-    results_summary = []
-    
-    # ========== EXPERIMENT 1: Train IAM → Test IAM ==========
-    print("\n" + "="*70)
-    print("EXPERIMENT 1: Train IAM → Test IAM")
-    print("="*70)
-    
-    train_ds = TripletDataset(iam_train, train=True, 
-                             triplets_per_writer=TRIPLETS_PER_WRITER, 
-                             target_size=TARGET_SIZE)
-    val_ds = TripletDataset(iam_val, train=False, 
-                           triplets_per_writer=TRIPLETS_PER_WRITER, 
-                           target_size=TARGET_SIZE)
-    test_ds = TripletDataset(iam_test, train=False, 
-                            triplets_per_writer=TRIPLETS_PER_WRITER, 
-                            target_size=TARGET_SIZE)
-    
-    train_loader = DataLoader(train_ds, BATCH_SIZE, shuffle=True, 
-                             num_workers=NUM_WORKERS, pin_memory=True)
-    
-    model = TripletMobileNetV3Small(embedding_dim=EMBEDDING_DIM)
-    trainer = TripletTrainer(model, "iam_to_iam_triplet", device, MARGIN, RESULTS_DIR)
-    
-    history = trainer.train(train_loader, val_ds, EPOCHS, PATIENCE)
-    plot_training_history_triplet(history, "IAM→IAM Triplet",
-                                 os.path.join(RESULTS_DIR, "iam_to_iam_history.png"))
-    
-    model.load_state_dict(torch.load(os.path.join(RESULTS_DIR, "iam_to_iam_triplet_best.pth")))
-    metrics = evaluate_comprehensive(model, test_ds, device, 2000, "IAM→IAM Test")
-    plot_comprehensive_results(metrics, os.path.join(RESULTS_DIR, "iam_to_iam_comprehensive.png"))
-    
-    results_summary.append({
-        'experiment': 'IAM→IAM',
-        **{k: v for k, v in metrics.items() if not isinstance(v, (list, type(None)))}
-    })
-    
-    trainer.cleanup()
-    
-    # ========== EXPERIMENT 2: Train IAM → Test RIMES ==========
-    print("\n" + "="*70)
-    print("EXPERIMENT 2: Train IAM → Test RIMES (Cross-Dataset)")
-    print("="*70)
-    
-    model.load_state_dict(torch.load(os.path.join(RESULTS_DIR, "iam_to_iam_triplet_best.pth")))
-    model = model.to(device)
-    
-    test_ds_rimes = TripletDataset(rimes_test, train=False, 
-                                   triplets_per_writer=TRIPLETS_PER_WRITER, 
-                                   target_size=TARGET_SIZE)
-    
-    metrics = evaluate_comprehensive(model, test_ds_rimes, device, 2000, "IAM→RIMES Test")
-    plot_comprehensive_results(metrics, os.path.join(RESULTS_DIR, "iam_to_rimes_comprehensive.png"))
-    
-    results_summary.append({
-        'experiment': 'IAM→RIMES',
-        **{k: v for k, v in metrics.items() if not isinstance(v, (list, type(None)))}
-    })
-    
-    del model
-    torch.cuda.empty_cache()
-    
-    # ========== EXPERIMENT 3: Train RIMES → Test RIMES ==========
-    print("\n" + "="*70)
-    print("EXPERIMENT 3: Train RIMES → Test RIMES")
-    print("="*70)
-    
-    train_ds = TripletDataset(rimes_train, train=True, 
-                             triplets_per_writer=TRIPLETS_PER_WRITER, 
-                             target_size=TARGET_SIZE)
-    val_ds = TripletDataset(rimes_val, train=False, 
-                           triplets_per_writer=TRIPLETS_PER_WRITER, 
-                           target_size=TARGET_SIZE)
-    test_ds = TripletDataset(rimes_test, train=False, 
-                            triplets_per_writer=TRIPLETS_PER_WRITER, 
-                            target_size=TARGET_SIZE)
-    
-    train_loader = DataLoader(train_ds, BATCH_SIZE, shuffle=True, 
-                             num_workers=NUM_WORKERS, pin_memory=True)
-    
-    model = TripletMobileNetV3Small(embedding_dim=EMBEDDING_DIM)
-    trainer = TripletTrainer(model, "rimes_to_rimes_triplet", device, MARGIN, RESULTS_DIR)
-    
-    history = trainer.train(train_loader, val_ds, EPOCHS, PATIENCE)
-    plot_training_history_triplet(history, "RIMES→RIMES Triplet",
-                                 os.path.join(RESULTS_DIR, "rimes_to_rimes_history.png"))
-    
-    model.load_state_dict(torch.load(os.path.join(RESULTS_DIR, "rimes_to_rimes_triplet_best.pth")))
-    metrics = evaluate_comprehensive(model, test_ds, device, 2000, "RIMES→RIMES Test")
-    plot_comprehensive_results(metrics, os.path.join(RESULTS_DIR, "rimes_to_rimes_comprehensive.png"))
-    
-    results_summary.append({
-        'experiment': 'RIMES→RIMES',
-        **{k: v for k, v in metrics.items() if not isinstance(v, (list, type(None)))}
-    })
-    
-    trainer.cleanup()
-    
-    # ========== EXPERIMENT 4: Train RIMES → Test IAM ==========
-    print("\n" + "="*70)
-    print("EXPERIMENT 4: Train RIMES → Test IAM (Cross-Dataset)")
-    print("="*70)
-    
-    model.load_state_dict(torch.load(os.path.join(RESULTS_DIR, "rimes_to_rimes_triplet_best.pth")))
-    model = model.to(device)
-    
-    test_ds_iam = TripletDataset(iam_test, train=False, 
-                                 triplets_per_writer=TRIPLETS_PER_WRITER, 
-                                 target_size=TARGET_SIZE)
-    
-    metrics = evaluate_comprehensive(model, test_ds_iam, device, 2000, "RIMES→IAM Test")
-    plot_comprehensive_results(metrics, os.path.join(RESULTS_DIR, "rimes_to_iam_comprehensive.png"))
-    
-    results_summary.append({
-        'experiment': 'RIMES→IAM',
-        **{k: v for k, v in metrics.items() if not isinstance(v, (list, type(None)))}
-    })
-    
-    # ========== FINAL SUMMARY ==========
-    df_summary = pd.DataFrame(results_summary)
-    df_summary.to_csv(os.path.join(RESULTS_DIR, "experiments_summary.csv"), index=False)
-    
-    print("\n" + "="*70)
-    print("FINAL RESULTS SUMMARY")
-    print("="*70)
-    print(df_summary[['experiment', 'eer', 'auc', 'acc_far_0.1%', 
-                      'acc_far_1.0%', 'd_prime']].to_string(index=False))
-    print(f"\n✓ All results saved to {RESULTS_DIR}/")
-
-
-if __name__ == "__main__":
-    main()-e 
 
 ===== ./results/script.py =====
 
