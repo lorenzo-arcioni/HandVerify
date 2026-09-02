@@ -4205,927 +4205,1174 @@ __all__ = [
 ===== ./webcam-demo/demo/webcam_demo.py =====
 
 """
-Demo live: verifica biometrica della scrittura a mano da webcam.
+HandVerify - webcam live + ROI disegnata a mano.
 
-Versione ottimizzata: la lettura della webcam e il preprocessing dell'anteprima
-girano su thread separati, cosi' il rendering del video non viene mai bloccato
-dal costo di verifier.prepare(). La cattura vera e propria (SPAZIO/1/2/INVIO)
-resta invece sincrona: e' un'azione occasionale dell'utente, non deve essere
-ottimizzata e cosi' e' piu' semplice da ragionare (nessuna race condition sui
-risultati mostrati a schermo).
+Stessa interfaccia della vecchia demo (feed live threaded, controllo
+focus manuale, cambio camera, barra soglie) ma le due ROI (campione A e
+campione B) non sono piu' rettangoli fissi: le disegni tu trascinando il
+mouse sul video, poi premi SPAZIO per catturare ed eseguire la verifica.
 
-Due modalita' di acquisizione:
+Controlli:
+    [Click sinistro + trascina]  disegna la ROI attiva (A o B, vedi pulsanti)
+    [SPACE]   Cattura ed esegue la verifica sulle due ROI correnti (un click = una verifica)
+    [R]       Reset pannello risultati
+    [T]       Cambia soglia (EER / FAR 1% / FAR 0.1%)
+    [F/G]     Focus +4 / -4
+    [D/H]     Focus +20 / -20
+    [1-5]     Focus preset (0, 64, 128, 192, 255)
+    [C]       Cambia camera
+    [Q/Esc]   Esci
 
-  DOPPIA  (default) i due post-it stanno insieme nel frame, uno per riquadro.
-          Comoda per la demo, ma ogni post-it occupa meta' inquadratura.
+Slider "SOGLIA BINARIZZAZIONE (GRIGIO)" nel pannello di destra: regola in
+tempo reale la soglia di binarizzazione usata nel preprocessing (0-255,
+default 128). Si vede subito l'effetto nel MODEL INPUT PREVIEW.
 
-  SINGOLA un post-it alla volta che riempie tutto il frame: piu' pixel sul
-          tratto e messa a fuoco migliore. Si cattura A, si cambia post-it,
-          si cattura B, poi si confronta. E' la modalita' da usare se i
-          risultati in doppia non convincono.
-
-Architettura del modello:
-  Il backbone (efficientnet_b1, resnet18, mobilenet_v3_large, densenet121,
-  regnet_y_400mf, ...) viene dedotto automaticamente dal nome del file del
-  checkpoint, es. "efficientnet_b1_triplet_iam_to_iam_best.pth" ->
-  efficientnet_b1. Se il nome non e' chiaro (o si vuole forzare comunque
-  un'architettura diversa da quella dedotta), si puo' usare --arch.
-
-Tasti:
-    SPAZIO        cattura (doppia: entrambi + confronto | singola: slot libero)
-    1 / 2         cattura nello slot A / nello slot B
-    INVIO         confronta gli slot A e B
-    M             cambia modalita' (doppia <-> singola)
-    C             svuota gli slot
-    R             torna al live
-    B             cambia preprocessing (scan <-> raw)
-    D             attiva/disattiva il ritaglio automatico del post-it
-    T             cambia soglia
-    X             salva il dettaglio degli stadi di preprocessing
-    S             salva l'ultimo confronto in demo/captures/
-    Q / ESC       esci
+Nota: SPAZIO funziona sempre, anche senza aver prima cliccato su un altro
+controllo (e' collegato a una scorciatoia globale dell'applicazione,
+indipendente dal focus da tastiera).
 """
-
-import argparse
+import sys
 import os
-import threading
 import time
-
 import cv2
 import numpy as np
+import argparse
+
+from PySide6.QtCore import Qt, QThread, Signal, QRectF, QRect, QPoint, QPropertyAnimation, QEasingCurve, QTimer
+from PySide6.QtGui import QImage, QPixmap, QPainter, QColor, QFont, QPen, QBrush, QShortcut, QKeySequence
+from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QLabel, QHBoxLayout,
+                               QVBoxLayout, QFrame, QGraphicsDropShadowEffect, QPushButton, QSlider)
 
 from engine import HandwritingVerifier, DEFAULT_THRESHOLDS, DEFAULT_CHECKPOINT
+from preprocess import quality_stats, quality_warnings, DEFAULT_GRAY_THRESHOLD
 
-# Usato solo per stampare a schermo l'architettura dedotta *prima* di
-# costruire il modello (HandwritingVerifier/engine.py fa comunque la sua
-# stessa deduzione internamente quando arch=None). Se il file con la
-# definizione dei backbone si chiama diversamente, aggiornare l'import qui
-# sotto di conseguenza.
-from model_defs import guess_arch, guess_net_type, BACKBONES, NET_TYPES
-from preprocess import debug_sheet, quality_stats, quality_warnings
+# ==============================================================================
+# CONFIGURAZIONE STILE (TEMA "BIOMETRIC SCANNER")
+# ==============================================================================
+DARK_BG = "#0B0F19"
+PANEL_BG = "#111827"
+CARD_BG = "#1F2937"
+NEON_CYAN = "#00F0FF"
+NEON_GREEN = "#00FF9D"
+NEON_RED = "#FF3366"
+NEON_ORANGE = "#FFAA00"
+TEXT_PRIMARY = "#F9FAFB"
+TEXT_SECONDARY = "#9CA3AF"
 
-FONT = cv2.FONT_HERSHEY_SIMPLEX
-GREEN = (80, 220, 100)
-RED = (60, 60, 235)
-AMBER = (0, 190, 250)
-GREY = (170, 170, 170)
-WHITE = (255, 255, 255)
-DARK = (35, 35, 35)
+GLOBAL_QSS = f"""
+    QMainWindow {{ background-color: {DARK_BG}; }}
+    QLabel {{ color: {TEXT_PRIMARY}; font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif; }}
+    #MainTitle {{ font-size: 24px; font-weight: 700; color: {NEON_CYAN}; letter-spacing: 2px; }}
+    #SubTitle {{ font-size: 12px; color: {TEXT_SECONDARY}; letter-spacing: 1px; }}
+    .Card {{
+        background-color: {CARD_BG};
+        border: 1px solid #374151;
+        border-radius: 12px;
+    }}
+    #VerdictLabel {{ font-size: 32px; font-weight: 800; letter-spacing: 1px; }}
+    #ScoreValue {{ font-size: 48px; font-weight: 800; }}
+    QPushButton {{
+        background-color: {NEON_CYAN}; color: {DARK_BG}; border: none; border-radius: 8px;
+        font-size: 14px; font-weight: bold; padding: 10px 20px;
+    }}
+    QPushButton:hover {{ background-color: #66F5FF; }}
+    QPushButton:pressed {{ background-color: #00C8D4; }}
+    QPushButton:checked {{ background-color: {NEON_GREEN}; }}
+    QSlider::groove:horizontal {{
+        border: 1px solid #374151;
+        height: 8px;
+        background: #374151;
+        border-radius: 4px;
+    }}
+    QSlider::handle:horizontal {{
+        background: {NEON_CYAN};
+        border: 1px solid {NEON_CYAN};
+        width: 18px;
+        margin: -6px 0;
+        border-radius: 9px;
+    }}
+    QSlider::handle:horizontal:hover {{
+        background: #66F5FF;
+    }}
+"""
 
-CAPTURES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "captures")
+ROI_NAMES = ("A", "B")
+ROI_COLORS = {"A": NEON_CYAN, "B": NEON_GREEN}
 
-NO_KEY = 255          # valore restituito da waitKey quando non e' stato premuto nulla
-DEBUG_KEYS = False    # True per stampare il codice di ogni tasto premuto
-
-PANEL_W = 190
-
-
-# --------------------------------------------------------------------------- #
-# Threading: cattura webcam e preprocessing dell'anteprima disaccoppiati
-# --------------------------------------------------------------------------- #
-
-class FrameGrabber:
-    """
-    Legge continuamente dalla webcam in un thread dedicato e tiene sempre
-    pronto l'ultimo frame. Senza questo, cap.read() blocca il loop principale
-    per tutta la durata dell'esposizione/USB transfer della camera, che su
-    alcune webcam puo' costare piu' di un semplice resize.
-    """
-
-    def __init__(self, cap):
-        self.cap = cap
-        self._frame = None
-        self._lock = threading.Lock()
-        self._running = True
-        self._ok = True
-        self._thread = threading.Thread(target=self._loop, daemon=True)
-        self._thread.start()
-
-    def _loop(self):
-        while self._running:
-            ok, frame = self.cap.read()
-            if not ok:
-                self._ok = False
-                break
-            with self._lock:
-                self._frame = frame
-
-    def read(self):
-        """Ritorna (ok, ultimo_frame_disponibile) senza mai bloccare."""
-        with self._lock:
-            frame = None if self._frame is None else self._frame.copy()
-        return self._ok, frame
-
-    def stop(self):
-        self._running = False
-        self._thread.join(timeout=1.0)
+# colori dedicati ai marker delle soglie sulla confidence bar
+THRESHOLD_MARKER_COLORS = {
+    "eer": "#FFAA00",     # arancio
+    "far1": "#C084FC",    # viola
+    "far01": "#38BDF8",   # azzurro
+}
 
 
-class PreviewWorker:
-    """
-    Calcola in background l'anteprima preprocessata (quella mostrata nel
-    pannello laterale) usando sempre il frame piu' recente disponibile.
+# ==============================================================================
+# WORKER PER LA WEBCAM (THREAD DEDICATO) - live feed, evita il grain del
+# singolo scatto (l'esposizione/guadagno del sensore si stabilizza solo
+# dopo qualche frame di streaming continuo).
+# ==============================================================================
+class CameraWorker(QThread):
+    frame_ready = Signal(np.ndarray)
+    focus_changed = Signal(int)
+    error_occurred = Signal(str)
+    camera_opened = Signal(int)
 
-    Se il calcolo precedente non e' ancora finito, il nuovo frame viene
-    semplicemente scartato invece di essere accodato: questo evita che il
-    lavoro si accumuli se la macchina e' piu' lenta della webcam, a costo di
-    mostrare un'anteprima leggermente meno "fresca" nei momenti di carico.
-    """
+    def __init__(self, camera_id, width, height, focus_initial):
+        super().__init__()
+        self.camera_id = camera_id
+        self.width = width
+        self.height = height
+        self.focus = focus_initial
+        self.running = True
+        self.cap = None
+        self.focus_delta_queue = 0
+        self.focus_absolute_queue = None
+        self.camera_change_queue = None
 
-    def __init__(self, verifier):
-        self.verifier = verifier
-        self._pending = None
-        self._result = None
-        self._lock = threading.Lock()
-        self._wakeup = threading.Event()
-        self._running = True
-        self._thread = threading.Thread(target=self._loop, daemon=True)
-        self._thread.start()
+    def run(self):
+        self._open_camera(self.camera_id)
 
-    def submit(self, roi):
-        """Propone una nuova ROI da preprocessare (sovrascrive la precedente)."""
-        with self._lock:
-            self._pending = roi
-        self._wakeup.set()
+    def _open_camera(self, camera_id):
+        if self.cap is not None:
+            self.cap.release()
+            self.cap = None
 
-    def latest(self):
-        with self._lock:
-            return self._result
+        backend = cv2.CAP_DSHOW if os.name == 'nt' else cv2.CAP_ANY
+        self.cap = cv2.VideoCapture(camera_id, backend)
 
-    def _loop(self):
-        while self._running:
-            self._wakeup.wait(timeout=0.1)
-            self._wakeup.clear()
-            with self._lock:
-                roi, self._pending = self._pending, None
-            if roi is None:
-                continue
-            out, _ = self.verifier.prepare(roi)
-            if out is not None:
-                with self._lock:
-                    self._result = out
-
-    def stop(self):
-        self._running = False
-        self._wakeup.set()
-        self._thread.join(timeout=1.0)
-
-
-# --------------------------------------------------------------------------- #
-# Disegno
-# --------------------------------------------------------------------------- #
-
-def read_key(delay=20):
-    """
-    Legge un tasto dalla finestra OpenCV.
-
-    Normalizza le maiuscole: con il Caps Lock attivo (o tenendo Shift) waitKey
-    restituisce 'Q' = 81 invece di 'q' = 113, e nessuna scorciatoia a lettera
-    verrebbe riconosciuta. Il delay di 20 ms lascia alla finestra il tempo di
-    smaltire gli eventi senza rallentare il video.
-    """
-    key = cv2.waitKey(delay) & 0xFF
-    if key == NO_KEY:
-        return NO_KEY
-    if ord('A') <= key <= ord('Z'):       # maiuscola -> minuscola
-        key += 32
-    if DEBUG_KEYS:
-        print("  [tasto] codice {} = {!r}".format(
-            key, chr(key) if 32 <= key < 127 else ""))
-    return key
-
-
-def roi_boxes(w, h, mode):
-    """Riquadri di acquisizione: due affiancati in doppia, uno solo in singola."""
-    top, bottom = int(0.14 * h), int(0.93 * h)
-    if mode == "singola":
-        return [(int(0.06 * w), top, int(0.94 * w), bottom)]
-    return [(int(0.03 * w), top, int(0.48 * w), bottom),
-            (int(0.52 * w), top, int(0.97 * w), bottom)]
-
-
-def draw_thumb(canvas, img_448, x, y, size, label, sublabel=None, sub_color=GREY):
-    """Miniatura di un'immagine preprocessata con etichetta."""
-    thumb = cv2.cvtColor(cv2.resize(img_448, (size, size)), cv2.COLOR_GRAY2BGR)
-    canvas[y:y + size, x:x + size] = thumb
-    cv2.rectangle(canvas, (x - 1, y - 1), (x + size, y + size), GREY, 1)
-    cv2.putText(canvas, label, (x, y - 7), FONT, 0.42, WHITE, 1, cv2.LINE_AA)
-    if sublabel:
-        cv2.putText(canvas, sublabel, (x, y + size + 14), FONT, 0.38,
-                    sub_color, 1, cv2.LINE_AA)
-
-
-def side_panel(height, preview, slots):
-    """Colonna a destra del video: cosa vede la rete adesso e cosa e' catturato."""
-    panel = np.full((height, PANEL_W, 3), (25, 25, 25), np.uint8)
-    size = PANEL_W - 32
-    x = 16
-    y = 34
-
-    if preview is not None:
-        focus, ink = quality_stats(preview)
-        warns = quality_warnings(preview)
-        draw_thumb(panel, preview, x, y, size, "anteprima live",
-                   "focus {:.0f}  inchiostro {:.1f}%".format(focus, ink),
-                   AMBER if warns else GREEN)
-    else:
-        cv2.putText(panel, "anteprima live", (x, y - 7), FONT, 0.42, GREY, 1, cv2.LINE_AA)
-        cv2.rectangle(panel, (x, y), (x + size, y + size), (60, 60, 60), 1)
-
-    y += size + 42
-    for name in ("A", "B"):
-        img = slots[name]
-        if img is not None:
-            draw_thumb(panel, img, x, y, size, "slot " + name, "catturato", GREEN)
-        else:
-            cv2.putText(panel, "slot " + name, (x, y - 7), FONT, 0.42, GREY, 1, cv2.LINE_AA)
-            cv2.rectangle(panel, (x, y), (x + size, y + size), (60, 60, 60), 1)
-            cv2.putText(panel, "vuoto", (x, y + size + 14), FONT, 0.38,
-                        (110, 110, 110), 1, cv2.LINE_AA)
-        y += size + 42
-
-    return panel
-
-
-def draw_live_overlay(frame, boxes, verifier, thr_key, acq_mode, slots, preview):
-    out = frame.copy()
-    h, w = out.shape[:2]
-
-    labels = ("INQUADRA QUI",) if acq_mode == "singola" else ("SCRITTURA A", "SCRITTURA B")
-    for (x1, y1, x2, y2), label in zip(boxes, labels):
-        cv2.rectangle(out, (x1, y1), (x2, y2), GREY, 2)
-        cv2.putText(out, label, (x1 + 8, y1 - 12), FONT, 0.6, DARK, 4, cv2.LINE_AA)
-        cv2.putText(out, label, (x1 + 8, y1 - 12), FONT, 0.6, WHITE, 1, cv2.LINE_AA)
-
-    band = int(0.09 * h)
-    out[0:band, :] = cv2.addWeighted(out[0:band, :], 0.35,
-                                     np.zeros((band, w, 3), np.uint8), 0.65, 0)
-    cv2.putText(out, "SPAZIO = cattura   1/2 = slot A/B   INVIO = confronta   "
-                     "M = modalita'   X = debug   Q = esci",
-                (14, int(0.055 * h)), FONT, 0.52, WHITE, 1, cv2.LINE_AA)
-
-    status = "modalita': {} | slot: A={} B={} | preproc: {} | auto-crop: {} | soglia: {} ({:.3f})".format(
-        acq_mode,
-        "ok" if slots["A"] is not None else "-",
-        "ok" if slots["B"] is not None else "-",
-        verifier.mode, "on" if verifier.detect else "off",
-        thr_key, verifier.thresholds[thr_key])
-    cv2.putText(out, status, (14, h - 12), FONT, 0.52, WHITE, 1, cv2.LINE_AA)
-
-    return np.hstack([out, side_panel(h, preview, slots)])
-
-
-def score_bar(width, score, threshold, ok):
-    """Barra della cosine similarity da -1 a 1 con il marker della soglia."""
-    bar = np.full((70, width, 3), DARK, np.uint8)
-    pad = 30
-    inner = width - 2 * pad
-
-    def to_x(value):
-        return int(pad + (value + 1.0) / 2.0 * inner)
-
-    cv2.rectangle(bar, (pad, 26), (pad + inner, 44), (70, 70, 70), -1)
-    x_score = max(pad, min(to_x(score), pad + inner))
-    cv2.rectangle(bar, (pad, 26), (x_score, 44), GREEN if ok else RED, -1)
-
-    tx = to_x(threshold)
-    cv2.line(bar, (tx, 18), (tx, 52), AMBER, 2)
-    cv2.putText(bar, "soglia", (tx - 22, 14), FONT, 0.4, AMBER, 1, cv2.LINE_AA)
-    cv2.putText(bar, "-1", (6, 42), FONT, 0.45, GREY, 1, cv2.LINE_AA)
-    cv2.putText(bar, "+1", (width - 24, 42), FONT, 0.45, GREY, 1, cv2.LINE_AA)
-    cv2.putText(bar, "cos = {:+.4f}".format(score), (pad, 66), FONT, 0.5, WHITE, 1, cv2.LINE_AA)
-    return bar
-
-
-def build_result_view(prep_a, prep_b, result, mode, thr_key, width=1000):
-    """Schermata di esito: le due immagini che vede la rete + verdetto."""
-    tile = 330
-    a = cv2.cvtColor(cv2.resize(prep_a, (tile, tile)), cv2.COLOR_GRAY2BGR)
-    b = cv2.cvtColor(cv2.resize(prep_b, (tile, tile)), cv2.COLOR_GRAY2BGR)
-
-    ok = result["same_writer"]
-    color = GREEN if ok else RED
-
-    canvas = np.full((tile + 240, width, 3), DARK, np.uint8)
-
-    gap = (width - 2 * tile) // 3
-    for img, prep, x, label in ((a, prep_a, gap, "A"), (b, prep_b, 2 * gap + tile, "B")):
-        canvas[95:95 + tile, x:x + tile] = img
-        cv2.rectangle(canvas, (x - 2, 93), (x + tile + 2, 95 + tile + 2), GREY, 1)
-        focus, ink = quality_stats(prep)
-        cv2.putText(canvas, "{}   focus {:.0f} | inchiostro {:.1f}%".format(label, focus, ink),
-                    (x + 4, 88), FONT, 0.5, GREY, 1, cv2.LINE_AA)
-
-    verdict = "CALLIGRAFIA UGUALE" if ok else "CALLIGRAFIE DIVERSE"
-    cv2.rectangle(canvas, (0, 0), (width, 62), color, -1)
-    cv2.putText(canvas, verdict, (24, 44), FONT, 1.2, (20, 20, 20), 3, cv2.LINE_AA)
-    cv2.putText(canvas, "margine dalla soglia: {:+.4f}".format(result["margin"]),
-                (width - 340, 40), FONT, 0.6, (20, 20, 20), 2, cv2.LINE_AA)
-
-    canvas[tile + 105:tile + 175, :] = score_bar(width, result["score"],
-                                                 result["threshold"], ok)
-
-    warns = []
-    for label, prep in (("A", prep_a), ("B", prep_b)):
-        for wmsg in quality_warnings(prep):
-            warns.append("{}: {}".format(label, wmsg))
-    if warns:
-        cv2.putText(canvas, "qualita' scarsa -> " + "   ".join(warns),
-                    (30, tile + 196), FONT, 0.5, AMBER, 1, cv2.LINE_AA)
-
-    cv2.putText(canvas, "preproc: {}   soglia {} = {:.4f}   |   "
-                        "R = live, X = debug, S = salva, Q = esci".format(
-                            mode, thr_key, result["threshold"]),
-                (30, tile + 224), FONT, 0.5, GREY, 1, cv2.LINE_AA)
-    return canvas
-
-
-def announce_architecture(checkpoint_path, forced_arch, forced_net_type):
-    """
-    Stampa a schermo, prima ancora di costruire il modello, quale backbone e
-    quale tipologia (triplet/contrastive/siamese) verranno usati: quelli
-    forzati da riga di comando, oppure quelli dedotti dal nome del file del
-    checkpoint. E' solo informativo: il caricamento vero e proprio (con
-    eventuale fallback su tutte le combinazioni) avviene dentro
-    HandwritingVerifier / model_defs.load_model.
-    """
-    name = os.path.basename(checkpoint_path)
-
-    if forced_net_type is not None:
-        print("Tipologia forzata da riga di comando: {}".format(forced_net_type))
-    else:
-        guess_t = guess_net_type(checkpoint_path)
-        if guess_t is not None:
-            print("Tipologia dedotta dal nome del checkpoint '{}': {}".format(name, guess_t))
-        else:
-            print("Impossibile dedurre la tipologia dal nome '{}'; "
-                  "verranno provate triplet/contrastive/siamese.".format(name))
-
-    if forced_arch is not None:
-        print("Backbone forzato da riga di comando: {}".format(forced_arch))
-    else:
-        guess_a = guess_arch(checkpoint_path)
-        if guess_a is not None:
-            print("Backbone dedotto dal nome del checkpoint '{}': {}".format(name, guess_a))
-        else:
-            print("Impossibile dedurre il backbone dal nome '{}'; "
-                  "verranno provati tutti.".format(name))
-
-    if forced_net_type == "siamese" or (forced_net_type is None and guess_net_type(checkpoint_path) == "siamese"):
-        print("ATTENZIONE: checkpoint 'siamese' rilevato/forzato. Questa demo confronta "
-              "embedding via cosine similarity, ma la rete siamese e' stata addestrata "
-              "come classificatore su coppie. Il confronto potrebbe non essere accurato "
-              "a meno che engine.py non usi SiameseNetwork.predict_pair() invece della "
-              "cosine similarity per questa tipologia.")
-
-
-# --------------------------------------------------------------------------- #
-# Stato applicativo: cattura/confronto/salvataggio raccolti in un solo posto
-# --------------------------------------------------------------------------- #
-
-class AppState:
-    def __init__(self, verifier, thr_key, acq_mode):
-        self.verifier = verifier
-        self.thr_key = thr_key
-        self.acq_mode = acq_mode
-        self.slots = {"A": None, "B": None}
-        self.stages_cache = {"A": None, "B": None}
-        self.result_view = None
-        self.last = None  # (frame, prep_a, prep_b, result)
-
-    def capture_one(self, frame, box, name):
-        """Preprocessa una ROI e stampa gli avvisi di qualita'."""
-        x1, y1, x2, y2 = box
-        out, stages = self.verifier.prepare(frame[y1:y2, x1:x2])
-        if out is None:
-            print("  [{}] nessuna scrittura leggibile.".format(name))
+        if not self.cap.isOpened():
+            error_msg = f"Impossibile aprire la camera {camera_id}"
+            print(f"[ERROR] {error_msg}")
+            self.error_occurred.emit(error_msg)
+            self.cap = None
             return False
-        if not stages.get("found_text", True):
-            print("  [{}] testo non rilevato, uso tutto il riquadro.".format(name))
-        for wmsg in quality_warnings(out):
-            print("  [{}] attenzione: {}".format(name, wmsg))
-        self.slots[name], self.stages_cache[name] = out, stages
+
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
+        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+        self.cap.set(cv2.CAP_PROP_AUTOFOCUS, 0)
+        self.cap.set(cv2.CAP_PROP_FOCUS, self.focus)
+        self.focus_changed.emit(self.focus)
+
+        self.camera_id = camera_id
+        print(f"[Camera] Camera {camera_id} aperta correttamente")
+        print(f"[Camera] Autofocus disabilitato, focus iniziale: {self.focus}")
+        self.camera_opened.emit(camera_id)
+
+        while self.running:
+            if self.camera_change_queue is not None:
+                new_cam_id = self.camera_change_queue
+                self.camera_change_queue = None
+                print(f"[Camera] Cambio a camera {new_cam_id}...")
+                if not self._open_camera(new_cam_id):
+                    continue
+
+            if self.focus_absolute_queue is not None:
+                self.focus = max(0, min(255, self.focus_absolute_queue))
+                self.focus_absolute_queue = None
+                if self.cap:
+                    self.cap.set(cv2.CAP_PROP_FOCUS, self.focus)
+                self.focus_changed.emit(self.focus)
+            elif self.focus_delta_queue != 0:
+                self.focus = max(0, min(255, self.focus + self.focus_delta_queue))
+                if self.cap:
+                    self.cap.set(cv2.CAP_PROP_FOCUS, self.focus)
+                self.focus_changed.emit(self.focus)
+                self.focus_delta_queue = 0
+
+            if self.cap is None:
+                self.msleep(100)
+                continue
+
+            ok, frame = self.cap.read()
+            if ok:
+                self.frame_ready.emit(frame)
+            else:
+                self.msleep(10)
+
         return True
 
-    def both_filled(self):
-        return self.slots["A"] is not None and self.slots["B"] is not None
+    def apply_focus_delta(self, delta):
+        self.focus_delta_queue = delta
 
-    def compare(self, frame_for_log):
-        if not self.both_filled():
-            print("  Servono entrambi gli slot: cattura con 1 e 2 (o SPAZIO).")
+    def set_focus_absolute(self, value):
+        self.focus_absolute_queue = value
+
+    def switch_camera(self, camera_id):
+        self.camera_change_queue = camera_id
+
+    def stop(self):
+        self.running = False
+        self.wait()
+        if self.cap is not None:
+            self.cap.release()
+
+
+# ==============================================================================
+# CANVAS VIDEO LIVE + ROI DISEGNATE A MANO
+# ==============================================================================
+class VideoCanvas(QLabel):
+    """Feed live della camera. L'utente trascina il mouse per disegnare la
+    ROI 'attiva' (self.active_roi, 'A' o 'B'); le due ROI persistono finche'
+    non vengono ridisegnate, in coordinate del frame originale."""
+
+    def __init__(self):
+        super().__init__()
+        self.setAlignment(Qt.AlignCenter)
+        self.setStyleSheet(f"background-color: {DARK_BG}; border-radius: 16px;")
+        self.setMouseTracking(True)
+        self.current_frame = None
+        self.pulse_opacity = 0.0
+        self.pulse_direction = 1
+        self.focus_value = 30
+        self.gray_threshold = DEFAULT_GRAY_THRESHOLD
+        self.error_message = None
+        self.current_camera_id = 0
+
+        self.active_roi = "A"
+        self.roi_rects = {"A": None, "B": None}  # QRect in coordinate frame
+        self._drag_start = None
+        self._drag_current = None
+
+        self.pulse_timer = QTimer(self)
+        self.pulse_timer.timeout.connect(self._update_pulse)
+        self.pulse_timer.start(30)
+
+    # ---- feed --------------------------------------------------------------
+    def update_frame(self, cv_frame):
+        self.error_message = None
+        self.current_frame = cv_frame
+        self._render()
+
+    def set_focus_display(self, focus_val):
+        self.focus_value = focus_val
+        if self.current_frame is not None:
+            self._render()
+
+    def set_gray_threshold_display(self, value):
+        self.gray_threshold = value
+        if self.current_frame is not None:
+            self._render()
+
+    def set_camera_id(self, camera_id):
+        self.current_camera_id = camera_id
+        if self.current_frame is not None:
+            self._render()
+
+    def show_error(self, error_msg):
+        self.error_message = error_msg
+        self.current_frame = None
+        self._render()
+
+    def _update_pulse(self):
+        self.pulse_opacity += 0.03 * self.pulse_direction
+        if self.pulse_opacity >= 1.0: self.pulse_direction = -1
+        if self.pulse_opacity <= 0.2: self.pulse_direction = 1
+        self._render()
+
+    # ---- selezione ROI attiva ------------------------------------------------
+    def set_active_roi(self, name):
+        self.active_roi = name
+
+    def get_roi_crop(self, name):
+        rect = self.roi_rects.get(name)
+        if self.current_frame is None or rect is None:
+            return None
+        h, w = self.current_frame.shape[:2]
+        x1, y1 = max(0, rect.left()), max(0, rect.top())
+        x2, y2 = min(w, rect.right()), min(h, rect.bottom())
+        if x2 <= x1 or y2 <= y1:
+            return None
+        return self.current_frame[y1:y2, x1:x2].copy()
+
+    # ---- geometria: widget <-> frame -----------------------------------------
+    def _pixmap_geometry(self):
+        if self.current_frame is None:
+            return None
+        img_h, img_w = self.current_frame.shape[:2]
+        w, h = self.width(), self.height()
+        if w <= 0 or h <= 0:
+            return None
+        scale = min(w / img_w, h / img_h)
+        disp_w, disp_h = img_w * scale, img_h * scale
+        off_x = (w - disp_w) / 2
+        off_y = (h - disp_h) / 2
+        return scale, off_x, off_y
+
+    def _widget_to_frame(self, pos):
+        geom = self._pixmap_geometry()
+        if geom is None:
+            return None
+        scale, off_x, off_y = geom
+        img_h, img_w = self.current_frame.shape[:2]
+        x = (pos.x() - off_x) / scale
+        y = (pos.y() - off_y) / scale
+        x = max(0, min(img_w - 1, x))
+        y = max(0, min(img_h - 1, y))
+        return QPoint(int(x), int(y))
+
+    # ---- mouse: disegno rettangolo -------------------------------------------
+    def mousePressEvent(self, event):
+        if self.current_frame is None:
             return
-        t0 = time.time()
-        res = self.verifier.verify(self.slots["A"], self.slots["B"], self.thr_key)
-        print("  cos={:+.4f}  soglia={:.4f}  -> {}  ({:.0f} ms)".format(
-            res["score"], res["threshold"],
-            "STESSA PERSONA" if res["same_writer"] else "PERSONE DIVERSE",
-            (time.time() - t0) * 1000))
-        self.result_view = build_result_view(
-            self.slots["A"], self.slots["B"], res, self.verifier.mode, self.thr_key)
-        self.last = (frame_for_log, self.slots["A"], self.slots["B"], res)
+        pt = self._widget_to_frame(event.position().toPoint())
+        if pt is not None:
+            self._drag_start = pt
+            self._drag_current = pt
 
-    def handle_space(self, frame, boxes):
-        if self.acq_mode == "doppia":
-            ok_all = all(self.capture_one(frame, box, name)
-                        for box, name in zip(boxes, ("A", "B")))
-            if ok_all:
-                self.compare(frame.copy())
-        else:
-            target = "A" if self.slots["A"] is None else "B"
-            if self.capture_one(frame, boxes[0], target):
-                print("  slot {} catturato.".format(target))
-                if self.both_filled():
-                    self.compare(frame.copy())
+    def mouseMoveEvent(self, event):
+        if self._drag_start is None:
+            return
+        pt = self._widget_to_frame(event.position().toPoint())
+        if pt is not None:
+            self._drag_current = pt
 
-    def handle_slot_key(self, frame, boxes, target):
-        box = boxes[0] if self.acq_mode == "singola" else boxes[0 if target == "A" else 1]
-        if self.capture_one(frame, box, target):
-            print("  slot {} catturato.".format(target))
+    def mouseReleaseEvent(self, event):
+        if self._drag_start is None:
+            return
+        pt = self._widget_to_frame(event.position().toPoint())
+        if pt is not None:
+            self._drag_current = pt
+        rect = QRect(self._drag_start, self._drag_current).normalized()
+        self._drag_start = None
+        self._drag_current = None
+        if rect.width() > 5 and rect.height() > 5:
+            self.roi_rects[self.active_roi] = rect
 
-    def clear_slots(self):
-        self.slots = {"A": None, "B": None}
-        self.stages_cache = {"A": None, "B": None}
-        self.result_view = None
-        print("  slot svuotati.")
+    # ---- disegno --------------------------------------------------------------
+    def _render(self):
+        if self.error_message:
+            w, h = self.width(), self.height()
+            q_img = QImage(w, h, QImage.Format_RGB32)
+            q_img.fill(QColor(DARK_BG))
 
-    def cycle_threshold(self):
-        keys = list(self.verifier.thresholds)
-        self.thr_key = keys[(keys.index(self.thr_key) + 1) % len(keys)]
-        print("  soglia: {} = {:.4f}".format(self.thr_key, self.verifier.thresholds[self.thr_key]))
-        if self.both_filled():
-            frame_for_log = self.last[0] if self.last else self.slots["A"]
-            self.compare(frame_for_log)
+            painter = QPainter(q_img)
+            painter.setRenderHint(QPainter.Antialiasing)
+            painter.setRenderHint(QPainter.TextAntialiasing)
 
-    def save_debug(self):
-        os.makedirs(CAPTURES_DIR, exist_ok=True)
-        stamp = time.strftime("%Y%m%d_%H%M%S")
-        saved = False
-        for name in ("A", "B"):
-            if self.stages_cache[name] is None:
+            font_title = QFont("Segoe UI", 24, QFont.Bold)
+            painter.setFont(font_title)
+            painter.setPen(QColor(NEON_RED))
+            painter.drawText(q_img.rect(), Qt.AlignCenter, "⚠ CAMERA ERROR")
+
+            font_msg = QFont("Segoe UI", 14)
+            painter.setFont(font_msg)
+            painter.setPen(QColor(TEXT_SECONDARY))
+            painter.drawText(QRectF(20, h//2 + 40, w - 40, 60), Qt.AlignCenter, self.error_message)
+
+            font_hint = QFont("Segoe UI", 12)
+            painter.setFont(font_hint)
+            painter.setPen(QColor(TEXT_SECONDARY))
+            painter.drawText(QRectF(20, h//2 + 120, w - 40, 40), Qt.AlignCenter,
+                           "Premi [C] per cambiare camera  |  [Q] per uscire")
+
+            painter.end()
+            self.setPixmap(QPixmap.fromImage(q_img))
+            return
+
+        if self.current_frame is None:
+            return
+
+        h, w, ch = self.current_frame.shape
+        bytes_per_line = ch * w
+        q_img = QImage(self.current_frame.data, w, h, bytes_per_line, QImage.Format_BGR888).copy()
+
+        painter = QPainter(q_img)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.TextAntialiasing)
+
+        alpha = int(255 * self.pulse_opacity)
+
+        # ROI confermate (in coordinate frame, quindi direttamente sul q_img)
+        for name, rect in self.roi_rects.items():
+            if rect is None:
                 continue
-            sheet = debug_sheet(self.stages_cache[name])
-            if sheet is not None:
-                path = os.path.join(CAPTURES_DIR, "{}_debug_{}.png".format(stamp, name))
-                cv2.imwrite(path, sheet)
-                print("  stadi di preprocessing salvati: {}".format(path))
-                saved = True
-        if not saved:
-            print("  niente da salvare: cattura prima con 1 / 2 / SPAZIO.")
+            base_color = QColor(ROI_COLORS[name])
+            is_active = (name == self.active_roi)
+            pen_alpha = alpha if is_active else 160
+            pen = QPen(QColor(base_color.red(), base_color.green(), base_color.blue(), pen_alpha))
+            pen.setWidth(3)
+            painter.setPen(pen)
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRect(rect)
 
-    def save_result(self):
-        if self.last is None:
-            return
-        os.makedirs(CAPTURES_DIR, exist_ok=True)
-        stamp = time.strftime("%Y%m%d_%H%M%S")
-        frame_img, pa, pb, res = self.last
-        cv2.imwrite(os.path.join(CAPTURES_DIR, stamp + "_frame.png"), frame_img)
-        cv2.imwrite(os.path.join(CAPTURES_DIR, stamp + "_A.png"), pa)
-        cv2.imwrite(os.path.join(CAPTURES_DIR, stamp + "_B.png"), pb)
-        if self.result_view is not None:
-            cv2.imwrite(os.path.join(CAPTURES_DIR, stamp + "_result.png"), self.result_view)
-        log_path = os.path.join(CAPTURES_DIR, "log.csv")
-        new_file = not os.path.exists(log_path)
-        with open(log_path, "a", encoding="utf-8") as f:
-            if new_file:
-                f.write("timestamp,score,threshold,same_writer,mode,detect,acquisition\n")
-            f.write("{},{:.6f},{:.6f},{},{},{},{}\n".format(
-                stamp, res["score"], res["threshold"],
-                int(res["same_writer"]), self.verifier.mode,
-                int(self.verifier.detect), self.acq_mode))
-        print("  salvato in {} ({})".format(CAPTURES_DIR, stamp))
+            font_title = QFont("Segoe UI", 13, QFont.Bold)
+            painter.setFont(font_title)
+            painter.setPen(QColor(255, 255, 255, 220))
+            painter.drawText(QRectF(rect.left(), max(0, rect.top() - 26), 160, 24),
+                              Qt.AlignLeft, f"SAMPLE {name}")
+
+        # rettangolo mentre si trascina
+        if self._drag_start is not None and self._drag_current is not None:
+            pen = QPen(QColor(NEON_ORANGE))
+            pen.setWidth(2)
+            pen.setStyle(Qt.DashLine)
+            painter.setPen(pen)
+            drag_rect = QRect(self._drag_start, self._drag_current).normalized()
+            painter.drawRect(drag_rect)
+
+        font_small = QFont("Segoe UI", 10)
+        painter.setFont(font_small)
+        painter.setPen(QColor(156, 163, 175))
+        footer_text = (f"[trascina] disegna ROI {self.active_roi} attiva  |  [SPACE] Verifica  |  [R] Reset  |  "
+                       f"[F/G] Focus ±4  |  [D/H] Focus ±20  |  [C] Cambia camera  |  [T] Cambia soglia  |  "
+                       f"Camera: {self.current_camera_id}  |  Focus: {self.focus_value}  |  "
+                       f"Soglia grigio: {self.gray_threshold}")
+        painter.drawText(QRectF(20, h - 40, w - 40, 30), Qt.AlignLeft, footer_text)
+
+        painter.end()
+
+        pixmap = QPixmap.fromImage(q_img)
+        scaled_pixmap = pixmap.scaled(self.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.setPixmap(scaled_pixmap)
+
+    def resizeEvent(self, event):
+        self._render()
+        super().resizeEvent(event)
 
 
-# --------------------------------------------------------------------------- #
-# Main
-# --------------------------------------------------------------------------- #
+# ==============================================================================
+# PANNELLO RISULTATI (CON ANIMAZIONI)
+# ==============================================================================
+class ResultDashboard(QWidget):
+    def __init__(self, thresholds, active_key):
+        super().__init__()
+        self.setFixedWidth(380)
+        self.setStyleSheet(f"background-color: {PANEL_BG}; border-left: 1px solid #1F2937;")
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--camera", type=int, default=1)
-    ap.add_argument("--checkpoint", default=DEFAULT_CHECKPOINT)
-    ap.add_argument("--width", type=int, default=1280)
-    ap.add_argument("--height", type=int, default=720)
-    ap.add_argument("--mode", choices=["scan", "raw"], default="scan")
-    ap.add_argument("--threshold", choices=list(DEFAULT_THRESHOLDS), default="eer")
-    ap.add_argument("--threshold-value", type=float,
-                    help="soglia numerica personalizzata (da calibrate.py)")
-    ap.add_argument("--acquisition", choices=["doppia", "singola"], default="doppia")
-    ap.add_argument("--arch", choices=sorted(BACKBONES), default=None,
-                    help="forza il backbone invece di dedurlo dal nome del "
-                    "checkpoint (es. 'efficientnet_b1_triplet_iam_to_iam_best.pth' "
-                    "-> efficientnet_b1 automaticamente). Disponibili: {}".format(
-                        ", ".join(sorted(BACKBONES))))
-    ap.add_argument("--net-type", choices=NET_TYPES, default=None,
-                    help="forza la tipologia di rete (triplet, contrastive, "
-                    "siamese) invece di dedurla dal nome del checkpoint "
-                    "(es. '..._contrastive_...' -> contrastive automaticamente). "
-                    "NOTA: se il tuo engine.py non conosce ancora questo "
-                    "parametro, va aggiornato per passarlo a model_defs.load_model.")
-    ap.add_argument("--no-detect", action="store_true")
-    ap.add_argument("--mirror", action="store_true",
-                    help="specchia l'anteprima (comodo con webcam frontali)")
-    ap.add_argument("--cv-threads", type=int, default=8,
-                    help="numero di thread interni di OpenCV (0 = default OpenCV, "
-                    "-1 = tutti i core disponibili)")
-    ap.add_argument("--debug-keys", action="store_true",
-                    help="stampa il codice di ogni tasto premuto")
-    args = ap.parse_args()
+        self.thresholds = thresholds
+        self.active_thr_key = active_key
 
-    global DEBUG_KEYS
-    DEBUG_KEYS = args.debug_keys
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(20)
 
-    # Lascia che OpenCV usi piu' core per resize/cvtColor/ecc. Su molte
-    # distribuzioni il default e' gia' "tutti i core", ma alcuni ambienti
-    # (es. dentro container, o dopo che PyTorch ha gia' preso i thread) lo
-    # abbassano: -1 forza il numero di CPU disponibili.
-    if args.cv_threads != 0:
-        n = os.cpu_count() if args.cv_threads < 0 else args.cv_threads
-        cv2.setNumThreads(n)
-        print("cv2.setNumThreads({})".format(n))
+        self.title = QLabel("ANALYSIS RESULT")
+        self.title.setObjectName("MainTitle")
+        layout.addWidget(self.title)
 
-    announce_architecture(args.checkpoint, args.arch, args.net_type)
+        self.subtitle = QLabel("Waiting for capture...")
+        self.subtitle.setObjectName("SubTitle")
+        layout.addWidget(self.subtitle)
 
-    print("Carico il modello...")
-    verifier = HandwritingVerifier(args.checkpoint, mode=args.mode,
-                                   detect=not args.no_detect, arch=args.arch)
-    print("Modello pronto su {} -> {}".format(verifier.device, verifier.describe()))
+        self.verdict_card = QFrame()
+        self.verdict_card.setObjectName("verdictCard")
+        self.verdict_card.setStyleSheet(f"#verdictCard {{ background-color: {CARD_BG}; border-radius: 16px; border: 2px solid #374151; }}")
+        v_layout = QVBoxLayout(self.verdict_card)
+        v_layout.setContentsMargins(20, 30, 20, 30)
 
-    # Su CPU, PyTorch di default usa gia' piu' thread per le operazioni
-    # interne (conv, matmul...): se e' stato limitato altrove nel progetto lo
-    # segnaliamo soltanto, senza forzare nulla qui per non litigare con
-    # eventuali impostazioni gia' fatte in engine.py.
-    if str(verifier.device) == "cpu":
-        try:
-            import torch
-            print("torch.get_num_threads() = {}".format(torch.get_num_threads()))
-        except Exception:
-            pass
+        self.verdict_label = QLabel("STANDBY")
+        self.verdict_label.setObjectName("VerdictLabel")
+        self.verdict_label.setAlignment(Qt.AlignCenter)
+        self.verdict_label.setStyleSheet(f"color: {TEXT_SECONDARY};")
+        v_layout.addWidget(self.verdict_label)
 
-    thr_key = args.threshold
-    if args.threshold_value is not None:
-        verifier.thresholds["custom"] = args.threshold_value
-        thr_key = "custom"
-        print("Soglia personalizzata: {:.4f}".format(args.threshold_value))
+        self.margin_label = QLabel("")
+        self.margin_label.setAlignment(Qt.AlignCenter)
+        self.margin_label.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 14px;")
+        v_layout.addWidget(self.margin_label)
 
-    cap = cv2.VideoCapture(args.camera, cv2.CAP_DSHOW if os.name == "nt" else cv2.CAP_ANY)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
-    # Buffer piccolo: evita che la queue interna della webcam accumuli frame
-    # vecchi quando il resto della pipeline rallenta anche solo per un attimo.
-    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-    if not cap.isOpened():
-        raise SystemExit("Webcam {} non disponibile (prova --camera 0)".format(args.camera))
+        layout.addWidget(self.verdict_card)
 
-    grabber = FrameGrabber(cap)
-    preview_worker = PreviewWorker(verifier)
+        self.score_card = QFrame()
+        self.score_card.setProperty("class", "Card")
+        s_layout = QVBoxLayout(self.score_card)
+        s_layout.setContentsMargins(20, 20, 20, 20)
 
-    win = "HandVerify - demo webcam"
-    cv2.namedWindow(win, cv2.WINDOW_NORMAL)
+        s_layout.addWidget(QLabel("COSINE SIMILARITY"))
 
-    state = AppState(verifier, thr_key, args.acquisition)
-    preview = None
+        self.score_value = QLabel("--")
+        self.score_value.setObjectName("ScoreValue")
+        self.score_value.setAlignment(Qt.AlignCenter)
+        self.score_value.setStyleSheet(f"color: {NEON_CYAN};")
+        s_layout.addWidget(self.score_value)
 
-    try:
-        while True:
-            ok, frame = grabber.read()
-            if not ok:
-                print("Frame non letto dalla webcam.")
-                break
-            if frame is None:
-                continue  # il grabber non ha ancora consegnato il primo frame
-            if args.mirror:
-                frame = cv2.flip(frame, 1)
+        # container della barra: qui dentro disegniamo il fill + i marker
+        # delle soglie (eer / far1 / far01), cosi' si vede sempre dove sta
+        # la soglia attualmente in uso rispetto allo score ottenuto.
+        self.score_bar_bg = QFrame()
+        self.score_bar_bg.setFixedHeight(16)
+        self.score_bar_bg.setStyleSheet(f"background-color: #374151; border-radius: 8px;")
 
-            h, w = frame.shape[:2]
-            boxes = roi_boxes(w, h, state.acq_mode)
+        self.score_bar_fill = QFrame(self.score_bar_bg)
+        self.score_bar_fill.setFixedHeight(16)
+        self.score_bar_fill.setStyleSheet(f"background-color: {NEON_CYAN}; border-radius: 8px;")
+        self.score_bar_fill.setFixedWidth(0)
 
-            if state.result_view is None:
-                x1, y1, x2, y2 = boxes[0]
-                preview_worker.submit(frame[y1:y2, x1:x2])
-                new_preview = preview_worker.latest()
-                preview = new_preview if new_preview is not None else preview
-                cv2.imshow(win, draw_live_overlay(frame, boxes, verifier, state.thr_key,
-                                                  state.acq_mode, state.slots, preview))
+        # marker fisso per lo zero (centro della barra, dato che il range è [-1, 1])
+        self.zero_marker = QFrame(self.score_bar_bg)
+        self.zero_marker.setFixedWidth(2)
+        self.zero_marker.setStyleSheet(f"background-color: {TEXT_PRIMARY};")
+        self.zero_marker.raise_()
+
+        # marker verticali per ciascuna soglia, disegnati sopra la barra
+        self.threshold_markers = {}
+        for key in self.thresholds:
+            marker = QFrame(self.score_bar_bg)
+            marker.setFixedWidth(3)
+            color = THRESHOLD_MARKER_COLORS.get(key, TEXT_PRIMARY)
+            marker.setStyleSheet(f"background-color: {color};")
+            marker.raise_()
+            self.threshold_markers[key] = marker
+
+        s_layout.addWidget(self.score_bar_bg)
+
+        # legenda soglie sotto la barra, con evidenza sulla soglia attiva
+        legend_row = QHBoxLayout()
+        legend_row.setSpacing(10)
+        self.threshold_legend_labels = {}
+        for key in self.thresholds:
+            lbl = QLabel()
+            lbl.setAlignment(Qt.AlignCenter)
+            self.threshold_legend_labels[key] = lbl
+            legend_row.addWidget(lbl)
+        s_layout.addLayout(legend_row)
+
+        layout.addWidget(self.score_card)
+
+        self.quality_card = QFrame()
+        self.quality_card.setProperty("class", "Card")
+        q_layout = QVBoxLayout(self.quality_card)
+        q_layout.setContentsMargins(20, 20, 20, 20)
+
+        q_layout.addWidget(QLabel("IMAGE QUALITY"))
+        self.quality_text = QLabel("Focus: - | Ink: -")
+        self.quality_text.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 13px;")
+        q_layout.addWidget(self.quality_text)
+        layout.addWidget(self.quality_card)
+
+        layout.addStretch()
+
+        self.bar_animation = QPropertyAnimation(self.score_bar_fill, b"minimumWidth")
+        self.bar_animation.setDuration(800)
+        self.bar_animation.setEasingCurve(QEasingCurve.OutQuart)
+
+        self._refresh_threshold_legend()
+        self._reposition_threshold_markers()
+
+    # ---- soglie: posizionamento marker + legenda -----------------------------
+    def _score_to_x(self, score):
+        """Converte uno score cosine [-1, 1] in una posizione x dentro la barra."""
+        bar_w = max(0, self.score_bar_bg.width() - 4)
+        pct = (score + 1.0) / 2.0
+        pct = max(0.0, min(1.0, pct))
+        return int(pct * bar_w)
+
+    def _reposition_threshold_markers(self):
+        bar_h = self.score_bar_bg.height()
+        zero_x = self._score_to_x(0.0)
+        self.zero_marker.setGeometry(zero_x, 0, 2, bar_h)
+        self.zero_marker.raise_()
+        for key, marker in self.threshold_markers.items():
+            thr_val = self.thresholds[key]
+            x = self._score_to_x(thr_val)
+            marker.setGeometry(x, 0, 3, bar_h)
+            marker.raise_()
+
+    def _refresh_threshold_legend(self):
+        labels_map = {"eer": "EER", "far1": "FAR 1%", "far01": "FAR 0.1%"}
+        for key, lbl in self.threshold_legend_labels.items():
+            color = THRESHOLD_MARKER_COLORS.get(key, TEXT_PRIMARY)
+            name = labels_map.get(key, key.upper())
+            value = self.thresholds[key]
+            is_active = (key == self.active_thr_key)
+            if is_active:
+                lbl.setText(f"● {name} {value:.3f}")
+                lbl.setStyleSheet(
+                    f"color: {color}; font-size: 11px; font-weight: bold; "
+                    f"border: 1px solid {color}; border-radius: 6px; padding: 2px 6px;")
             else:
-                cv2.imshow(win, state.result_view)
+                lbl.setText(f"{name} {value:.3f}")
+                lbl.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 11px; padding: 2px 6px;")
 
-            # chiusura con la X della finestra: senza questo controllo il loop
-            # continuerebbe a riaprirla a ogni imshow
-            if cv2.getWindowProperty(win, cv2.WND_PROP_VISIBLE) < 1:
-                break
+    def set_active_threshold(self, key):
+        self.active_thr_key = key
+        self._refresh_threshold_legend()
 
-            key = read_key()
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._reposition_threshold_markers()
 
-            if key in (ord('q'), 27):
-                break
-            elif key == 32:  # spazio
-                state.handle_space(frame, boxes)
-            elif key in (ord('1'), ord('2')):
-                state.handle_slot_key(frame, boxes, "A" if key == ord('1') else "B")
-            elif key in (13, 10):  # invio
-                state.compare(frame.copy())
-            elif key == ord('m'):
-                state.acq_mode = "singola" if state.acq_mode == "doppia" else "doppia"
-                state.result_view = None
-                print("  modalita' di acquisizione: {}".format(state.acq_mode))
-            elif key == ord('c'):
-                state.clear_slots()
-            elif key == ord('r'):
-                state.result_view = None
-            elif key == ord('b'):
-                verifier.mode = "raw" if verifier.mode == "scan" else "scan"
-                state.result_view = None
-                print("  preprocessing: {}".format(verifier.mode))
-            elif key == ord('d'):
-                verifier.detect = not verifier.detect
-                state.result_view = None
-                print("  auto-crop post-it: {}".format("on" if verifier.detect else "off"))
-            elif key == ord('t'):
-                state.cycle_threshold()
-            elif key == ord('x'):
-                state.save_debug()
-            elif key == ord('s'):
-                state.save_result()
-    finally:
-        preview_worker.stop()
-        grabber.stop()
-        cap.release()
-        cv2.destroyAllWindows()
+    def update_result(self, result, img_a, img_b, thresholds, thr_key):
+        is_match = result["same_writer"]
+        color = NEON_GREEN if is_match else NEON_RED
+        text = "MATCH CONFIRMED" if is_match else "NO MATCH"
+
+        self.verdict_label.setText(text)
+        self.verdict_label.setStyleSheet(f"color: {color};")
+        self.verdict_card.setStyleSheet(f"#verdictCard {{ background-color: {CARD_BG}; border-radius: 16px; border: 2px solid {color}; }}")
+
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(25)
+        shadow.setColor(QColor(color))
+        shadow.setOffset(0, 0)
+        self.verdict_card.setGraphicsEffect(shadow)
+
+        self.margin_label.setText(f"Margin: {result['margin']:+.4f} | Threshold: {thr_key.upper()}")
+
+        score = result["score"]
+        self.score_value.setText(f"{score:.4f}")
+        self.score_value.setStyleSheet(f"color: {color};")
+
+        # riempimento classico da sinistra: 0% = -1, 100% = +1. Il marker
+        # bianco fisso al centro (self.zero_marker) resta il riferimento
+        # visivo per lo zero, cosi' la barra resta piena e leggibile anche
+        # per punteggi alti, invece di crescere solo da un segmento centrale.
+        target_width = self._score_to_x(score)
+
+        self.score_bar_fill.move(0, 0)
+        self.bar_animation.setStartValue(self.score_bar_fill.width())
+        self.bar_animation.setEndValue(max(0, target_width))
+        self.score_bar_fill.setStyleSheet(f"background-color: {color}; border-radius: 8px;")
+        self.bar_animation.start()
+
+        self._reposition_threshold_markers()
+
+        f_a, i_a = quality_stats(img_a)
+        f_b, i_b = quality_stats(img_b)
+        self.quality_text.setText(f"A: Focus {f_a:.0f} | Ink {i_a:.1f}%\nB: Focus {f_b:.0f} | Ink {i_b:.1f}%")
+
+        warns = quality_warnings(img_a) + quality_warnings(img_b)
+        if warns:
+            self.quality_text.setStyleSheet(f"color: #FBBF24; font-size: 13px;")
+        else:
+            self.quality_text.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 13px;")
+
+
+# ==============================================================================
+# PANNELLO PREVIEW PREPROCESSING (LIVE, SOTTO LA WEBCAM)
+# ==============================================================================
+class PreprocessPreview(QWidget):
+    """Mostra le due ROI cosi' come escono dal preprocessing, cioe'
+    esattamente quello che il modello vede (448x448, binarizzato).
+    Thumbnail grandi per poterle controllare bene ad occhio nudo."""
+
+    THUMB_SIZE = 340
+
+    def __init__(self):
+        super().__init__()
+        self.setStyleSheet(f"background-color: {PANEL_BG}; border-radius: 12px;")
+        self.setFixedHeight(self.THUMB_SIZE + 70)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(16, 12, 16, 12)
+        outer.setSpacing(8)
+
+        header = QLabel("MODEL INPUT PREVIEW (live)")
+        header.setStyleSheet(f"color: {NEON_CYAN}; font-size: 12px; font-weight: bold; letter-spacing: 1px;")
+        outer.addWidget(header)
+
+        row = QHBoxLayout()
+        row.setSpacing(16)
+        self.slot_a = self._build_slot("A")
+        self.slot_b = self._build_slot("B")
+        row.addWidget(self.slot_a["widget"])
+        row.addWidget(self.slot_b["widget"])
+        row.addStretch()
+        outer.addLayout(row)
+
+    def _build_slot(self, label_text):
+        widget = QWidget()
+        h = QHBoxLayout(widget)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(10)
+
+        img_label = QLabel()
+        img_label.setFixedSize(self.THUMB_SIZE, self.THUMB_SIZE)
+        img_label.setAlignment(Qt.AlignCenter)
+        img_label.setStyleSheet(
+            f"background-color: {DARK_BG}; border-radius: 8px; border: 1px solid #374151; color: {TEXT_SECONDARY};")
+        img_label.setText("No ROI")
+        h.addWidget(img_label)
+
+        v = QVBoxLayout()
+        v.setSpacing(4)
+        tag = QLabel(f"SAMPLE {label_text}")
+        tag.setStyleSheet(f"color: {TEXT_PRIMARY}; font-size: 14px; font-weight: bold;")
+        v.addWidget(tag)
+        info = QLabel("Focus: -\nInk: -")
+        info.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 12px;")
+        v.addWidget(info)
+        v.addStretch()
+        h.addLayout(v)
+
+        return {"widget": widget, "img": img_label, "info": info}
+
+    def update_slot(self, which, img_448):
+        slot = self.slot_a if which == "A" else self.slot_b
+
+        if img_448 is None:
+            slot["img"].setPixmap(QPixmap())
+            slot["img"].setText("No ROI")
+            slot["info"].setText("Focus: -\nInk: -")
+            return
+
+        arr = np.ascontiguousarray(img_448)
+        h, w = arr.shape
+        qimg = QImage(arr.data, w, h, w, QImage.Format_Grayscale8).copy()
+        pixmap = QPixmap.fromImage(qimg).scaled(
+            self.THUMB_SIZE, self.THUMB_SIZE, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        slot["img"].setText("")
+        slot["img"].setPixmap(pixmap)
+
+        focus, ink = quality_stats(arr)
+        warns = quality_warnings(arr)
+        color = "#FBBF24" if warns else TEXT_SECONDARY
+        slot["info"].setStyleSheet(f"color: {color}; font-size: 12px;")
+        slot["info"].setText(f"Focus: {focus:.0f}\nInk: {ink:.1f}%")
+
+
+# ==============================================================================
+# BARRA SOGLIE
+# ==============================================================================
+class ThresholdBar(QWidget):
+    """Riga di pulsanti per scegliere quale soglia usare (EER / FAR 1% / FAR 0.1%)."""
+
+    LABELS = {"eer": "EER", "far1": "FAR 1%", "far01": "FAR 0.1%"}
+
+    def __init__(self, thresholds, active_key, on_change):
+        super().__init__()
+        self.setStyleSheet(f"background-color: {PANEL_BG}; border-radius: 12px;")
+        self.on_change = on_change
+        self.buttons = {}
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setSpacing(8)
+
+        header = QLabel("SOGLIA DI DECISIONE")
+        header.setStyleSheet(f"color: {TEXT_PRIMARY}; font-size: 12px; font-weight: bold; letter-spacing: 1px;")
+        layout.addWidget(header)
+
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        for key in thresholds:
+            btn = QPushButton(f"{self.LABELS.get(key, key.upper())}\n{thresholds[key]:.4f}")
+            btn.setCheckable(True)
+            btn.setChecked(key == active_key)
+            btn.clicked.connect(lambda _checked, k=key: self._select(k))
+            self.buttons[key] = btn
+            row.addWidget(btn)
+        layout.addLayout(row)
+
+    def _select(self, key):
+        for k, btn in self.buttons.items():
+            btn.setChecked(k == key)
+        self.on_change(key)
+
+    def set_active(self, key):
+        for k, btn in self.buttons.items():
+            btn.setChecked(k == key)
+
+
+# ==============================================================================
+# MAIN WINDOW
+# ==============================================================================
+class HandVerifyApp(QMainWindow):
+    def __init__(self, checkpoint, arch, camera_id, threshold_key, initial_focus):
+        super().__init__()
+        self.setWindowTitle("HandVerify // Biometric Scanner")
+        self.resize(1500, 1000)
+        self.setStyleSheet(GLOBAL_QSS)
+
+        print("Caricamento modello AI...")
+        self.verifier = HandwritingVerifier(checkpoint, arch=arch)
+        print(f"Modello pronto: {self.verifier.describe()}")
+
+        self.thr_key = threshold_key
+        self.available_cameras = self._detect_cameras()
+        print(f"Camere disponibili: {self.available_cameras}")
+
+        # UI Setup
+        central = QWidget()
+        self.setCentralWidget(central)
+        main_layout = QHBoxLayout(central)
+        main_layout.setContentsMargins(16, 16, 16, 16)
+        main_layout.setSpacing(16)
+
+        self.video_canvas = VideoCanvas()
+        self.preprocess_preview = PreprocessPreview()
+
+        left_panel = QWidget()
+        left_layout = QVBoxLayout(left_panel)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(16)
+
+        # pulsanti per scegliere quale ROI si sta disegnando
+        roi_select_row = QHBoxLayout()
+        self.roi_buttons = {}
+        for name in ROI_NAMES:
+            btn = QPushButton(f"Disegna ROI {name}")
+            btn.setCheckable(True)
+            btn.setChecked(name == self.video_canvas.active_roi)
+            btn.setStyleSheet(
+                f"background-color: {ROI_COLORS[name]}; color: {DARK_BG};" if name == self.video_canvas.active_roi
+                else "")
+            btn.clicked.connect(lambda _checked, n=name: self._select_active_roi(n))
+            self.roi_buttons[name] = btn
+            roi_select_row.addWidget(btn)
+        left_layout.addLayout(roi_select_row)
+
+        left_layout.addWidget(self.video_canvas, stretch=1)
+        left_layout.addWidget(self.preprocess_preview)
+        main_layout.addWidget(left_panel, stretch=1)
+
+        self._last_preview_update = 0.0
+        self._preview_interval = 0.1  # ~10 fps
+
+        self.dashboard = ResultDashboard(self.verifier.thresholds, self.thr_key)
+
+        focus_widget = QWidget()
+        focus_widget.setStyleSheet(f"background-color: {PANEL_BG}; border-radius: 12px; padding: 12px;")
+        focus_layout = QVBoxLayout(focus_widget)
+        focus_layout.setContentsMargins(16, 12, 16, 12)
+
+        focus_header = QLabel("MANUAL FOCUS CONTROL")
+        focus_header.setStyleSheet(f"color: {NEON_CYAN}; font-size: 12px; font-weight: bold; letter-spacing: 1px;")
+        focus_layout.addWidget(focus_header)
+
+        self.focus_slider = QSlider(Qt.Horizontal)
+        self.focus_slider.setMinimum(0)
+        self.focus_slider.setMaximum(255)
+        self.focus_slider.setValue(initial_focus)
+        self.focus_slider.valueChanged.connect(self.on_focus_slider_changed)
+        focus_layout.addWidget(self.focus_slider)
+
+        self.focus_label = QLabel(f"Focus: {initial_focus}")
+        self.focus_label.setStyleSheet(f"color: {TEXT_PRIMARY}; font-size: 14px; font-weight: bold;")
+        self.focus_label.setAlignment(Qt.AlignCenter)
+        focus_layout.addWidget(self.focus_label)
+
+        self.gray_threshold = DEFAULT_GRAY_THRESHOLD
+
+        gray_widget = QWidget()
+        gray_widget.setStyleSheet(f"background-color: {PANEL_BG}; border-radius: 12px; padding: 12px;")
+        gray_layout = QVBoxLayout(gray_widget)
+        gray_layout.setContentsMargins(16, 12, 16, 12)
+
+        gray_header = QLabel("SOGLIA BINARIZZAZIONE (GRIGIO)")
+        gray_header.setStyleSheet(f"color: {NEON_CYAN}; font-size: 12px; font-weight: bold; letter-spacing: 1px;")
+        gray_layout.addWidget(gray_header)
+
+        self.gray_slider = QSlider(Qt.Horizontal)
+        self.gray_slider.setMinimum(0)
+        self.gray_slider.setMaximum(255)
+        self.gray_slider.setValue(self.gray_threshold)
+        self.gray_slider.valueChanged.connect(self.on_gray_threshold_changed)
+        gray_layout.addWidget(self.gray_slider)
+
+        self.gray_label = QLabel(f"Soglia: {self.gray_threshold}")
+        self.gray_label.setStyleSheet(f"color: {TEXT_PRIMARY}; font-size: 14px; font-weight: bold;")
+        self.gray_label.setAlignment(Qt.AlignCenter)
+        gray_layout.addWidget(self.gray_label)
+
+        self.threshold_bar = ThresholdBar(self.verifier.thresholds, self.thr_key, self._on_threshold_changed)
+
+        right_panel = QWidget()
+        right_layout = QVBoxLayout(right_panel)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(12)
+        right_layout.addWidget(self.dashboard)
+        right_layout.addWidget(focus_widget)
+        right_layout.addWidget(gray_widget)
+        right_layout.addWidget(self.threshold_bar)
+
+        main_layout.addWidget(right_panel)
+
+        # Scorciatoia per SPAZIO indipendente dal focus da tastiera: senza
+        # questo, se nessun widget con focus policy ha mai ricevuto il
+        # focus (es. non si e' ancora cliccato su uno slider/pulsante),
+        # keyPressEvent sulla finestra non riceve gli eventi e SPAZIO
+        # sembra "non funzionare" finche' non si clicca altrove prima.
+        self._space_shortcut = QShortcut(QKeySequence(Qt.Key_Space), self)
+        self._space_shortcut.setContext(Qt.ApplicationShortcut)
+        self._space_shortcut.activated.connect(self.capture_and_verify)
+
+        if camera_id not in self.available_cameras and self.available_cameras:
+            print(f"[WARNING] Camera {camera_id} non disponibile, uso la prima disponibile: {self.available_cameras[0]}")
+            camera_id = self.available_cameras[0]
+
+        self.camera_worker = CameraWorker(camera_id, 1280, 720, initial_focus)
+        self.camera_worker.frame_ready.connect(self.process_frame)
+        self.camera_worker.focus_changed.connect(self.on_focus_changed)
+        self.camera_worker.error_occurred.connect(self.show_camera_error)
+        self.camera_worker.camera_opened.connect(self.on_camera_opened)
+        self.camera_worker.start()
+
+    def _detect_cameras(self):
+        available = []
+        for i in range(5):
+            cap = cv2.VideoCapture(i, cv2.CAP_DSHOW if os.name == 'nt' else cv2.CAP_ANY)
+            if cap.isOpened():
+                available.append(i)
+                cap.release()
+        return available
+
+    def _select_active_roi(self, name):
+        self.video_canvas.set_active_roi(name)
+        for n, btn in self.roi_buttons.items():
+            btn.setChecked(n == name)
+            btn.setStyleSheet(f"background-color: {ROI_COLORS[n]}; color: {DARK_BG};" if n == name else "")
+
+    def _on_threshold_changed(self, key):
+        self.thr_key = key
+        self.dashboard.set_active_threshold(key)
+        print(f"Soglia attiva: {self.thr_key} = {self.verifier.thresholds[self.thr_key]:.4f}")
+
+    def process_frame(self, frame):
+        self.video_canvas.update_frame(frame)
+        self._update_preprocess_preview()
+
+    def _update_preprocess_preview(self):
+        now = time.time()
+        if now - self._last_preview_update < self._preview_interval:
+            return
+        self._last_preview_update = now
+
+        for name in ROI_NAMES:
+            roi = self.video_canvas.get_roi_crop(name)
+            img_448 = self.verifier.prepare(roi, self.gray_threshold) if roi is not None else None
+            self.preprocess_preview.update_slot(name, img_448)
+
+    def on_gray_threshold_changed(self, value):
+        self.gray_threshold = value
+        self.gray_label.setText(f"Soglia: {value}")
+        self.video_canvas.set_gray_threshold_display(value)
+
+    def on_focus_slider_changed(self, value):
+        self.camera_worker.set_focus_absolute(value)
+        self.focus_label.setText(f"Focus: {value}")
+
+    def on_focus_changed(self, value):
+        self.video_canvas.set_focus_display(value)
+        if self.focus_slider.value() != value:
+            self.focus_slider.blockSignals(True)
+            self.focus_slider.setValue(value)
+            self.focus_slider.blockSignals(False)
+        self.focus_label.setText(f"Focus: {value}")
+
+    def on_camera_opened(self, camera_id):
+        self.video_canvas.set_camera_id(camera_id)
+
+    def show_camera_error(self, error_msg):
+        self.video_canvas.show_error(error_msg)
+
+    def keyPressEvent(self, event):
+        # Ignora gli auto-repeat generati dal sistema quando un tasto resta
+        # premuto: senza questo controllo, tenendo premuto SPAZIO si otterrebbero
+        # decine di verifiche al secondo invece di una singola per pressione.
+        if event.isAutoRepeat():
+            return
+
+        key = event.key()
+
+        if key == Qt.Key_R:
+            self.reset_view()
+        elif key == Qt.Key_T:
+            keys = list(self.verifier.thresholds)
+            idx = keys.index(self.thr_key)
+            new_key = keys[(idx + 1) % len(keys)]
+            self.threshold_bar.set_active(new_key)
+            self._on_threshold_changed(new_key)
+        elif key == Qt.Key_F:
+            new_val = self.focus_slider.value() + 4
+            self.focus_slider.setValue(min(255, new_val))
+        elif key == Qt.Key_G:
+            new_val = self.focus_slider.value() - 4
+            self.focus_slider.setValue(max(0, new_val))
+        elif key == Qt.Key_D:
+            new_val = self.focus_slider.value() + 20
+            self.focus_slider.setValue(min(255, new_val))
+        elif key == Qt.Key_H:
+            new_val = self.focus_slider.value() - 20
+            self.focus_slider.setValue(max(0, new_val))
+        elif key == Qt.Key_C:
+            self._switch_to_next_camera()
+        elif key == Qt.Key_A:
+            self._select_active_roi("A")
+        elif key == Qt.Key_B:
+            self._select_active_roi("B")
+        elif key == Qt.Key_1:
+            self.focus_slider.setValue(0)
+        elif key == Qt.Key_2:
+            self.focus_slider.setValue(64)
+        elif key == Qt.Key_3:
+            self.focus_slider.setValue(128)
+        elif key == Qt.Key_4:
+            self.focus_slider.setValue(192)
+        elif key == Qt.Key_5:
+            self.focus_slider.setValue(255)
+        elif key == Qt.Key_Escape or key == Qt.Key_Q:
+            self.close()
+
+    def _switch_to_next_camera(self):
+        if not self.available_cameras:
+            print("Nessuna camera disponibile")
+            return
+
+        current = self.camera_worker.camera_id
+        idx = self.available_cameras.index(current) if current in self.available_cameras else -1
+        next_idx = (idx + 1) % len(self.available_cameras)
+        next_camera = self.available_cameras[next_idx]
+
+        print(f"Cambio camera: {current} -> {next_camera}")
+        self.camera_worker.switch_camera(next_camera)
+
+    def capture_and_verify(self):
+        roi_a = self.video_canvas.get_roi_crop("A")
+        roi_b = self.video_canvas.get_roi_crop("B")
+
+        if roi_a is None or roi_b is None:
+            self.dashboard.subtitle.setText("Disegna prima entrambe le ROI (A e B).")
+            return
+
+        img_a = self.verifier.prepare(roi_a, self.gray_threshold)
+        img_b = self.verifier.prepare(roi_b, self.gray_threshold)
+
+        if img_a is None or img_b is None:
+            self.dashboard.subtitle.setText("Error: ROI non valida in uno dei due campioni.")
+            return
+
+        t0 = time.time()
+        result = self.verifier.verify(img_a, img_b, self.thr_key)
+        print(f"  cos={result['score']:+.4f} | {self.thr_key}={result['threshold']:.4f} | {(time.time()-t0)*1000:.0f}ms")
+
+        self.dashboard.subtitle.setText(f"Analysis completed in {(time.time()-t0)*1000:.0f} ms")
+        self.dashboard.update_result(result, img_a, img_b, self.verifier.thresholds, self.thr_key)
+
+    def reset_view(self):
+        self.dashboard.subtitle.setText("Waiting for capture...")
+        self.dashboard.verdict_label.setText("STANDBY")
+        self.dashboard.verdict_label.setStyleSheet(f"color: {TEXT_SECONDARY};")
+        self.dashboard.verdict_card.setStyleSheet(f"#verdictCard {{ background-color: {CARD_BG}; border-radius: 16px; border: 2px solid #374151; }}")
+        self.dashboard.verdict_card.setGraphicsEffect(None)
+        self.dashboard.score_value.setText("--")
+        zero_x = self.dashboard._score_to_x(0.0)
+        self.dashboard.score_bar_fill.move(zero_x, 0)
+        self.dashboard.score_bar_fill.setFixedWidth(0)
+        self.dashboard.quality_text.setText("Focus: - | Ink: -")
+
+    def closeEvent(self, event):
+        self.camera_worker.stop()
+        event.accept()
 
 
 if __name__ == "__main__":
-    main()-e 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--camera", type=int, default=1)
+    parser.add_argument("--checkpoint", default=DEFAULT_CHECKPOINT)
+    parser.add_argument("--threshold", choices=list(DEFAULT_THRESHOLDS), default="eer")
+    parser.add_argument("--arch", default=None)
+    parser.add_argument("--focus", type=int, default=30, help="Valore focus iniziale (0-255)")
+    args = parser.parse_args()
+
+    QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
+
+    app = QApplication(sys.argv)
+    app.setStyle("Fusion")
+
+    window = HandVerifyApp(args.checkpoint, args.arch, args.camera, args.threshold, args.focus)
+    window.show()
+
+    sys.exit(app.exec())-e 
 
 ===== ./webcam-demo/demo/preprocess.py =====
 
 """
-Preprocessing delle immagini da webcam, allineato alla pipeline usata per IAM
-(notebooks/Datasets Preprocessing.ipynb del repo HandVerify):
+Preprocessing per ROI selezionate MANUALMENTE dall'utente col mouse.
 
-    grayscale -> binarizzazione Otsu -> tight crop sul testo ->
-    padding a quadrato su sfondo bianco -> resize 448x448 -> ToTensor [0,1]
-
-In piu', rispetto al dataset (scansioni pulite), qui serve compensare la
-webcam: rimozione dell'ombreggiatura, sbiancamento dello sfondo e ritaglio
-automatico del post-it dentro la ROI.
+Niente piu' rilevamento automatico del foglio o dell'inchiostro (erano la
+fonte di instabilita': soglie Otsu/adattive che saltano a seconda della
+scena). Qui l'utente disegna gia' un rettangolo stretto intorno alla
+scrittura, quindi il preprocessing si limita a:
+  1) binarizzare (sfondo -> bianco puro, inchiostro -> nero)
+  2) incollare su un canvas quadrato e ridimensionare a TARGET_SIZE
 """
 
 import cv2
 import numpy as np
-import torch
 
 TARGET_SIZE = 448
+DEFAULT_GRAY_THRESHOLD = 128
 
 
-# ----------------------------------------------------------------------------
-# funzioni prese dalla pipeline IAM originale
-# ----------------------------------------------------------------------------
-def compute_tight_crop_coords(binary_image, padding=5, min_pixel_ratio=0.02):
-    """Coordinate di crop aggressive attorno al testo: (y1, y2, x1, x2)."""
-    binary_inv = 255 - binary_image
-    h, w = binary_image.shape
-
-    min_row_threshold = max(10, int(w * min_pixel_ratio))
-    min_col_threshold = max(10, int(h * min_pixel_ratio))
-
-    row_sums = np.sum(binary_inv > 0, axis=1)
-    col_sums = np.sum(binary_inv > 0, axis=0)
-
-    text_rows = np.where(row_sums > min_row_threshold)[0]
-    text_cols = np.where(col_sums > min_col_threshold)[0]
-
-    if len(text_rows) == 0 or len(text_cols) == 0:
-        return None
-
-    y1, y2 = text_rows[0], text_rows[-1]
-    x1, x2 = text_cols[0], text_cols[-1]
-
-    extra_trim = 3
-    y1 = min(y1 + extra_trim, y2 - 1)
-    y2 = max(y2 - extra_trim, y1 + 1)
-
-    y1 = max(0, y1 - padding)
-    y2 = min(h, y2 + padding)
-    x1 = max(0, x1 - padding)
-    x2 = min(w, x2 + padding)
-
-    return (y1, y2, x1, x2)
-
-
-def resize_to_square(image, size=TARGET_SIZE):
-    """Resize mantenendo l'aspect ratio dentro un canvas quadrato bianco."""
-    h, w = image.shape
+def make_square_resize(img, size=TARGET_SIZE):
+    h, w = img.shape
     side = max(h, w)
+    canvas = np.full((side, side), 255, dtype=np.uint8)
+    y = (side - h) // 2
+    x = (side - w) // 2
+    canvas[y:y + h, x:x + w] = img
+    return cv2.resize(canvas, (size, size), interpolation=cv2.INTER_AREA)
 
-    square = np.full((side, side), 255, dtype=np.uint8)
-    y_off, x_off = (side - h) // 2, (side - w) // 2
-    square[y_off:y_off + h, x_off:x_off + w] = image
 
-    return cv2.resize(square, (size, size), interpolation=cv2.INTER_AREA)
+def preprocess_manual_roi(roi_bgr, gray_threshold=DEFAULT_GRAY_THRESHOLD):
+    """ROI (BGR) disegnata a mano -> immagine 448x448 binarizzata.
 
+    gray_threshold: soglia (0-255) usata per la binarizzazione netta
+    inchiostro/sfondo. Valori piu' bassi catturano solo i tratti piu'
+    scuri, valori piu' alti includono anche i grigi piu' chiari.
 
-# ----------------------------------------------------------------------------
-# adattamenti per la webcam
-# ----------------------------------------------------------------------------
-def remove_shading(gray, ksize=51):
+    Ritorna None se la ROI e' vuota (rettangolo non ancora disegnato).
     """
-    Divide per lo sfondo stimato: toglie ombre e gradienti di luce.
-    Lo sfondo viene stimato su un'immagine ridotta a 1/4 (il median blur su
-    kernel grandi e' costoso) e poi riportato alla dimensione originale.
-    """
-    small = cv2.resize(gray, None, fx=0.25, fy=0.25, interpolation=cv2.INTER_AREA)
-    k = max(3, int(ksize * 0.25) | 1)
-    background = cv2.medianBlur(small, k)
-    background = cv2.resize(background, (gray.shape[1], gray.shape[0]),
-                            interpolation=cv2.INTER_LINEAR)
-    background = np.maximum(background, 1).astype(np.float32)
-    normalized = (gray.astype(np.float32) / background) * 220.0
-    return np.clip(normalized, 0, 255).astype(np.uint8)
-
-
-def detect_note(gray, min_area_ratio=0.05, inset=0.04):
-    """
-    Trova il post-it (regione chiara piu' grande) dentro la ROI.
-    Ritorna (y1, y2, x1, x2) oppure None se non trova nulla di sensato.
-    """
-    h, w = gray.shape
-    blurred = cv2.GaussianBlur(gray, (9, 9), 0)
-    _, bright = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-
-    kernel = np.ones((15, 15), np.uint8)
-    bright = cv2.morphologyEx(bright, cv2.MORPH_CLOSE, kernel)
-    bright = cv2.morphologyEx(bright, cv2.MORPH_OPEN, kernel)
-
-    contours, _ = cv2.findContours(bright, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    if not contours:
+    if roi_bgr is None or roi_bgr.size == 0:
         return None
 
-    c = max(contours, key=cv2.contourArea)
-    if cv2.contourArea(c) < min_area_ratio * h * w:
-        return None
+    gray = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2GRAY)
 
-    x, y, cw, ch = cv2.boundingRect(c)
-    if cw < 0.15 * w or ch < 0.15 * h:
-        return None
+    # sfondo quasi bianco -> bianco puro, poi binarizzazione netta
+    background = gray > 180
+    gray = gray.copy()
+    gray[background] = 255
+    _, binary = cv2.threshold(gray, gray_threshold, 255, cv2.THRESH_BINARY)
 
-    # rientra un po' per togliere bordo e ombra del post-it
-    dx, dy = int(cw * inset), int(ch * inset)
-    return (y + dy, y + ch - dy, x + dx, x + cw - dx)
+    return make_square_resize(binary, TARGET_SIZE)
 
 
-def whiten_background(gray, binary):
-    """Porta a bianco puro tutto cio' che Otsu considera sfondo (carta colorata,
-    texture del post-it), lasciando i tratti d'inchiostro in grayscale."""
-    out = gray.copy()
-    out[binary == 255] = 255
-    return out
+def quality_stats(img):
+    focus = cv2.Laplacian(img, cv2.CV_64F).var()
+    ink_ratio = (img < 128).mean() * 100
+    return focus, ink_ratio
 
 
-def preprocess_roi(roi_bgr, mode="scan", detect=True, return_stages=False):
-    """
-    Da ritaglio della webcam (BGR) a immagine 448x448 in stile IAM.
-
-    mode:
-        "scan" -> rimozione ombre + sfondo sbiancato (consigliato con la webcam)
-        "raw"  -> solo grayscale, come una scansione gia' pulita
-    detect:
-        True -> cerca il post-it dentro la ROI prima del crop sul testo
-
-    Ritorna l'immagine uint8 448x448 (None se non trova testo), oppure
-    (immagine, dict_di_stage) se return_stages=True.
-    """
-    stages = {}
-    gray = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2GRAY) if roi_bgr.ndim == 3 else roi_bgr.copy()
-    stages["gray"] = gray
-
-    if detect:
-        box = detect_note(gray)
-        if box is not None:
-            y1, y2, x1, x2 = box
-            gray = gray[y1:y2, x1:x2]
-    stages["note"] = gray
-
-    work = remove_shading(gray) if mode == "scan" else gray
-
-    # se l'inchiostro risultasse piu' chiaro della carta (foto in negativo,
-    # lavagna scura...) si inverte, il modello si aspetta nero su bianco
-    if np.median(work) < 110:
-        work = 255 - work
-
-    _, binary = cv2.threshold(work, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    stages["binary"] = binary
-
-    cleaned = whiten_background(work, binary) if mode == "scan" else work
-
-    coords = compute_tight_crop_coords(binary, padding=5, min_pixel_ratio=0.02)
-    if coords is None:
-        # nessun testo trovato: si usa tutta la ROI invece di fallire
-        cropped = cleaned
-    else:
-        y1, y2, x1, x2 = coords
-        cropped = cleaned[y1:y2, x1:x2]
-
-    if cropped.size == 0:
-        return (None, stages) if return_stages else None
-
-    final = resize_to_square(cropped, TARGET_SIZE)
-    stages["final"] = final
-    stages["found_text"] = coords is not None
-
-    return (final, stages) if return_stages else final
+def to_tensor(img):
+    import torch
+    tensor = torch.from_numpy(img.astype(np.float32) / 255.0)
+    tensor = tensor.unsqueeze(0).unsqueeze(0)
+    return tensor
 
 
-def to_tensor(img_448):
-    """448x448 uint8 -> tensore (1, 1, 448, 448) in [0, 1], come ToTensor()."""
-    t = torch.from_numpy(img_448.astype(np.float32) / 255.0)
-    return t.unsqueeze(0).unsqueeze(0)
-
-
-# ----------------------------------------------------------------------------
-# diagnostica
-# ----------------------------------------------------------------------------
-def quality_stats(img_448):
-    """
-    Due indicatori per capire se l'acquisizione e' buona:
-      focus = varianza del laplaciano (bassa = immagine sfocata)
-      ink   = percentuale di pixel scuri (poco inchiostro = troppo poco testo)
-    """
-    focus = float(cv2.Laplacian(img_448, cv2.CV_64F).var())
-    ink = float((img_448 < 128).mean() * 100.0)
-    return focus, ink
-
-
-def quality_warnings(img_448, focus_min=150.0, ink_min=2.5, ink_max=25.0):
-    """Lista di problemi rilevati sull'immagine preprocessata (vuota = ok)."""
-    focus, ink = quality_stats(img_448)
-    warns = []
-    if focus < focus_min:
-        warns.append("sfocata (focus {:.0f})".format(focus))
-    if ink < ink_min:
-        warns.append("poco testo ({:.1f}% inchiostro)".format(ink))
-    elif ink > ink_max:
-        warns.append("troppo scura ({:.1f}% inchiostro)".format(ink))
-    return warns
-
-
-def debug_sheet(stages, height=260):
-    """Composito con gli stadi del preprocessing, per capire dove sbaglia."""
-    order = [("gray", "1. grayscale"), ("note", "2. post-it"),
-             ("binary", "3. Otsu"), ("final", "4. 448x448")]
-    tiles = []
-    for key, label in order:
-        img = stages.get(key)
-        if img is None:
-            continue
-        scale = height / img.shape[0]
-        tile = cv2.resize(img, (max(1, int(img.shape[1] * scale)), height))
-        tile = cv2.cvtColor(tile, cv2.COLOR_GRAY2BGR)
-        tile = cv2.copyMakeBorder(tile, 26, 6, 4, 4, cv2.BORDER_CONSTANT, value=(35, 35, 35))
-        cv2.putText(tile, label, (8, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.45,
-                    (255, 255, 255), 1, cv2.LINE_AA)
-        tiles.append(tile)
-
-    if not tiles:
-        return None
-    return np.hstack(tiles)
--e 
+def quality_warnings(img):
+    warnings = []
+    focus, ink = quality_stats(img)
+    if focus < 50:
+        warnings.append("LOW_FOCUS")
+    if ink < 0.5:
+        warnings.append("LOW_INK")
+    if ink > 40:
+        warnings.append("TOO_MUCH_INK")
+    return warnings-e 
 
 ===== ./webcam-demo/demo/model_defs.py =====
 
 """
-Definizione stand-alone delle reti di HandVerify.
+Definizione stand-alone delle reti di HandVerify (solo Triplet e Contrastive:
+la Siamese e' stata tolta perche' non e' usata da questa demo e comunque non
+si presta al confronto via cosine similarity, vedi il repo originale).
 
-Replica esattamente `src/models/base.py` (BaseTripletNetwork,
-BaseContrastiveNetwork, BaseSiameseNetwork) + i vari `*_backbones.py` del
-repo lorenzo-arcioni/HandVerify, ma senza scaricare i pesi ImageNet (qui
-arrivano tutti dal checkpoint .pth) e senza dipendenze dal repo.
-
-Backbone supportati (stessa lista per tutte e tre le tipologie):
+Backbone supportati:
     efficientnet_b0, efficientnet_b1, efficientnet_v2_s,
     resnet18, resnet34, resnet50,
     mobilenet_v3_small, mobilenet_v3_large,
-    densenet121,
-    regnet_y_400mf
+    densenet121, regnet_y_400mf
 
-Tipologie supportate: triplet, contrastive, siamese.
-
-Sia il backbone che la tipologia vengono dedotti dal nome del file del
-checkpoint (convenzione del repo: "<backbone>_<tipologia>_<da>_to_<a>_..pth",
-es. "efficientnet_b1_triplet_iam_to_iam_best.pth" o
-"resnet18_contrastive_rimes_to_iam_best.pth"). Se il nome non aiuta, si
-prova ogni combinazione finche' lo state_dict combacia esattamente. Si
-puo' sempre forzare con arch=... e/o net_type=...
-
-IMPORTANTE sulla rete Siamese: a differenza di Triplet e Contrastive, non
-e' pensata per il confronto via cosine similarity tra due embedding. Il
-repo la addestra come classificatore binario su coppie: incapsula le due
-immagini nello stesso encoder, concatena le feature e le passa in un MLP
-con uscita Sigmoid che stima direttamente P(stesso scrivente). Per un
-confronto "fedele" con un checkpoint siamese va usato
-`SiameseNetwork.predict_pair(imgA, imgB)`, non `get_embedding` + cosine
-similarity (che qui e' comunque offerto come fallback/approssimazione,
-vedi il metodo `get_embedding`, ma non e' il modo in cui la rete e' stata
-addestrata).
+Sia il backbone che la tipologia (triplet/contrastive) vengono dedotti dal
+nome del file del checkpoint (es. "resnet18_contrastive_mixed_iam_rimes_..pth"
+-> resnet18 + contrastive). Se il nome non aiuta, si prova ogni combinazione
+finche' lo state_dict combacia esattamente. Si puo' sempre forzare con
+arch=... / net_type=....
 """
 
 import os
@@ -5136,9 +5383,7 @@ import torch.nn.functional as F
 from torchvision import models
 
 EMBEDDING_DIM = 32
-PROJECTION_DIM = 512
 
-# nome -> (costruttore torchvision, dimensione delle feature in uscita)
 BACKBONES = {
     "efficientnet_b0":    (models.efficientnet_b0, 1280),
     "efficientnet_b1":    (models.efficientnet_b1, 1280),
@@ -5152,20 +5397,14 @@ BACKBONES = {
     "regnet_y_400mf":     (models.regnet_y_400mf, 440),
 }
 
-NET_TYPES = ("triplet", "contrastive", "siamese")
+NET_TYPES = ("triplet", "contrastive")
 
 _RESNET_PREFIX = "resnet"
 _DENSENET_PREFIX = "densenet"
 _REGNET_PREFIX = "regnet"
-# tutto il resto (efficientnet*, mobilenet*) condivide lo schema features[0][0]
 
-
-# --------------------------------------------------------------------------
-# Encoder (condiviso dalle tre tipologie)
-# --------------------------------------------------------------------------
 
 def _to_grayscale(conv: nn.Conv2d, in_channels: int) -> nn.Conv2d:
-    """Ricrea il conv con in_channels diversi (nessun weights=None da trasferire)."""
     if conv.in_channels == in_channels:
         return conv
     return nn.Conv2d(in_channels, conv.out_channels,
@@ -5176,7 +5415,6 @@ def _to_grayscale(conv: nn.Conv2d, in_channels: int) -> nn.Conv2d:
 
 
 def _build_encoder(arch: str, in_channels: int) -> nn.Sequential:
-    """Costruisce l'encoder con la stessa struttura del repo (chiavi identiche)."""
     ctor, _ = BACKBONES[arch]
     net = ctor(weights=None)
 
@@ -5193,257 +5431,80 @@ def _build_encoder(arch: str, in_channels: int) -> nn.Sequential:
 
     if arch.startswith(_DENSENET_PREFIX):
         net.features.conv0 = _to_grayscale(net.features.conv0, in_channels)
-        return nn.Sequential(
-            net.features,
-            nn.AdaptiveAvgPool2d(1),
-            nn.Flatten()
-        )
+        return nn.Sequential(net.features, nn.AdaptiveAvgPool2d(1), nn.Flatten())
 
     if arch.startswith(_REGNET_PREFIX):
         net.stem[0] = _to_grayscale(net.stem[0], in_channels)
-        return nn.Sequential(
-            *list(net.children())[:-1],   # scarta il classifier (fc)
-            nn.AdaptiveAvgPool2d(1),
-            nn.Flatten()
-        )
+        return nn.Sequential(*list(net.children())[:-1], nn.AdaptiveAvgPool2d(1), nn.Flatten())
 
     # efficientnet* e mobilenet* condividono la stessa forma
     net.features[0][0] = _to_grayscale(net.features[0][0], in_channels)
     return nn.Sequential(net.features, nn.AdaptiveAvgPool2d(1), nn.Flatten())
 
 
-class _FreezeMixin:
-    """
-    Replica _freeze_encoder_layers del repo. Non influisce sui pesi salvati
-    (requires_grad non e' nello state_dict), quindi per il solo caricamento
-    di un checkpoint in inferenza e' innocuo lasciare freeze_backbone_layers=0
-    (default) e non chiamarlo mai.
-    """
-
-    def _freeze_encoder_layers(self, num_layers: int):
-        frozen_count = 0
-        for child in self.encoder[0].children():
-            if frozen_count < num_layers:
-                for param in child.parameters():
-                    param.requires_grad = False
-                frozen_count += 1
-            else:
-                break
-        frozen_params = sum(p.numel() for p in self.encoder[0].parameters() if not p.requires_grad)
-        total_params = sum(p.numel() for p in self.encoder[0].parameters())
-        print("Total encoder layers:", len(self.encoder[0]))
-        print("  frozen {} encoder layers".format(frozen_count))
-        print("  frozen parameters: {:,} / {:,} ({:.1f}%)".format(
-            frozen_params, total_params,
-            100 * frozen_params / total_params if total_params else 0))
+def _build_mlp_head(feature_dim: int, embedding_dim: int, dropout: float) -> nn.Sequential:
+    hidden1, hidden2, hidden3 = 1024, 512, 256
+    return nn.Sequential(
+        nn.Linear(feature_dim, hidden1), nn.BatchNorm1d(hidden1), nn.ReLU(inplace=True), nn.Dropout(dropout),
+        nn.Linear(hidden1, hidden2), nn.BatchNorm1d(hidden2), nn.ReLU(inplace=True), nn.Dropout(dropout),
+        nn.Linear(hidden2, hidden3), nn.BatchNorm1d(hidden3), nn.ReLU(inplace=True), nn.Dropout(dropout * 0.8),
+        nn.Linear(hidden3, embedding_dim)
+    )
 
 
-# --------------------------------------------------------------------------
-# Triplet
-# --------------------------------------------------------------------------
+class TripletNetwork(nn.Module):
+    """Encoder condiviso + testa 'fc', output L2-normalizzato."""
 
-class TripletNetwork(nn.Module, _FreezeMixin):
-    """Encoder condiviso + testa 'fc', output L2-normalizzato a 128-D."""
-
-    def __init__(self, arch: str = "efficientnet_b1", in_channels: int = 1,
-                 embedding_dim: int = EMBEDDING_DIM,
-                 freeze_backbone_layers: int = 0, dropout: float = 0.5):
+    def __init__(self, arch="efficientnet_b1", in_channels=1, embedding_dim=EMBEDDING_DIM, dropout=0.5):
         super().__init__()
         _require_arch(arch)
         self.arch = arch
         self.net_type = "triplet"
         self.encoder = _build_encoder(arch, in_channels)
-        self.feature_dim = BACKBONES[arch][1]
-        self.embedding_dim = embedding_dim
-        if freeze_backbone_layers > 0:
-            self._freeze_encoder_layers(freeze_backbone_layers)
-        self.fc = _build_mlp_head(self.feature_dim, embedding_dim, dropout)
+        self.fc = _build_mlp_head(BACKBONES[arch][1], embedding_dim, dropout)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x):
         x = self.encoder(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
         return F.normalize(x, p=2, dim=1)
 
-    get_embedding = forward
 
+class ContrastiveNetwork(nn.Module):
+    """Encoder condiviso + testa 'projection' (non 'fc'), output L2-normalizzato."""
 
-# --------------------------------------------------------------------------
-# Contrastive
-# --------------------------------------------------------------------------
-
-class ContrastiveNetwork(nn.Module, _FreezeMixin):
-    """Encoder condiviso + testa 'projection' (NON 'fc'!), output L2-normalizzato."""
-
-    def __init__(self, arch: str = "efficientnet_b1", in_channels: int = 1,
-                 embedding_dim: int = EMBEDDING_DIM,
-                 freeze_backbone_layers: int = 0, dropout: float = 0.5):
+    def __init__(self, arch="efficientnet_b1", in_channels=1, embedding_dim=EMBEDDING_DIM, dropout=0.5):
         super().__init__()
         _require_arch(arch)
         self.arch = arch
         self.net_type = "contrastive"
         self.encoder = _build_encoder(arch, in_channels)
-        self.feature_dim = BACKBONES[arch][1]
-        self.embedding_dim = embedding_dim
-        if freeze_backbone_layers > 0:
-            self._freeze_encoder_layers(freeze_backbone_layers)
-        self.projection = _build_mlp_head(self.feature_dim, embedding_dim, dropout)
+        self.projection = _build_mlp_head(BACKBONES[arch][1], embedding_dim, dropout)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x):
         features = self.encoder(x)
         features = features.view(features.size(0), -1)
         embedding = self.projection(features)
         return F.normalize(embedding, p=2, dim=1)
 
-    def get_embedding(self, x: torch.Tensor) -> torch.Tensor:
-        return self.forward(x)
 
-
-def _build_mlp_head(feature_dim: int, embedding_dim: int, dropout: float) -> nn.Sequential:
-    """Testa condivisa da Triplet e Contrastive (stessa forma, nomi di attributo diversi)."""
-    hidden1, hidden2, hidden3 = 1024, 512, 256
-    return nn.Sequential(
-        nn.Linear(feature_dim, hidden1),
-        nn.BatchNorm1d(hidden1),
-        nn.ReLU(inplace=True),
-        nn.Dropout(dropout),
-
-        nn.Linear(hidden1, hidden2),
-        nn.BatchNorm1d(hidden2),
-        nn.ReLU(inplace=True),
-        nn.Dropout(dropout),
-
-        nn.Linear(hidden2, hidden3),
-        nn.BatchNorm1d(hidden3),
-        nn.ReLU(inplace=True),
-        nn.Dropout(dropout * 0.8),
-
-        nn.Linear(hidden3, embedding_dim)
-    )
-
-
-# --------------------------------------------------------------------------
-# Siamese
-# --------------------------------------------------------------------------
-
-class SiameseNetwork(nn.Module, _FreezeMixin):
-    """
-    Encoder condiviso + classificatore 'fc' su coppie concatenate.
-    ATTENZIONE: non e' un embedding a cosine similarity, vedi docstring
-    del modulo. forward(img1, img2) restituisce una probabilita' [0,1]
-    (dopo Sigmoid) di "stesso scrivente".
-    """
-
-    def __init__(self, arch: str = "efficientnet_b1", in_channels: int = 1,
-                 projection_dim: int = PROJECTION_DIM,
-                 freeze_backbone_layers: int = 0, dropout: float = 0.5):
-        super().__init__()
-        _require_arch(arch)
-        self.arch = arch
-        self.net_type = "siamese"
-        self.encoder = _build_encoder(arch, in_channels)
-        self.feature_dim = BACKBONES[arch][1]
-        self.projection_dim = projection_dim
-        if freeze_backbone_layers > 0:
-            self._freeze_encoder_layers(freeze_backbone_layers)
-        self.fc = self._build_fc_block(self.feature_dim * 2, projection_dim, dropout)
-
-    @staticmethod
-    def _build_fc_block(input_dim: int, projection_dim: int, dropout: float) -> nn.Sequential:
-        layer1 = projection_dim
-        layer2 = projection_dim // 2
-        layer3 = projection_dim // 4
-        layer4 = projection_dim // 8
-        layer5 = projection_dim // 16
-
-        return nn.Sequential(
-            nn.Linear(input_dim, layer1),
-            nn.BatchNorm1d(layer1),
-            nn.ReLU(inplace=True),
-            nn.Dropout(dropout),
-
-            nn.Linear(layer1, layer2),
-            nn.BatchNorm1d(layer2),
-            nn.ReLU(inplace=True),
-            nn.Dropout(dropout),
-
-            nn.Linear(layer2, layer3),
-            nn.BatchNorm1d(layer3),
-            nn.ReLU(inplace=True),
-            nn.Dropout(dropout * 0.9),
-
-            nn.Linear(layer3, layer4),
-            nn.BatchNorm1d(layer4),
-            nn.ReLU(inplace=True),
-            nn.Dropout(dropout * 0.8),
-
-            nn.Linear(layer4, layer5),
-            nn.BatchNorm1d(layer5),
-            nn.ReLU(inplace=True),
-            nn.Dropout(dropout * 0.6),
-
-            nn.Linear(layer5, 1),
-            nn.Sigmoid()
-        )
-
-    def forward_one(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.encoder(x)
-        return x.view(x.size(0), -1)
-
-    def forward(self, img1: torch.Tensor, img2: torch.Tensor,
-               return_embeddings: bool = False):
-        feat1 = self.forward_one(img1)
-        feat2 = self.forward_one(img2)
-        if return_embeddings:
-            feat1 = F.normalize(feat1, p=2, dim=1)
-            feat2 = F.normalize(feat2, p=2, dim=1)
-            return feat1, feat2
-        combined = torch.cat([feat1, feat2], dim=1)
-        return self.fc(combined)
-
-    def predict_pair(self, img1: torch.Tensor, img2: torch.Tensor) -> torch.Tensor:
-        """Modo corretto/fedele al training: probabilita' [0,1] via classificatore."""
-        with torch.no_grad():
-            return self.forward(img1, img2)
-
-    def get_embedding(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Fallback SOLO per compatibilita' di interfaccia con Triplet/Contrastive
-        (feature grezze dell'encoder, L2-normalizzate). Il classificatore 'fc'
-        NON viene usato qui: la rete non e' stata addestrata per essere
-        confrontata cosi', quindi i punteggi di cosine similarity ottenuti
-        da questo embedding sono solo un'APPROSSIMAZIONE, non equivalenti a
-        predict_pair().
-        """
-        return F.normalize(self.forward_one(x), p=2, dim=1)
-
-
-def _require_arch(arch: str):
+def _require_arch(arch):
     if arch not in BACKBONES:
         raise ValueError("Backbone '{}' non supportato. Disponibili: {}".format(
             arch, ", ".join(sorted(BACKBONES))))
 
 
-_NET_CLASSES = {
-    "triplet": TripletNetwork,
-    "contrastive": ContrastiveNetwork,
-    "siamese": SiameseNetwork,
-}
+_NET_CLASSES = {"triplet": TripletNetwork, "contrastive": ContrastiveNetwork}
 
 
-def build_network(arch: str, net_type: str, in_channels: int = 1):
+def build_network(arch, net_type, in_channels=1):
     if net_type not in _NET_CLASSES:
         raise ValueError("Tipologia '{}' non supportata. Disponibili: {}".format(
             net_type, ", ".join(NET_TYPES)))
     return _NET_CLASSES[net_type](arch=arch, in_channels=in_channels)
 
 
-# --------------------------------------------------------------------------
-# Riconoscimento dal nome del file + caricamento
-# --------------------------------------------------------------------------
-
-def guess_arch(checkpoint_path: str):
-    """Ricava il backbone dal nome del file, es. 'resnet18_contrastive_...' -> 'resnet18'."""
+def guess_arch(checkpoint_path):
     name = os.path.basename(checkpoint_path).lower()
     for arch in sorted(BACKBONES, key=len, reverse=True):
         if arch in name:
@@ -5451,8 +5512,7 @@ def guess_arch(checkpoint_path: str):
     return None
 
 
-def guess_net_type(checkpoint_path: str):
-    """Ricava la tipologia dal nome del file, es. '..._contrastive_...' -> 'contrastive'."""
+def guess_net_type(checkpoint_path):
     name = os.path.basename(checkpoint_path).lower()
     for net_type in NET_TYPES:
         if net_type in name:
@@ -5460,15 +5520,11 @@ def guess_net_type(checkpoint_path: str):
     return None
 
 
-def load_model(checkpoint_path: str, device: torch.device = None,
-               arch: str = None, net_type: str = None, verbose: bool = True):
+def load_model(checkpoint_path, device=None, arch=None, net_type=None, verbose=True):
     """
-    Costruisce la rete giusta (backbone + tipologia) e ci carica dentro lo
-    state_dict del checkpoint.
-
-    arch=None / net_type=None -> dedotti dal nome del file; se il nome non
-    aiuta, o se il primo tentativo non combacia, si prova ogni combinazione
-    (tipologia dedotta per prima, poi le altre) finche' una fa match esatto.
+    Costruisce la rete giusta (backbone + tipologia) e ci carica lo state_dict.
+    arch/net_type=None -> dedotti dal nome del file; se il primo tentativo
+    non combacia si prova ogni combinazione finche' una fa match esatto.
     """
     device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -5478,28 +5534,16 @@ def load_model(checkpoint_path: str, device: torch.device = None,
             state = state[key]
 
     if net_type is not None:
-        if verbose:
-            print("[model_defs] Tipologia forzata da --net-type: {}".format(net_type))
         type_candidates = [net_type]
     else:
         guess_t = guess_net_type(checkpoint_path)
-        if verbose:
-            print("[model_defs] Tipologia dedotta dal nome del file: {}".format(
-                guess_t if guess_t else "non riconosciuta, provo tutte"))
-        type_candidates = ([guess_t] if guess_t else []) + \
-                          [t for t in NET_TYPES if t != guess_t]
+        type_candidates = ([guess_t] if guess_t else []) + [t for t in NET_TYPES if t != guess_t]
 
     if arch is not None:
-        if verbose:
-            print("[model_defs] Backbone forzato da --arch: {}".format(arch))
         arch_candidates = [arch]
     else:
         guess_a = guess_arch(checkpoint_path)
-        if verbose:
-            print("[model_defs] Backbone dedotto dal nome del file: {}".format(
-                guess_a if guess_a else "non riconosciuto, provo tutti"))
-        arch_candidates = ([guess_a] if guess_a else []) + \
-                          [a for a in sorted(BACKBONES) if a != guess_a]
+        arch_candidates = ([guess_a] if guess_a else []) + [a for a in sorted(BACKBONES) if a != guess_a]
 
     errors = []
     for t in type_candidates:
@@ -5511,29 +5555,23 @@ def load_model(checkpoint_path: str, device: torch.device = None,
                 errors.append("  {}/{}: {}".format(t, a, str(exc).split("\n")[0]))
                 continue
             if verbose:
-                print("[model_defs] Checkpoint caricato correttamente: "
-                     "tipologia={}, backbone={}".format(t, a))
+                print("[model_defs] Checkpoint caricato: tipologia={}, backbone={}".format(t, a))
             model.to(device).eval()
             return model
 
     raise RuntimeError(
-        "Nessuna combinazione tipologia/backbone combacia con {}.\n"
-        "Tentativi:\n{}".format(os.path.basename(checkpoint_path), "\n".join(errors))
-    )-e 
+        "Nessuna combinazione tipologia/backbone combacia con {}.\nTentativi:\n{}".format(
+            os.path.basename(checkpoint_path), "\n".join(errors)))-e 
 
 ===== ./webcam-demo/demo/engine.py =====
 
 """
-Wrapper di inferenza: carica il checkpoint triplet e confronta due scritture.
+Wrapper di inferenza: carica il checkpoint e confronta due scritture.
 
-Lo score e' la cosine similarity fra i due embedding L2-normalizzati, esattamente
-come in `BaseTrainer._evaluate_verification` del repo HandVerify; di conseguenza
-le soglie salvate nei CSV degli esperimenti sono direttamente riutilizzabili.
-
-Cambiare i pesi = passare un altro file .pth (opzione --checkpoint di tutti gli
-script). L'architettura viene riconosciuta dal nome del file e le soglie vengono
-lette dal CSV delle metriche di quell'esperimento, se lo si trova accanto al
-checkpoint o dentro triplet_experiments/.
+Lo score e' la cosine similarity fra i due embedding L2-normalizzati.
+Le soglie vengono lette dal CSV delle metriche dell'esperimento se lo si
+trova accanto al checkpoint o dentro triplet_experiments/, altrimenti si
+usano dei valori di riferimento di default.
 """
 
 import csv
@@ -5544,22 +5582,23 @@ import torch
 import torch.nn.functional as F
 
 from model_defs import load_model
-from preprocess import preprocess_roi, to_tensor
+from preprocess import preprocess_manual_roi, to_tensor, DEFAULT_GRAY_THRESHOLD
 
 csv.field_size_limit(min(sys.maxsize, 2 ** 31 - 1))
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Soglie di riferimento: esperimento efficientnet_b1_triplet_iam_to_iam
-# (AUC 0.956, EER 0.115). Usate quando il CSV delle metriche non si trova.
+# (AUC 0.956, EER 0.115). Usate solo come fallback quando il CSV delle
+# metriche del checkpoint scelto non si trova.
+#   eer   -> eer_threshold               (Equal Error Rate)
+#   far1  -> threshold_at_far_0.01       (soglia per FAR = 1%)
+#   far01 -> threshold_at_far_0.001      (soglia per FAR = 0.1%)
 DEFAULT_THRESHOLDS = {
     "eer": 0.7912201881408691,
     "far1": 0.9312598705291748,
-    "far01": 0.95,   # <-- placeholder, aggiornalo con un valore di riferimento reale
+    "far01": 0.9312598705291748,  # nessun riferimento reale: fallback = far1
 }
-
-# alias di comodo, usato da chi importa solo le chiavi disponibili
-THRESHOLDS = dict(DEFAULT_THRESHOLDS)
 
 DEFAULT_CHECKPOINT = os.path.join(
     PROJECT_ROOT, "efficientnet_b1_triplet_iam_to_iam_best.pth"
@@ -5567,11 +5606,6 @@ DEFAULT_CHECKPOINT = os.path.join(
 
 
 def find_metrics_csv(checkpoint_path):
-    """
-    Cerca il CSV delle metriche dell'esperimento a cui appartiene il checkpoint.
-    I file seguono la convenzione '<esperimento>_best.pth' / '<esperimento>_final.pth'
-    e '<esperimento>_final_metrics.csv'.
-    """
     name = os.path.basename(checkpoint_path)
     stem = os.path.splitext(name)[0]
     for suffix in ("_best", "_final"):
@@ -5600,13 +5634,11 @@ def thresholds_for_checkpoint(checkpoint_path):
         row = next(csv.DictReader(open(path, encoding="utf-8")))
         thresholds = {"eer": float(row["eer_threshold"])}
 
-        # FAR target = 1%
-        far1 = row.get("threshold_at_far_0.01")
+        far1 = row.get("threshold_at_far_0.01")   # soglia per FAR = 1%
         thresholds["far1"] = float(far1) if far1 not in (None, "", "None") else thresholds["eer"]
 
-        # FAR target = 0.1%  <-- NUOVO
-        far01 = row.get("threshold_at_far_0.001")
-        thresholds["far01"] = float(far01) if far01 not in (None, "", "None") else thresholds["eer"]
+        far01 = row.get("threshold_at_far_0.001")  # soglia per FAR = 0.1%
+        thresholds["far01"] = float(far01) if far01 not in (None, "", "None") else thresholds["far1"]
 
         return thresholds, os.path.basename(path)
     except Exception as exc:
@@ -5615,14 +5647,11 @@ def thresholds_for_checkpoint(checkpoint_path):
 
 
 class HandwritingVerifier:
-    def __init__(self, checkpoint=DEFAULT_CHECKPOINT, device=None, mode="scan",
-                 detect=True, arch=None):
+    def __init__(self, checkpoint=DEFAULT_CHECKPOINT, device=None, arch=None):
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.checkpoint = checkpoint
         self.model = load_model(checkpoint, self.device, arch=arch)
         self.arch = self.model.arch
-        self.mode = mode
-        self.detect = detect
         self.thresholds, self.threshold_source = thresholds_for_checkpoint(checkpoint)
 
     def describe(self):
@@ -5630,20 +5659,13 @@ class HandwritingVerifier:
             os.path.basename(self.checkpoint), self.arch, self.threshold_source)
 
     def resolve_threshold(self, threshold):
-        """Accetta una chiave ('eer', 'far1', ...) oppure un valore numerico."""
         if isinstance(threshold, (int, float)):
             return float(threshold)
         return self.thresholds[threshold]
 
-    def prepare(self, roi_bgr):
-        """ROI webcam -> (immagine 448 preprocessata, stage intermedi)."""
-        return preprocess_roi(roi_bgr, mode=self.mode, detect=self.detect,
-                              return_stages=True)
-
-    @torch.no_grad()
-    def embed(self, img_448):
-        x = to_tensor(img_448).to(self.device)
-        return self.model(x)
+    def prepare(self, roi_bgr, gray_threshold=DEFAULT_GRAY_THRESHOLD):
+        """ROI disegnata a mano -> immagine 448x448 preprocessata (None se vuota)."""
+        return preprocess_manual_roi(roi_bgr, gray_threshold=gray_threshold)
 
     @torch.no_grad()
     def similarity(self, img_a_448, img_b_448):
@@ -5661,8 +5683,7 @@ class HandwritingVerifier:
             "threshold": thr,
             "same_writer": score >= thr,
             "margin": score - thr,
-        }
--e 
+        }-e 
 
 ===== ./main.py =====
 
@@ -7216,3 +7237,489 @@ for key, value in metrics.items():
 out_path = os.path.join(RESULTS_DIR, f"{TARGET_DATASET_NAME}_exhaustive_metrics.csv")
 pd.DataFrame([metrics_to_save]).to_csv(out_path, index=False)
 print(f"\n✓ Metriche salvate in {out_path}")
+-e 
+
+===== ./notebooks/train_configurable_loss.py =====
+
+# %% [markdown]
+# # Training finale per la demo: ResNet18 su IAM+RIMES mescolati
+# ## Loss configurabile (bce / contrastive / triplet), impostor stratificati,
+# ## genuine cross-dataset impossibili per costruzione
+#
+# Per cambiare loss basta modificare `CONFIG['loss_type']` qui sotto: tutto
+# il resto (dataset, trainer, parametri del modello) si adatta da solo.
+#
+# Riepilogo delle protezioni gia' discusse:
+#
+# 1. **Genuine pair cross-dataset (bug)**: i writer_id vengono prefissati
+#    con la sorgente (`iam__042`, `rimes__042`), cosi' una directory `IAM/042`
+#    e una `RIMES/042` non possono mai essere fuse nello stesso writer.
+# 2. **Impostor sbilanciati verso RIMES**: per BCE/Contrastive il pool di
+#    impostor e' diviso in 3 strati (iam-iam / rimes-rimes / cross) pesati
+#    esplicitamente. Per Triplet (dove ogni negativo e' scelto per un
+#    singolo anchor, non per una coppia di writer arbitraria) si usano 2
+#    strati dal punto di vista dell'anchor: "stesso dataset dell'anchor,
+#    altro writer" vs "dataset diverso dall'anchor".
+
+# %%
+import sys
+sys.path.append('/kaggle/working/HandVerify')  # <-- adattare al path del repo
+
+import os
+import random
+from pathlib import Path
+from itertools import combinations
+from datetime import datetime
+
+import torch
+from PIL import Image
+from sklearn.model_selection import train_test_split
+
+from src.data.base_dataset import BaseWriterDataset
+from src.data.transforms import get_train_transforms, get_test_transforms
+from src.data.dataloader_factory import _make_loader
+from src.models import get_model
+from src.training import BCETrainer, ContrastiveTrainer, TripletTrainer
+from src.utils import set_seed, get_device, ensure_dir
+
+# %% [markdown]
+# ## Configurazione
+#
+# `loss_type`: 'bce' | 'contrastive' | 'triplet'. Tutto cio' che dipende
+# dalla loss (classe dataset, classe trainer, se serve `margin`, come si
+# chiama la dimensione dell'embedding) viene risolto piu' sotto in base a
+# questo unico valore.
+
+# %%
+RANDOM_STATE = 42
+
+IAM_PATH = "/kaggle/input/processed-handwritten/processed-handwritten/iam_processed"
+RIMES_PATH = "/kaggle/input/processed-handwritten/processed-handwritten/rimes_processed"
+
+CONFIG = {
+    'loss_type': 'contrastive',     # <-- cambia qui: 'bce' | 'contrastive' | 'triplet'
+    'backbone': 'resnet18',
+    'embedding_dim': 128,           # per BCE viene rimappato in automatico su projection_dim
+    'freeze_backbone_layers': 3,
+    'dropout': 0.4,
+    'margin': 0.5,                  # usato solo da contrastive/triplet, ignorato per bce
+    'batch_size': 16,
+    'num_workers': 4,
+    'target_size': 448,
+    'val_size': 0.10,
+    'positive_ratio': 0.5,
+    'resample_negatives_every_n_epochs': 1,
+    'epochs': 50,
+    'patience': 7,
+
+    # Usati da BCE e Contrastive: pesi relativi (normalizzati in automatico)
+    # dei 3 strati di impostor pair.
+    'pair_strata_ratios': {'iam-iam': 1 / 3, 'rimes-rimes': 1 / 3, 'cross': 1 / 3},
+
+    # Usati solo da Triplet: pesi relativi dei negativi scelti per ogni
+    # anchor, dal punto di vista dell'anchor stesso (non ha senso "rimes-rimes"
+    # se l'anchor e' IAM: o il negativo e' un altro writer IAM, o e' un
+    # writer RIMES qualsiasi).
+    'triplet_negative_strata_ratios': {'same_dataset': 0.5, 'cross_dataset': 0.5},
+}
+
+assert CONFIG['loss_type'] in ('bce', 'contrastive', 'triplet')
+
+TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
+EXP_NAME = f"{CONFIG['backbone']}_{CONFIG['loss_type']}_mixed_iam_rimes_stratified"
+RESULTS_DIR = f"/kaggle/working/final_model/{EXP_NAME}"
+
+print(f"Esperimento: {EXP_NAME}")
+print(f"Loss: {CONFIG['loss_type']}")
+print(f"Output: {RESULTS_DIR}")
+print(f"Timestamp: {TIMESTAMP}")
+
+set_seed(RANDOM_STATE)
+device = get_device()
+ensure_dir(RESULTS_DIR)
+
+# %% [markdown]
+# ## Funzioni condivise: caricamento writer "safe" + strati di impostor
+#
+# Usate sia dal dataset per BCE/Contrastive sia (in parte) da quello per
+# Triplet, per non duplicare tre volte la stessa logica di prefissaggio e
+# stratificazione.
+
+# %%
+def load_writer_images_prefixed(writer_sources):
+    """
+    writer_sources: lista di (writer_dir_path, source_label).
+    Ritorna (writer_images, writer_source), con writer_id sempre prefissato
+    dalla sorgente (es. 'iam__042'): una collisione di nome tra directory
+    IAM e RIMES non puo' mai fondere due writer diversi nello stesso id.
+    """
+    writer_images, writer_source = {}, {}
+    seen_ids = set()
+
+    for writer_dir, source in writer_sources:
+        writer_id = f"{source}__{Path(writer_dir).name}"
+        assert writer_id not in seen_ids, (
+            f"writer_id duplicato: '{writer_id}' ({writer_dir}). Non dovrebbe "
+            f"poter succedere: controllare la lista writer_sources."
+        )
+        seen_ids.add(writer_id)
+
+        writer_images[writer_id] = [
+            os.path.join(writer_dir, f)
+            for f in os.listdir(writer_dir)
+            if f.lower().endswith(('.png', '.jpg', '.jpeg'))
+        ]
+        writer_source[writer_id] = source
+
+    return writer_images, writer_source
+
+
+def build_pair_strata(writer_ids, writer_images, writer_source):
+    """Tutte le impostor pairs (img1, img2) divise in 3 strati per sorgente."""
+    strata = {"iam-iam": [], "rimes-rimes": [], "cross": []}
+    for w1, w2 in combinations(writer_ids, 2):
+        s1, s2 = writer_source[w1], writer_source[w2]
+        key = ("iam-iam" if s1 == s2 == "iam" else
+               "rimes-rimes" if s1 == s2 == "rimes" else "cross")
+        for img1 in writer_images[w1]:
+            for img2 in writer_images[w2]:
+                strata[key].append((img1, img2))
+    return strata
+
+
+def sample_from_strata(strata, ratios, n_total, rng, label=""):
+    """Campiona n_total coppie da `strata` secondo `ratios` (normalizzati)."""
+    total_w = sum(ratios.values())
+    ratios = {k: v / total_w for k, v in ratios.items()}
+    sampled = []
+    for key, w in ratios.items():
+        pool = strata.get(key, [])
+        n_target = int(round(n_total * w))
+        n_take = min(n_target, len(pool))
+        if n_take < n_target:
+            print(f"  [attenzione]{(' ' + label) if label else ''} strato '{key}': "
+                  f"richieste {n_target}, disponibili {len(pool):,}. Uso tutte quelle disponibili.")
+        sampled.extend(rng.sample(pool, n_take))
+    return sampled
+
+# %% [markdown]
+# ## Dataset per BCE / Contrastive: impostor stratificati (3 strati)
+#
+# Sottoclasse di `BaseWriterDataset` (la base di `SiameseDataset` e
+# `ContrastiveDataset`, identiche a parte il nome): stessa interfaccia,
+# solo `_load_writer_images`/`_generate_all_impostor_pairs`/
+# `_resample_negatives` sono sovrascritti per usare writer_id prefissati e
+# campionamento stratificato invece che uniforme sul pool combinato.
+
+# %%
+class StratifiedPairDataset(BaseWriterDataset):
+    """Dataset di coppie (img1, img2, label) valido sia per BCE che per
+    Contrastive: le due loss condividono esattamente lo stesso formato di
+    input, cambia solo la loss/trainer usati a valle."""
+
+    def __init__(self, writer_sources, train=True, target_size=448,
+                 positive_ratio=0.5, resample_negatives_every_n_epochs=1,
+                 strata_ratios=None, random_seed=42):
+        self._writer_sources_input = writer_sources
+        self.strata_ratios = strata_ratios or {"iam-iam": 1/3, "rimes-rimes": 1/3, "cross": 1/3}
+
+        print(f"\n{'='*60}")
+        print(f"Initializing {'TRAIN' if train else 'VAL'} StratifiedPairDataset")
+        print(f"{'='*60}")
+        print(f"  Writers: {len(writer_sources)}  |  Strata ratios: {self.strata_ratios}")
+
+        super().__init__(
+            writer_dirs=[d for d, _ in writer_sources],
+            train=train, target_size=target_size,
+            positive_ratio=positive_ratio,
+            resample_negatives_every_n_epochs=resample_negatives_every_n_epochs,
+            random_seed=random_seed,
+        )
+
+    def _load_writer_images(self):
+        writer_images, self.writer_source = load_writer_images_prefixed(self._writer_sources_input)
+        return writer_images
+
+    def _generate_all_impostor_pairs(self):
+        self._impostor_strata = build_pair_strata(self.writer_ids, self.writer_images, self.writer_source)
+        for key, pairs in self._impostor_strata.items():
+            print(f"  Impostor pool [{key}]: {len(pairs):,} coppie")
+        return [p for pairs in self._impostor_strata.values() for p in pairs]
+
+    def _resample_negatives(self, epoch: int = 0):
+        rng = random.Random(self.random_seed + epoch)
+        self.current_impostor_pairs = sample_from_strata(
+            self._impostor_strata, self.strata_ratios, self.num_impostors_needed, rng)
+        print(f"  Sampled {len(self.current_impostor_pairs):,} impostors (stratificati)")
+        self._create_current_samples()
+
+    def __getitem__(self, idx: int):
+        img1_path, img2_path, label = self.samples[idx]
+        return self._load_image(img1_path), self._load_image(img2_path), \
+               torch.tensor(label, dtype=torch.float32)
+
+    def get_validation_pair(self, idx: int):
+        return self.samples[idx]
+
+# %% [markdown]
+# ## Dataset per Triplet: negativi stratificati per anchor (2 strati)
+
+# %%
+class StratifiedTripletDataset:
+    """Equivalente stratificato di TripletDataset. Non eredita da
+    BaseWriterDataset perche' TripletDataset originale non lo fa: la logica
+    di campionamento e' intrinsecamente diversa (un negativo per anchor,
+    non una lista di coppie etichettate)."""
+
+    def __init__(self, writer_sources, train=True, target_size=448,
+                 positive_ratio=0.5, resample_negatives_every_n_epochs=1,
+                 negative_strata_ratios=None,
+                 validation_strata_ratios=None, random_seed=42):
+        self.writer_sources_input = writer_sources
+        self.train = train
+        self.target_size = target_size
+        self.positive_ratio = positive_ratio
+        self.resample_negatives_every_n_epochs = resample_negatives_every_n_epochs
+        self.random_seed = random_seed
+        self.negative_strata_ratios = negative_strata_ratios or \
+            {"same_dataset": 0.5, "cross_dataset": 0.5}
+        self.validation_strata_ratios = validation_strata_ratios or \
+            {"iam-iam": 1/3, "rimes-rimes": 1/3, "cross": 1/3}
+
+        self.transform = get_train_transforms(target_size) if train else get_test_transforms(target_size)
+
+        print(f"\n{'='*60}")
+        print(f"Initializing {'TRAIN' if train else 'VAL'} StratifiedTripletDataset")
+        print(f"{'='*60}")
+        print(f"  Writers: {len(writer_sources)}  |  Negative strata: {self.negative_strata_ratios}")
+
+        self.writer_images, self.writer_source = load_writer_images_prefixed(writer_sources)
+        self.writer_ids = list(self.writer_images.keys())
+
+        self.all_genuine_pairs = self._generate_all_genuine_pairs()
+        print(f"  Generated {len(self.all_genuine_pairs)} genuine pairs (base for triplets)")
+
+        self._build_negative_pools()
+        self._resample_triplets()
+        self._create_validation_pairs()
+
+    def _load_image(self, path):
+        return self.transform(Image.open(path).convert("L"))
+
+    def _generate_all_genuine_pairs(self):
+        pairs = []
+        for wid, imgs in self.writer_images.items():
+            if len(imgs) >= 2:
+                for img1, img2 in combinations(imgs, 2):
+                    pairs.append((wid, img1, img2))
+        return pairs
+
+    def _build_negative_pools(self):
+        """Per ogni writer: pool 'same_dataset' (altri writer, stessa
+        sorgente) e 'cross_dataset' (qualunque writer, sorgente diversa)."""
+        images_by_source = {}
+        for wid, imgs in self.writer_images.items():
+            images_by_source.setdefault(self.writer_source[wid], []).extend(imgs)
+
+        self.negative_pool = {}
+        for wid in self.writer_ids:
+            src = self.writer_source[wid]
+            own = set(self.writer_images[wid])
+            same_dataset = [img for img in images_by_source.get(src, []) if img not in own]
+            cross_dataset = [img for other_src, imgs in images_by_source.items()
+                             if other_src != src for img in imgs]
+            self.negative_pool[wid] = {"same_dataset": same_dataset, "cross_dataset": cross_dataset}
+
+    def _resample_triplets(self, epoch: int = 0):
+        rng = random.Random(self.random_seed + epoch)
+        ratios = self.negative_strata_ratios
+        keys, weights = list(ratios.keys()), list(ratios.values())
+
+        self.triplets = []
+        for wid, anchor_path, positive_path in self.all_genuine_pairs:
+            chosen = rng.choices(keys, weights=weights, k=1)[0]
+            pool = self.negative_pool[wid][chosen]
+            if not pool:  # fallback se lo strato scelto e' vuoto per questo writer
+                other = "cross_dataset" if chosen == "same_dataset" else "same_dataset"
+                pool = self.negative_pool[wid][other]
+            negative_path = rng.choice(pool)
+            self.triplets.append((anchor_path, positive_path, negative_path))
+
+        random.shuffle(self.triplets)
+        print(f"  Generated {len(self.triplets)} triplets (strata: {ratios})")
+
+    def _create_validation_pairs(self):
+        genuine_samples = [(img1, img2, 1.0) for _, img1, img2 in self.all_genuine_pairs]
+        strata = build_pair_strata(self.writer_ids, self.writer_images, self.writer_source)
+        n_impostors_needed = int(len(genuine_samples) * (1 - self.positive_ratio) / self.positive_ratio)
+        rng = random.Random(self.random_seed)
+        impostor_samples = [(a, b, 0.0) for a, b in
+                            sample_from_strata(strata, self.validation_strata_ratios,
+                                                n_impostors_needed, rng, label="validation")]
+
+        self.validation_pairs = genuine_samples + impostor_samples
+        random.shuffle(self.validation_pairs)
+        print(f"  Created {len(self.validation_pairs)} validation pairs "
+              f"({len(genuine_samples)} genuine + {len(impostor_samples)} impostor, stratificati)")
+
+    def on_epoch_end(self, epoch: int):
+        if self.resample_negatives_every_n_epochs and \
+           (epoch + 1) % self.resample_negatives_every_n_epochs == 0:
+            print("\n🔄 Resampling triplet negatives for next epoch...")
+            self._resample_triplets(epoch + 1)
+
+    def __getitem__(self, idx: int):
+        anchor_path, positive_path, negative_path = self.triplets[idx]
+        return self._load_image(anchor_path), self._load_image(positive_path), \
+               self._load_image(negative_path)
+
+    def __len__(self):
+        return len(self.triplets)
+
+    def get_validation_pair(self, idx: int):
+        return self.validation_pairs[idx]
+
+# %% [markdown]
+# ## Raccolta writer IAM + RIMES, controllo collisioni, split 90/10 stratificato
+
+# %%
+def list_writer_sources(root_path, source_label):
+    return [
+        (os.path.join(root_path, d), source_label)
+        for d in sorted(os.listdir(root_path))
+        if os.path.isdir(os.path.join(root_path, d))
+    ]
+
+iam_writer_sources = list_writer_sources(IAM_PATH, "iam")
+rimes_writer_sources = list_writer_sources(RIMES_PATH, "rimes")
+all_writer_sources = iam_writer_sources + rimes_writer_sources
+
+print(f"Writer IAM: {len(iam_writer_sources)}  |  RIMES: {len(rimes_writer_sources)}  "
+      f"|  totale: {len(all_writer_sources)}")
+
+name_collisions = ({Path(d).name for d, _ in iam_writer_sources} &
+                    {Path(d).name for d, _ in rimes_writer_sources})
+print(f"Nomi directory in comune IAM/RIMES: {len(name_collisions)} "
+      f"(innocuo grazie al prefisso di sorgente nel writer_id)")
+
+sources_only = [s for _, s in all_writer_sources]
+train_writer_sources, val_writer_sources = train_test_split(
+    all_writer_sources, test_size=CONFIG['val_size'],
+    random_state=RANDOM_STATE, stratify=sources_only,
+)
+print(f"Train writers: {len(train_writer_sources)}  |  Val writers: {len(val_writer_sources)}")
+
+# %% [markdown]
+# ## Selezione di dataset/model_type/trainer in base a `CONFIG['loss_type']`
+
+# %%
+LOSS_TYPE = CONFIG['loss_type']
+
+if LOSS_TYPE in ('bce', 'contrastive'):
+    DatasetClass = StratifiedPairDataset
+    dataset_kwargs = dict(strata_ratios=CONFIG['pair_strata_ratios'])
+else:  # triplet
+    DatasetClass = StratifiedTripletDataset
+    dataset_kwargs = dict(negative_strata_ratios=CONFIG['triplet_negative_strata_ratios'])
+
+TrainerClass = {'bce': BCETrainer, 'contrastive': ContrastiveTrainer, 'triplet': TripletTrainer}[LOSS_TYPE]
+trainer_kwargs = {'margin': CONFIG['margin']} if LOSS_TYPE in ('contrastive', 'triplet') else {}
+
+common_kwargs = dict(
+    target_size=CONFIG['target_size'],
+    positive_ratio=CONFIG['positive_ratio'],
+    resample_negatives_every_n_epochs=CONFIG['resample_negatives_every_n_epochs'],
+    random_seed=RANDOM_STATE,
+)
+
+train_dataset = DatasetClass(train_writer_sources, train=True, **common_kwargs, **dataset_kwargs)
+val_dataset = DatasetClass(val_writer_sources, train=False, **common_kwargs, **dataset_kwargs)
+
+# %% [markdown]
+# ### Verifica finale: zero genuine pair cross-dataset
+
+# %%
+def assert_no_cross_dataset_genuine(dataset, name):
+    bad = []
+    for writer_id, img1, img2 in dataset.all_genuine_pairs:
+        img1_is_iam = "iam_processed" in img1.replace("\\", "/")
+        img2_is_iam = "iam_processed" in img2.replace("\\", "/")
+        if img1_is_iam != img2_is_iam:
+            bad.append((writer_id, img1, img2))
+    print(f"[{name}] Genuine pairs: {len(dataset.all_genuine_pairs):,}  |  cross-dataset: {len(bad)}")
+    assert not bad, f"Trovate genuine pairs cross-dataset in {name}! Esempio: {bad[0]}"
+
+assert_no_cross_dataset_genuine(train_dataset, "train")
+assert_no_cross_dataset_genuine(val_dataset, "val")
+
+# %% [markdown]
+# ## DataLoader
+#
+# Per Triplet uso `DataLoader` diretto (stesso pattern di
+# `create_triplet_kfold_dataloaders` nel repo); per BCE/Contrastive riuso
+# `_make_loader` per restare coerente col resto del progetto.
+
+# %%
+if LOSS_TYPE == 'triplet':
+    from torch.utils.data import DataLoader
+    train_loader = DataLoader(train_dataset, batch_size=CONFIG['batch_size'], shuffle=True,
+                               num_workers=CONFIG['num_workers'], pin_memory=True, drop_last=True)
+    val_loader = DataLoader(val_dataset, batch_size=CONFIG['batch_size'], shuffle=False,
+                             num_workers=CONFIG['num_workers'], pin_memory=True)
+else:
+    train_loader = _make_loader(train_dataset, CONFIG['batch_size'], shuffle=True,
+                                 num_workers=CONFIG['num_workers'], random_state=RANDOM_STATE, drop_last=True)
+    val_loader = _make_loader(val_dataset, CONFIG['batch_size'], shuffle=False,
+                               num_workers=CONFIG['num_workers'], random_state=RANDOM_STATE)
+
+print(f"Train samples: {len(train_dataset):,}  |  Val samples: {len(val_dataset):,}")
+
+# %% [markdown]
+# ## Modello + Trainer
+
+# %%
+model = get_model(
+    CONFIG['backbone'], model_type=LOSS_TYPE, in_channels=1,
+    embedding_dim=CONFIG['embedding_dim'],   # per BCE viene rimappato su projection_dim
+    freeze_backbone_layers=CONFIG['freeze_backbone_layers'],
+    dropout=CONFIG['dropout'],
+)
+
+trainer = TrainerClass(
+    model=model, model_name=EXP_NAME, device=device,
+    results_dir=RESULTS_DIR, **trainer_kwargs,
+)
+
+# %% [markdown]
+# ## Training
+#
+# Nessun `test_dataset`: la validazione finale (soglie per la demo) usa il
+# 10% di `val_dataset`, stratificato IAM/RIMES fin dallo split.
+
+# %%
+history, final_metrics = trainer.train(
+    train_loader=train_loader, val_loader=val_loader, val_dataset=val_dataset,
+    test_dataset=None, epochs=CONFIG['epochs'], patience=CONFIG['patience'], fold=None,
+)
+
+trainer.cleanup()
+
+# %% [markdown]
+# ## Riepilogo per l'uso nella demo
+
+# %%
+best_ckpt = os.path.join(RESULTS_DIR, f"{EXP_NAME}_best.pth")
+metrics_csv = os.path.join(RESULTS_DIR, f"{EXP_NAME}_final_metrics.csv")
+
+print(f"\n{'='*70}\nMODELLO PRONTO PER LA DEMO ({LOSS_TYPE})\n{'='*70}")
+print(f"Checkpoint:      {best_ckpt}")
+print(f"Metriche/soglie: {metrics_csv}")
+print(f"EER:             {final_metrics['eer']:.4f}")
+print(f"EER threshold:   {final_metrics['eer_threshold']:.4f}")
+print(f"AUC:             {final_metrics['auc']:.4f}")
+print(f"""
+Copia ENTRAMBI i file ('{EXP_NAME}_best.pth' e '{EXP_NAME}_final_metrics.csv')
+accanto alla demo e lancia:
+
+    python webcam_demo.py --checkpoint {EXP_NAME}_best.pth
+""")
