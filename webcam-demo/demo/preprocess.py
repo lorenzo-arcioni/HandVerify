@@ -13,6 +13,7 @@ import cv2
 import numpy as np
 
 TARGET_SIZE = 448
+DEFAULT_GRAY_THRESHOLD = 128
 
 
 def make_square_resize(img, size=TARGET_SIZE):
@@ -25,8 +26,12 @@ def make_square_resize(img, size=TARGET_SIZE):
     return cv2.resize(canvas, (size, size), interpolation=cv2.INTER_AREA)
 
 
-def preprocess_manual_roi(roi_bgr):
+def preprocess_manual_roi(roi_bgr, gray_threshold=DEFAULT_GRAY_THRESHOLD):
     """ROI (BGR) disegnata a mano -> immagine 448x448 binarizzata.
+
+    gray_threshold: soglia (0-255) usata per la binarizzazione netta
+    inchiostro/sfondo. Valori piu' bassi catturano solo i tratti piu'
+    scuri, valori piu' alti includono anche i grigi piu' chiari.
 
     Ritorna None se la ROI e' vuota (rettangolo non ancora disegnato).
     """
@@ -36,12 +41,12 @@ def preprocess_manual_roi(roi_bgr):
     gray = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2GRAY)
 
     # sfondo quasi bianco -> bianco puro, poi binarizzazione netta
-    background = gray > 150
+    background = gray > 180
     gray = gray.copy()
     gray[background] = 255
-    _, binary = cv2.threshold(gray, 128, 255, cv2.THRESH_BINARY)
+    _, binary = cv2.threshold(gray, gray_threshold, 255, cv2.THRESH_BINARY)
 
-    return make_square_resize(gray, TARGET_SIZE)
+    return make_square_resize(binary, TARGET_SIZE)
 
 
 def quality_stats(img):

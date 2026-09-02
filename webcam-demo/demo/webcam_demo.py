@@ -16,6 +16,14 @@ Controlli:
     [1-5]     Focus preset (0, 64, 128, 192, 255)
     [C]       Cambia camera
     [Q/Esc]   Esci
+
+Slider "SOGLIA BINARIZZAZIONE (GRIGIO)" nel pannello di destra: regola in
+tempo reale la soglia di binarizzazione usata nel preprocessing (0-255,
+default 128). Si vede subito l'effetto nel MODEL INPUT PREVIEW.
+
+Nota: SPAZIO funziona sempre, anche senza aver prima cliccato su un altro
+controllo (e' collegato a una scorciatoia globale dell'applicazione,
+indipendente dal focus da tastiera).
 """
 import sys
 import os
@@ -25,12 +33,12 @@ import numpy as np
 import argparse
 
 from PySide6.QtCore import Qt, QThread, Signal, QRectF, QRect, QPoint, QPropertyAnimation, QEasingCurve, QTimer
-from PySide6.QtGui import QImage, QPixmap, QPainter, QColor, QFont, QPen, QBrush
+from PySide6.QtGui import QImage, QPixmap, QPainter, QColor, QFont, QPen, QBrush, QShortcut, QKeySequence
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QLabel, QHBoxLayout,
                                QVBoxLayout, QFrame, QGraphicsDropShadowEffect, QPushButton, QSlider)
 
 from engine import HandwritingVerifier, DEFAULT_THRESHOLDS, DEFAULT_CHECKPOINT
-from preprocess import quality_stats, quality_warnings
+from preprocess import quality_stats, quality_warnings, DEFAULT_GRAY_THRESHOLD
 
 # ==============================================================================
 # CONFIGURAZIONE STILE (TEMA "BIOMETRIC SCANNER")
@@ -213,6 +221,7 @@ class VideoCanvas(QLabel):
         self.pulse_opacity = 0.0
         self.pulse_direction = 1
         self.focus_value = 30
+        self.gray_threshold = DEFAULT_GRAY_THRESHOLD
         self.error_message = None
         self.current_camera_id = 0
 
@@ -233,6 +242,11 @@ class VideoCanvas(QLabel):
 
     def set_focus_display(self, focus_val):
         self.focus_value = focus_val
+        if self.current_frame is not None:
+            self._render()
+
+    def set_gray_threshold_display(self, value):
+        self.gray_threshold = value
         if self.current_frame is not None:
             self._render()
 
@@ -398,7 +412,8 @@ class VideoCanvas(QLabel):
         painter.setPen(QColor(156, 163, 175))
         footer_text = (f"[trascina] disegna ROI {self.active_roi} attiva  |  [SPACE] Verifica  |  [R] Reset  |  "
                        f"[F/G] Focus ±4  |  [D/H] Focus ±20  |  [C] Cambia camera  |  [T] Cambia soglia  |  "
-                       f"Camera: {self.current_camera_id}  |  Focus: {self.focus_value}")
+                       f"Camera: {self.current_camera_id}  |  Focus: {self.focus_value}  |  "
+                       f"Soglia grigio: {self.gray_threshold}")
         painter.drawText(QRectF(20, h - 40, w - 40, 30), Qt.AlignLeft, footer_text)
 
         painter.end()
@@ -480,6 +495,12 @@ class ResultDashboard(QWidget):
         self.score_bar_fill.setStyleSheet(f"background-color: {NEON_CYAN}; border-radius: 8px;")
         self.score_bar_fill.setFixedWidth(0)
 
+        # marker fisso per lo zero (centro della barra, dato che il range è [-1, 1])
+        self.zero_marker = QFrame(self.score_bar_bg)
+        self.zero_marker.setFixedWidth(2)
+        self.zero_marker.setStyleSheet(f"background-color: {TEXT_PRIMARY};")
+        self.zero_marker.raise_()
+
         # marker verticali per ciascuna soglia, disegnati sopra la barra
         self.threshold_markers = {}
         for key in self.thresholds:
@@ -535,6 +556,9 @@ class ResultDashboard(QWidget):
 
     def _reposition_threshold_markers(self):
         bar_h = self.score_bar_bg.height()
+        zero_x = self._score_to_x(0.0)
+        self.zero_marker.setGeometry(zero_x, 0, 2, bar_h)
+        self.zero_marker.raise_()
         for key, marker in self.threshold_markers.items():
             thr_val = self.thresholds[key]
             x = self._score_to_x(thr_val)
@@ -586,8 +610,13 @@ class ResultDashboard(QWidget):
         self.score_value.setText(f"{score:.4f}")
         self.score_value.setStyleSheet(f"color: {color};")
 
+        # riempimento classico da sinistra: 0% = -1, 100% = +1. Il marker
+        # bianco fisso al centro (self.zero_marker) resta il riferimento
+        # visivo per lo zero, cosi' la barra resta piena e leggibile anche
+        # per punteggi alti, invece di crescere solo da un segmento centrale.
         target_width = self._score_to_x(score)
 
+        self.score_bar_fill.move(0, 0)
         self.bar_animation.setStartValue(self.score_bar_fill.width())
         self.bar_animation.setEndValue(max(0, target_width))
         self.score_bar_fill.setStyleSheet(f"background-color: {color}; border-radius: 8px;")
@@ -810,6 +839,29 @@ class HandVerifyApp(QMainWindow):
         self.focus_label.setAlignment(Qt.AlignCenter)
         focus_layout.addWidget(self.focus_label)
 
+        self.gray_threshold = DEFAULT_GRAY_THRESHOLD
+
+        gray_widget = QWidget()
+        gray_widget.setStyleSheet(f"background-color: {PANEL_BG}; border-radius: 12px; padding: 12px;")
+        gray_layout = QVBoxLayout(gray_widget)
+        gray_layout.setContentsMargins(16, 12, 16, 12)
+
+        gray_header = QLabel("SOGLIA BINARIZZAZIONE (GRIGIO)")
+        gray_header.setStyleSheet(f"color: {NEON_CYAN}; font-size: 12px; font-weight: bold; letter-spacing: 1px;")
+        gray_layout.addWidget(gray_header)
+
+        self.gray_slider = QSlider(Qt.Horizontal)
+        self.gray_slider.setMinimum(0)
+        self.gray_slider.setMaximum(255)
+        self.gray_slider.setValue(self.gray_threshold)
+        self.gray_slider.valueChanged.connect(self.on_gray_threshold_changed)
+        gray_layout.addWidget(self.gray_slider)
+
+        self.gray_label = QLabel(f"Soglia: {self.gray_threshold}")
+        self.gray_label.setStyleSheet(f"color: {TEXT_PRIMARY}; font-size: 14px; font-weight: bold;")
+        self.gray_label.setAlignment(Qt.AlignCenter)
+        gray_layout.addWidget(self.gray_label)
+
         self.threshold_bar = ThresholdBar(self.verifier.thresholds, self.thr_key, self._on_threshold_changed)
 
         right_panel = QWidget()
@@ -818,9 +870,19 @@ class HandVerifyApp(QMainWindow):
         right_layout.setSpacing(12)
         right_layout.addWidget(self.dashboard)
         right_layout.addWidget(focus_widget)
+        right_layout.addWidget(gray_widget)
         right_layout.addWidget(self.threshold_bar)
 
         main_layout.addWidget(right_panel)
+
+        # Scorciatoia per SPAZIO indipendente dal focus da tastiera: senza
+        # questo, se nessun widget con focus policy ha mai ricevuto il
+        # focus (es. non si e' ancora cliccato su uno slider/pulsante),
+        # keyPressEvent sulla finestra non riceve gli eventi e SPAZIO
+        # sembra "non funzionare" finche' non si clicca altrove prima.
+        self._space_shortcut = QShortcut(QKeySequence(Qt.Key_Space), self)
+        self._space_shortcut.setContext(Qt.ApplicationShortcut)
+        self._space_shortcut.activated.connect(self.capture_and_verify)
 
         if camera_id not in self.available_cameras and self.available_cameras:
             print(f"[WARNING] Camera {camera_id} non disponibile, uso la prima disponibile: {self.available_cameras[0]}")
@@ -865,8 +927,13 @@ class HandVerifyApp(QMainWindow):
 
         for name in ROI_NAMES:
             roi = self.video_canvas.get_roi_crop(name)
-            img_448 = self.verifier.prepare(roi) if roi is not None else None
+            img_448 = self.verifier.prepare(roi, self.gray_threshold) if roi is not None else None
             self.preprocess_preview.update_slot(name, img_448)
+
+    def on_gray_threshold_changed(self, value):
+        self.gray_threshold = value
+        self.gray_label.setText(f"Soglia: {value}")
+        self.video_canvas.set_gray_threshold_display(value)
 
     def on_focus_slider_changed(self, value):
         self.camera_worker.set_focus_absolute(value)
@@ -895,9 +962,7 @@ class HandVerifyApp(QMainWindow):
 
         key = event.key()
 
-        if key == Qt.Key_Space:
-            self.capture_and_verify()
-        elif key == Qt.Key_R:
+        if key == Qt.Key_R:
             self.reset_view()
         elif key == Qt.Key_T:
             keys = list(self.verifier.thresholds)
@@ -957,8 +1022,8 @@ class HandVerifyApp(QMainWindow):
             self.dashboard.subtitle.setText("Disegna prima entrambe le ROI (A e B).")
             return
 
-        img_a = self.verifier.prepare(roi_a)
-        img_b = self.verifier.prepare(roi_b)
+        img_a = self.verifier.prepare(roi_a, self.gray_threshold)
+        img_b = self.verifier.prepare(roi_b, self.gray_threshold)
 
         if img_a is None or img_b is None:
             self.dashboard.subtitle.setText("Error: ROI non valida in uno dei due campioni.")
@@ -978,6 +1043,8 @@ class HandVerifyApp(QMainWindow):
         self.dashboard.verdict_card.setStyleSheet(f"#verdictCard {{ background-color: {CARD_BG}; border-radius: 16px; border: 2px solid #374151; }}")
         self.dashboard.verdict_card.setGraphicsEffect(None)
         self.dashboard.score_value.setText("--")
+        zero_x = self.dashboard._score_to_x(0.0)
+        self.dashboard.score_bar_fill.move(zero_x, 0)
         self.dashboard.score_bar_fill.setFixedWidth(0)
         self.dashboard.quality_text.setText("Focus: - | Ink: -")
 

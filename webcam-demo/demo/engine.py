@@ -15,7 +15,7 @@ import torch
 import torch.nn.functional as F
 
 from model_defs import load_model
-from preprocess import preprocess_manual_roi, to_tensor
+from preprocess import preprocess_manual_roi, to_tensor, DEFAULT_GRAY_THRESHOLD
 
 csv.field_size_limit(min(sys.maxsize, 2 ** 31 - 1))
 
@@ -96,9 +96,9 @@ class HandwritingVerifier:
             return float(threshold)
         return self.thresholds[threshold]
 
-    def prepare(self, roi_bgr):
+    def prepare(self, roi_bgr, gray_threshold=DEFAULT_GRAY_THRESHOLD):
         """ROI disegnata a mano -> immagine 448x448 preprocessata (None se vuota)."""
-        return preprocess_manual_roi(roi_bgr)
+        return preprocess_manual_roi(roi_bgr, gray_threshold=gray_threshold)
 
     @torch.no_grad()
     def similarity(self, img_a_448, img_b_448):
