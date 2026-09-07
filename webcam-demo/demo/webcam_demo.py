@@ -32,10 +32,12 @@ import cv2
 import numpy as np
 import argparse
 
-from PySide6.QtCore import Qt, QThread, Signal, QRectF, QRect, QPoint, QPropertyAnimation, QEasingCurve, QTimer
+from PySide6.QtCore import (Qt, QThread, Signal, QRectF, QRect, QPoint, QPropertyAnimation,
+                            QEasingCurve, QTimer, QObject, QEvent)
 from PySide6.QtGui import QImage, QPixmap, QPainter, QColor, QFont, QPen, QBrush, QShortcut, QKeySequence
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QLabel, QHBoxLayout,
-                               QVBoxLayout, QFrame, QGraphicsDropShadowEffect, QPushButton, QSlider)
+                               QVBoxLayout, QFrame, QGraphicsDropShadowEffect, QPushButton, QSlider,
+                               QSpinBox, QProgressBar, QButtonGroup)
 
 from engine import HandwritingVerifier, DEFAULT_THRESHOLDS, DEFAULT_CHECKPOINT
 from preprocess import quality_stats, quality_warnings, DEFAULT_GRAY_THRESHOLD
@@ -88,6 +90,29 @@ GLOBAL_QSS = f"""
     QSlider::handle:horizontal:hover {{
         background: #66F5FF;
     }}
+    QSpinBox {{
+        background-color: {CARD_BG};
+        color: {TEXT_PRIMARY};
+        border: 1px solid #374151;
+        border-radius: 6px;
+        padding: 4px 8px;
+        font-size: 14px;
+        font-weight: bold;
+    }}
+    QProgressBar {{
+        background-color: #374151;
+        border: none;
+        border-radius: 6px;
+        height: 14px;
+        text-align: center;
+        color: {DARK_BG};
+        font-size: 11px;
+        font-weight: bold;
+    }}
+    QProgressBar::chunk {{
+        background-color: {NEON_CYAN};
+        border-radius: 6px;
+    }}
 """
 
 ROI_NAMES = ("A", "B")
@@ -99,6 +124,27 @@ THRESHOLD_MARKER_COLORS = {
     "far1": "#C084FC",    # viola
     "far01": "#38BDF8",   # azzurro
 }
+
+
+class _SpaceCaptureFilter(QObject):
+    """Event filter che intercetta SPAZIO anche quando il focus e' dentro
+    un campo di editing (QSpinBox, QSlider...). Questi widget, quando hanno
+    il focus, dicono a Qt "gestisco io questo tasto" (ShortcutOverride) per
+    poter scrivere/navigare al loro interno, e questo impedisce alla
+    QShortcut globale su SPAZIO di scattare. Installando questo filtro
+    direttamente sul widget, SPAZIO lancia comunque la verifica senza
+    bisogno di cliccare fuori prima."""
+
+    def __init__(self, callback, parent=None):
+        super().__init__(parent)
+        self.callback = callback
+
+    def eventFilter(self, obj, event):
+        if event.type() in (QEvent.KeyPress, QEvent.ShortcutOverride) \
+                and event.key() == Qt.Key_Space and not event.isAutoRepeat():
+            self.callback()
+            return True
+        return False
 
 
 # ==============================================================================
@@ -491,9 +537,8 @@ class ResultDashboard(QWidget):
         self.score_bar_bg.setStyleSheet(f"background-color: #374151; border-radius: 8px;")
 
         self.score_bar_fill = QFrame(self.score_bar_bg)
-        self.score_bar_fill.setFixedHeight(16)
         self.score_bar_fill.setStyleSheet(f"background-color: {NEON_CYAN}; border-radius: 8px;")
-        self.score_bar_fill.setFixedWidth(0)
+        self.score_bar_fill.setGeometry(0, 0, 0, 16)
 
         # marker fisso per lo zero (centro della barra, dato che il range è [-1, 1])
         self.zero_marker = QFrame(self.score_bar_bg)
@@ -539,12 +584,30 @@ class ResultDashboard(QWidget):
 
         layout.addStretch()
 
-        self.bar_animation = QPropertyAnimation(self.score_bar_fill, b"minimumWidth")
+        self.last_score = None
+        self.bar_animation = QPropertyAnimation(self.score_bar_fill, b"geometry")
         self.bar_animation.setDuration(800)
         self.bar_animation.setEasingCurve(QEasingCurve.OutQuart)
 
         self._refresh_threshold_legend()
         self._reposition_threshold_markers()
+
+    # ---- barra score: da -1 a +1, riempimento ancorato allo zero -------------
+    def _bar_rect_for_score(self, score):
+        """Rettangolo del riempimento per uno score in [-1, 1].
+
+        La barra rappresenta l'intero range [-1, +1]; il riempimento parte
+        SEMPRE dal marker dello zero (self.zero_marker, al centro) e si
+        estende verso destra per score positivi o verso sinistra per score
+        negativi, cosi' la lunghezza del riempimento e' proporzionale alla
+        distanza dallo zero, non alla posizione assoluta da un bordo fisso.
+        """
+        bar_h = self.score_bar_bg.height()
+        zero_x = self._score_to_x(0.0)
+        score_x = self._score_to_x(score)
+        left = min(zero_x, score_x)
+        width = abs(score_x - zero_x)
+        return QRect(left, 0, width, bar_h)
 
     # ---- soglie: posizionamento marker + legenda -----------------------------
     def _score_to_x(self, score):
@@ -588,6 +651,10 @@ class ResultDashboard(QWidget):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._reposition_threshold_markers()
+        # riposiziona anche il riempimento della barra score in base
+        # all'ultimo score noto (o allo zero se non c'e' ancora un risultato)
+        current_score = self.last_score if self.last_score is not None else 0.0
+        self.score_bar_fill.setGeometry(self._bar_rect_for_score(current_score))
 
     def update_result(self, result, img_a, img_b, thresholds, thr_key):
         is_match = result["same_writer"]
@@ -607,19 +674,18 @@ class ResultDashboard(QWidget):
         self.margin_label.setText(f"Margin: {result['margin']:+.4f} | Threshold: {thr_key.upper()}")
 
         score = result["score"]
+        self.last_score = score
         self.score_value.setText(f"{score:.4f}")
         self.score_value.setStyleSheet(f"color: {color};")
 
-        # riempimento classico da sinistra: 0% = -1, 100% = +1. Il marker
-        # bianco fisso al centro (self.zero_marker) resta il riferimento
-        # visivo per lo zero, cosi' la barra resta piena e leggibile anche
-        # per punteggi alti, invece di crescere solo da un segmento centrale.
-        target_width = self._score_to_x(score)
-
-        self.score_bar_fill.move(0, 0)
-        self.bar_animation.setStartValue(self.score_bar_fill.width())
-        self.bar_animation.setEndValue(max(0, target_width))
+        # riempimento ancorato allo zero: cresce verso destra se score > 0,
+        # verso sinistra se score < 0. Il range coperto dalla barra e'
+        # sempre [-1, +1] (vedi _score_to_x / _bar_rect_for_score).
+        end_rect = self._bar_rect_for_score(score)
         self.score_bar_fill.setStyleSheet(f"background-color: {color}; border-radius: 8px;")
+        self.bar_animation.stop()
+        self.bar_animation.setStartValue(self.score_bar_fill.geometry())
+        self.bar_animation.setEndValue(end_rect)
         self.bar_animation.start()
 
         self._reposition_threshold_markers()
@@ -740,12 +806,52 @@ class ThresholdBar(QWidget):
         header.setStyleSheet(f"color: {TEXT_PRIMARY}; font-size: 12px; font-weight: bold; letter-spacing: 1px;")
         layout.addWidget(header)
 
+        # QButtonGroup esclusivo: garantisce che UN SOLO pulsante alla
+        # volta possa risultare "checked", indipendentemente da come/quante
+        # volte l'utente clicca. setFocusPolicy(NoFocus) evita che il click
+        # sposti il focus da tastiera su questi pulsanti (le scorciatoie
+        # F/G/D/H/1-5/T/C/A/B restano quindi affidabili).
+        self.button_group = QButtonGroup(self)
+        self.button_group.setExclusive(True)
+
         row = QHBoxLayout()
         row.setSpacing(8)
         for key in thresholds:
+            accent = THRESHOLD_MARKER_COLORS.get(key, NEON_CYAN)
             btn = QPushButton(f"{self.LABELS.get(key, key.upper())}\n{thresholds[key]:.4f}")
             btn.setCheckable(True)
             btn.setChecked(key == active_key)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setFocusPolicy(Qt.NoFocus)
+            btn.setMinimumHeight(48)
+            # scritte sempre bianche/chiare, leggibili sia da attive che
+            # da non attive; lo stato attivo si distingue con un bordo
+            # colorato (stesso colore del marker sulla barra dello score)
+            # invece che riempire il pulsante di colore pieno.
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {CARD_BG};
+                    color: {TEXT_PRIMARY};
+                    border: 2px solid #374151;
+                    border-radius: 8px;
+                    padding: 8px;
+                    font-size: 13px;
+                    font-weight: bold;
+                }}
+                QPushButton:hover {{
+                    background-color: #29354a;
+                    border: 2px solid {accent};
+                }}
+                QPushButton:pressed {{
+                    background-color: #151d2b;
+                }}
+                QPushButton:checked {{
+                    background-color: #1a2333;
+                    color: {TEXT_PRIMARY};
+                    border: 2px solid {accent};
+                }}
+            """)
+            self.button_group.addButton(btn)
             btn.clicked.connect(lambda _checked, k=key: self._select(k))
             self.buttons[key] = btn
             row.addWidget(btn)
@@ -778,6 +884,14 @@ class HandVerifyApp(QMainWindow):
         self.thr_key = threshold_key
         self.available_cameras = self._detect_cameras()
         print(f"Camere disponibili: {self.available_cameras}")
+
+        # stato della verifica multi-inferenza (vedi capture_and_verify)
+        self._multi_run_active = False
+        self._multi_run_timer = None
+        self._multi_run_scores = []
+        self._multi_run_total = 1
+        self._multi_run_last_imgs = (None, None)
+        self._multi_run_t0 = 0.0
 
         # UI Setup
         central = QWidget()
@@ -832,6 +946,8 @@ class HandVerifyApp(QMainWindow):
         self.focus_slider.setMaximum(255)
         self.focus_slider.setValue(initial_focus)
         self.focus_slider.valueChanged.connect(self.on_focus_slider_changed)
+        self._space_filter_focus = _SpaceCaptureFilter(self.capture_and_verify, self)
+        self.focus_slider.installEventFilter(self._space_filter_focus)
         focus_layout.addWidget(self.focus_slider)
 
         self.focus_label = QLabel(f"Focus: {initial_focus}")
@@ -855,6 +971,8 @@ class HandVerifyApp(QMainWindow):
         self.gray_slider.setMaximum(255)
         self.gray_slider.setValue(self.gray_threshold)
         self.gray_slider.valueChanged.connect(self.on_gray_threshold_changed)
+        self._space_filter_gray = _SpaceCaptureFilter(self.capture_and_verify, self)
+        self.gray_slider.installEventFilter(self._space_filter_gray)
         gray_layout.addWidget(self.gray_slider)
 
         self.gray_label = QLabel(f"Soglia: {self.gray_threshold}")
@@ -864,6 +982,52 @@ class HandVerifyApp(QMainWindow):
 
         self.threshold_bar = ThresholdBar(self.verifier.thresholds, self.thr_key, self._on_threshold_changed)
 
+        # ---- ACCURATEZZA: numero di inferenze da mediare -----------------
+        # Invece di una singola inferenza, l'utente puo' chiedere N
+        # acquisizioni/inferenze successive (ogni volta un nuovo crop dal
+        # feed live, senza dover ridisegnare le ROI): lo score finale e'
+        # la media dei singoli score, piu' stabile rispetto a rumore del
+        # sensore/frame singolo.
+        accuracy_widget = QWidget()
+        accuracy_widget.setStyleSheet(f"background-color: {PANEL_BG}; border-radius: 12px; padding: 12px;")
+        accuracy_layout = QVBoxLayout(accuracy_widget)
+        accuracy_layout.setContentsMargins(16, 12, 16, 12)
+        accuracy_layout.setSpacing(8)
+
+        accuracy_header = QLabel("ACCURATEZZA (N. INFERENZE DA MEDIARE)")
+        accuracy_header.setStyleSheet(f"color: {NEON_CYAN}; font-size: 12px; font-weight: bold; letter-spacing: 1px;")
+        accuracy_layout.addWidget(accuracy_header)
+
+        spin_row = QHBoxLayout()
+        spin_row.setSpacing(10)
+        spin_label = QLabel("Numero acquisizioni:")
+        spin_label.setStyleSheet(f"color: {TEXT_SECONDARY}; font-size: 13px;")
+        spin_row.addWidget(spin_label)
+
+        self.num_inferences_spin = QSpinBox()
+        self.num_inferences_spin.setMinimum(1)
+        self.num_inferences_spin.setMaximum(100)
+        self.num_inferences_spin.setValue(1)
+        self.num_inferences_spin.setSuffix("  inference/i")
+        # NB: questo controllo non e' collegato a nient'altro se non al
+        # proprio valore, letto direttamente in capture_and_verify(). Non
+        # deve mai toccare self.thr_key (la soglia attiva) - vedi anche la
+        # guardia in keyPressEvent che blocca le scorciatoie da tastiera
+        # mentre questo campo ha il focus.
+        # Il filtro sotto garantisce che SPAZIO funzioni comunque anche se
+        # il cursore e' rimasto dentro questo campo (vedi _SpaceCaptureFilter).
+        self._space_filter_spin = _SpaceCaptureFilter(self.capture_and_verify, self)
+        self.num_inferences_spin.installEventFilter(self._space_filter_spin)
+        spin_row.addWidget(self.num_inferences_spin, stretch=1)
+        accuracy_layout.addLayout(spin_row)
+
+        self.multi_run_progress = QProgressBar()
+        self.multi_run_progress.setMinimum(0)
+        self.multi_run_progress.setMaximum(1)
+        self.multi_run_progress.setValue(0)
+        self.multi_run_progress.setVisible(False)
+        accuracy_layout.addWidget(self.multi_run_progress)
+
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
         right_layout.setContentsMargins(0, 0, 0, 0)
@@ -871,6 +1035,7 @@ class HandVerifyApp(QMainWindow):
         right_layout.addWidget(self.dashboard)
         right_layout.addWidget(focus_widget)
         right_layout.addWidget(gray_widget)
+        right_layout.addWidget(accuracy_widget)
         right_layout.addWidget(self.threshold_bar)
 
         main_layout.addWidget(right_panel)
@@ -960,6 +1125,17 @@ class HandVerifyApp(QMainWindow):
         if event.isAutoRepeat():
             return
 
+        # Se il focus da tastiera e' su un campo di input (es. lo spinbox
+        # "N. inferenze" o gli slider), le scorciatoie globali qui sotto
+        # (T/F/G/D/H/C/A/B/1-5/R) NON devono scattare: altrimenti digitare
+        # o modificare un valore in un campo puo' involontariamente
+        # cambiare soglia, camera, focus, ecc. Questo e' il motivo per cui
+        # cambiare il numero di inferenze poteva "spostare" la soglia
+        # attiva da FAR1 a EER.
+        focus_widget = QApplication.focusWidget()
+        if isinstance(focus_widget, (QSpinBox, QSlider)):
+            return
+
         key = event.key()
 
         if key == Qt.Key_R:
@@ -1014,41 +1190,129 @@ class HandVerifyApp(QMainWindow):
         print(f"Cambio camera: {current} -> {next_camera}")
         self.camera_worker.switch_camera(next_camera)
 
+    # ---- verifica multi-inferenza (media di N acquisizioni) ------------------
+    # Ogni "tick" del timer preleva una NUOVA acquisizione dal feed live
+    # (self.video_canvas.get_roi_crop ritorna sempre il contenuto piu'
+    # recente del rettangolo gia' disegnato, senza bisogno di ridisegnarlo)
+    # e la fa passare per una singola inferenza. Alla fine si fa la media
+    # degli score cosine ottenuti: piu' N e' alto, piu' il risultato e'
+    # stabile rispetto al rumore di un singolo frame/crop.
     def capture_and_verify(self):
+        if self._multi_run_active:
+            return  # una verifica multipla e' gia' in corso, ignora SPAZIO/click
+
         roi_a = self.video_canvas.get_roi_crop("A")
         roi_b = self.video_canvas.get_roi_crop("B")
-
         if roi_a is None or roi_b is None:
             self.dashboard.subtitle.setText("Disegna prima entrambe le ROI (A e B).")
             return
 
-        img_a = self.verifier.prepare(roi_a, self.gray_threshold)
-        img_b = self.verifier.prepare(roi_b, self.gray_threshold)
+        n = self.num_inferences_spin.value()
 
-        if img_a is None or img_b is None:
-            self.dashboard.subtitle.setText("Error: ROI non valida in uno dei due campioni.")
+        self._multi_run_active = True
+        self._multi_run_scores = []
+        self._multi_run_total = n
+        self._multi_run_last_imgs = (None, None)
+        self._multi_run_t0 = time.time()
+
+        self.multi_run_progress.setMaximum(n)
+        self.multi_run_progress.setValue(0)
+        self.multi_run_progress.setFormat(f"0/{n}")
+        self.multi_run_progress.setVisible(True)
+        self.dashboard.subtitle.setText(f"Acquisizione 1/{n}...")
+
+        # intervallo fra un'acquisizione e la successiva: abbastanza corto
+        # da non far aspettare l'utente per N grandi, ma sufficiente a
+        # lasciar arrivare almeno un nuovo frame dalla webcam fra un giro
+        # e l'altro (il feed gira in un thread separato, vedi CameraWorker).
+        self._multi_run_timer = QTimer(self)
+        self._multi_run_timer.timeout.connect(self._run_one_inference_step)
+        self._multi_run_timer.start(60)
+
+    def _run_one_inference_step(self):
+        roi_a = self.video_canvas.get_roi_crop("A")
+        roi_b = self.video_canvas.get_roi_crop("B")
+        if roi_a is None or roi_b is None:
+            self._finish_multi_run(aborted=True)
             return
 
-        t0 = time.time()
-        result = self.verifier.verify(img_a, img_b, self.thr_key)
-        print(f"  cos={result['score']:+.4f} | {self.thr_key}={result['threshold']:.4f} | {(time.time()-t0)*1000:.0f}ms")
+        img_a = self.verifier.prepare(roi_a, self.gray_threshold)
+        img_b = self.verifier.prepare(roi_b, self.gray_threshold)
+        if img_a is None or img_b is None:
+            self._finish_multi_run(aborted=True)
+            return
 
-        self.dashboard.subtitle.setText(f"Analysis completed in {(time.time()-t0)*1000:.0f} ms")
+        score = self.verifier.similarity(img_a, img_b)
+        self._multi_run_scores.append(score)
+        self._multi_run_last_imgs = (img_a, img_b)
+
+        done = len(self._multi_run_scores)
+        self.multi_run_progress.setValue(done)
+        self.multi_run_progress.setFormat(f"{done}/{self._multi_run_total}")
+
+        if done >= self._multi_run_total:
+            self._finish_multi_run()
+        else:
+            self.dashboard.subtitle.setText(f"Acquisizione {done + 1}/{self._multi_run_total}...")
+
+    def _finish_multi_run(self, aborted=False):
+        self._multi_run_timer.stop()
+        self._multi_run_timer.deleteLater()
+        self._multi_run_timer = None
+        self._multi_run_active = False
+
+        if aborted or not self._multi_run_scores:
+            self.dashboard.subtitle.setText("Error: ROI persa durante l'acquisizione multipla.")
+            self.multi_run_progress.setVisible(False)
+            return
+
+        scores = self._multi_run_scores
+        n = len(scores)
+        mean_score = sum(scores) / n
+        std_score = (sum((s - mean_score) ** 2 for s in scores) / n) ** 0.5 if n > 1 else 0.0
+
+        thr = self.verifier.resolve_threshold(self.thr_key)
+        result = {
+            "score": mean_score,
+            "threshold": thr,
+            "same_writer": mean_score >= thr,
+            "margin": mean_score - thr,
+        }
+
+        elapsed_ms = (time.time() - self._multi_run_t0) * 1000
+        print(f"  cos_mean={mean_score:+.4f} (n={n}, std={std_score:.4f}) | "
+              f"{self.thr_key}={thr:.4f} | {elapsed_ms:.0f}ms")
+
+        extra = f" | n={n}, σ={std_score:.4f}" if n > 1 else ""
+        self.dashboard.subtitle.setText(f"Analysis completed in {elapsed_ms:.0f} ms{extra}")
+
+        img_a, img_b = self._multi_run_last_imgs
         self.dashboard.update_result(result, img_a, img_b, self.verifier.thresholds, self.thr_key)
 
+        self.multi_run_progress.setVisible(False)
+        self._multi_run_scores = []
+
     def reset_view(self):
+        if self._multi_run_active and self._multi_run_timer is not None:
+            self._multi_run_timer.stop()
+            self._multi_run_timer.deleteLater()
+            self._multi_run_timer = None
+            self._multi_run_active = False
+            self._multi_run_scores = []
+        self.multi_run_progress.setVisible(False)
         self.dashboard.subtitle.setText("Waiting for capture...")
         self.dashboard.verdict_label.setText("STANDBY")
         self.dashboard.verdict_label.setStyleSheet(f"color: {TEXT_SECONDARY};")
         self.dashboard.verdict_card.setStyleSheet(f"#verdictCard {{ background-color: {CARD_BG}; border-radius: 16px; border: 2px solid #374151; }}")
         self.dashboard.verdict_card.setGraphicsEffect(None)
         self.dashboard.score_value.setText("--")
-        zero_x = self.dashboard._score_to_x(0.0)
-        self.dashboard.score_bar_fill.move(zero_x, 0)
-        self.dashboard.score_bar_fill.setFixedWidth(0)
+        self.dashboard.last_score = None
+        self.dashboard.score_bar_fill.setGeometry(self.dashboard._bar_rect_for_score(0.0))
         self.dashboard.quality_text.setText("Focus: - | Ink: -")
 
     def closeEvent(self, event):
+        if self._multi_run_timer is not None:
+            self._multi_run_timer.stop()
         self.camera_worker.stop()
         event.accept()
 
@@ -1059,7 +1323,7 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint", default=DEFAULT_CHECKPOINT)
     parser.add_argument("--threshold", choices=list(DEFAULT_THRESHOLDS), default="eer")
     parser.add_argument("--arch", default=None)
-    parser.add_argument("--focus", type=int, default=30, help="Valore focus iniziale (0-255)")
+    parser.add_argument("--focus", type=int, default=255, help="Valore focus iniziale (0-255)")
     args = parser.parse_args()
 
     QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)

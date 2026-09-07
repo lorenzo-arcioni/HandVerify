@@ -51,7 +51,7 @@ python webcam_demo.py
 oppure
 
 ```bash
-python webcam_demo.py --camera 1 --checkpoint ../../results/contrastive/contrastive_experiments/resnet18_contrastive_rimes_to_iam/resnet18_contrastive_rimes_to_iam_final.pth --threshold far01
+QT_PLUGIN_PATH="" LD_LIBRARY_PATH="" uv run python webcam_demo.py --camera 4 --checkpoint ../../results/demo/resnet18_contrastive_mixed_iam_rimes_stratified_best.pth --threshold eer
 ```
 
 I tasti funzionano sia maiuscoli sia minuscoli, e la finestra si chiude anche
