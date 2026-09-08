@@ -1,0 +1,106 @@
+%============================================================
+% SEZIONE: Experimental Setup
+%============================================================
+\section{Experimental Setup}\label{sec:experiments}
+
+\subsection{Datasets}
+
+We evaluate our framework on two standard handwriting verification datasets. Due to the modular design, the framework supports any dataset organized with writer subdirectories containing handwriting samples. For this study, we use datasets with varying numbers of writers and samples per writer to assess generalization across different data scales.
+
+Images are preprocessed to grayscale and resized to 448×448 pixels, balancing computational efficiency with fine detail preservation. This resolution is sufficient to capture stroke characteristics while remaining manageable for modern GPUs.
+
+\subsection{Data Preprocessing}
+
+All datasets undergo a rigorous preprocessing pipeline to normalize images while preserving handwriting characteristics. 
+The pipeline combines Otsu's binarization, morphological operations, and adaptive cropping strategies 
+tailored to each dataset's structure. Binarization is used exclusively as an auxiliary guide to \emph{compute} 
+crop coordinates and content masks; the pixel values that are ultimately cropped, resized, and saved to disk 
+always come from the original \emph{grayscale} image, never from the binary mask itself.
+
+In brief: each grayscale image is Otsu-thresholded to obtain a binary mask, which is used to (i) detect IAM guide 
+lines, (ii) locate left-margin and top/bottom black regions, and (iii) compute tight-crop bounding boxes 
+via axial projections. These coordinates are then applied to the grayscale image, which is cropped, centered on 
+a square canvas, and resized to 448×448 with area interpolation. IAM full-form images additionally undergo guide-line 
+detection and removal via morphological opening, with the handwritten region extracted according to the number of 
+detected lines (falling back to a fixed region when detection is unreliable). RIMES text lines are instead 
+height-normalized per writer and vertically stacked into groups of 5 to form 448×448 batches.
+
+The full mathematical formulation of these steps (Otsu thresholding, projection-based tight cropping, IAM guide-line 
+detection rules, RIMES height normalization and batching, visual examples, and associated fallback/safeguard conditions) 
+is provided in Appendix~\ref{app:preprocessing}, together with the exact parameter values used ($\rho = 0.018$ for 
+RIMES, $\rho = 0.02$ for IAM, padding, trim, and batching constants). All these seemingly arbitrary configuration 
+choices are carefully designed with the final dataset in mind, in particular to avoid issues with the models or 
+loss functions such as having too few positive/negative pairs or too few triplets, which could make training more 
+difficult.
+
+\subsection{Dataset Statistics Analysis}
+\label{subsec:dataset-stats}
+
+After preprocessing, we analyze the distribution of images per author across the two resulting datasets, as this directly informs downstream design choices such as batching strategy and writer-level splitting. Table~\ref{tab:dataset-stats} summarizes the key statistics computed on the preprocessed IAM and RIMES datasets.
+
+\begin{table}[h]
+\centering
+\caption{Summary statistics of images per author for the preprocessed IAM and RIMES datasets.}
+\label{tab:dataset-stats}
+\begin{tabular}{lrrrrrr}
+\toprule
+\textbf{Dataset} & \textbf{Authors} & \textbf{Tot. Images} & \textbf{Mean/Author} & \textbf{Median/Author} & \textbf{Std/Author} & \textbf{Min/Max} \\
+\midrule
+IAM   & 657  & 1539 & 2.34 & 1.0 & 3.03 & 1 / 59 \\
+RIMES & 1500 & 5046 & 3.36 & 3.0 & 1.27 & 1 / 10 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+IAM comprises 657 authors contributing a total of 1539 processed images, with a mean of 2.34 images per author but a median of only 1.0, indicating a strongly right-skewed distribution; this is confirmed by the high standard deviation (3.03) relative to the mean, and by the presence of an extreme outlier author with 59 images, more than an order of magnitude above the median. RIMES, in contrast, comprises 1500 authors and 5046 total processed images (batches), with mean and median again fairly close (3.36 and 3.0 respectively) and a moderate standard deviation (1.27), with a maximum of 10 images per author. The corresponding per-author histograms and boxplot comparison, which visually confirm this asymmetry (IAM dominated by a large spike at 1--2 images per author with a long sparse tail, RIMES broader and more centrally distributed), are reported in Appendix~\ref{app:dataset-stats-figures}.
+
+This asymmetry has practical implications for the training pipeline: since IAM images already correspond to full, variable-length handwritten samples (one 448×448 image per crop), no further batching is applied, and the heavy-tailed per-author distribution is instead handled through a writer-level (rather than image-level) train/validation/test split, preventing data leakage across sets. For RIMES, the "images" counted here correspond to the stacked 448×448 batches produced by the line-grouping procedure (Appendix~\ref{app:preprocessing}); the broader spread around 3 batches per author, compared to IAM, reflects the larger and more variable number of lines each RIMES writer contributed, combined with the fixed batch size $N_{\text{batch}}=5$.
+
+\subsection{Experimental Protocol}
+
+\subsubsection{Train/Validation/Test Splitting and Dataset Pairings}
+\label{subsubsec:dataset-pairings}
+
+Each candidate backbone/loss configuration is evaluated on four
+train$\to$evaluation dataset pairings (IAM$\to$IAM, IAM$\to$RIMES,
+RIMES$\to$IAM, RIMES$\to$RIMES), for $6(backbones)\times3(losses)\times4(pairings)=72$ trained
+models in total.
+
+For the two \textbf{within-dataset} pairings (IAM$\to$IAM,
+RIMES$\to$RIMES), the source dataset is writer-disjointly split into
+three subsets: 70\% training, 10\% validation (\texttt{val\_size}
+$=0.1$, used for model selection / early-stopping monitoring), and
+20\% test (\texttt{test\_size} $=0.2$, held out and used only for the
+final comprehensive evaluation), with a fixed random seed of 42.
+
+For the two \textbf{cross-dataset} pairings (IAM$\to$RIMES,
+RIMES$\to$IAM), the model is trained on the \emph{entire} source
+dataset (all of its writers), while the target dataset is itself split
+writer-disjointly into a 10\% validation subset (monitoring/early
+stopping) and a 90\% test subset, the latter used for the final
+evaluation reported throughout this paper. This setting assesses the
+ability of a model trained on one handwriting dataset to generalize to
+a different handwriting domain and data-collection protocol.
+
+Exact writer and pair counts per split are given in
+Table~\ref{tab:protocol} (Section~\ref{sec:protocol}); these counts are
+confirmed identical across all backbone/loss combinations within a
+given split, since the writer-level split depends only on the fixed
+random seed and dataset identity, not on backbone or loss.
+
+For all training configurations, negative samples are resampled every epoch, since the number of possible negative pairs is substantially larger than the number of positive pairs. Resampling therefore allows the model to observe a wider variety of negative examples throughout training, rather than repeatedly using the same subset of negative pairs.
+
+This choice is also motivated by the intended real-world application: in forensic handwriting and signature examination, cases are not submitted to an examiner at random, but precisely because the authenticity of a signature or document is already in question---an instance of what is known in the forensic statistics literature as an \emph{ascertainment} (or \emph{selection}) bias effect on casework composition \cite{rosenblum2024incorrect}\footnote{The cited work discusses this effect in the context of firearms examiner casework; we adopt it here as a conceptually analogous argument, as no equivalent study (at the best of our knowledge) specifically quantifying casework composition exists for forensic handwriting/signature examination.}. As a result, the population of samples an examiner actually evaluates is skewed toward disputed, and often forged, material relative to the general population of signatures. Exposing the model to a wide and varied set of negative examples during training is therefore consistent with this real-world prior: a system intended to support forgery detection should be robust across a broad range of negative (forged) cases, rather than a narrow, fixed subset.
+
+No resampling is applied to the validation or test sets, which remain fixed throughout each experiment. Each model is trained from scratch for every architecture/loss/dataset-pairing combination, with early stopping monitored using the corresponding validation set.
+
+\subsubsection{Hyperparameters}
+
+All 72 configurations of the main sweep share a single uniform
+hyperparameter configuration: batch size 16, 3 frozen backbone encoder
+layers, dropout 0.2, and margins 0.5 (Contrastive) / 0.3 (Triplet), matching
+the values introduced in Section~\ref{sec:methodology}.
+A complete list of representative hyperparameters, including values not
+otherwise discussed in the main text (maximum epochs, embedding
+dimension, data-loading workers, etc), is given in
+Appendix~\ref{app:hyperparams}.

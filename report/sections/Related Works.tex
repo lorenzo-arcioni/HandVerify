@@ -1,0 +1,37 @@
+\section{Related Work}\label{sec:related}
+
+\subsection{Traditional Handwriting Verification}
+
+Early handwriting verification systems relied on handcrafted feature extraction methods. Grapheme-based approaches decomposed handwriting into fundamental stroke patterns, analyzing their statistical distributions. Texture-based methods applied filters like Gabor wavelets, Local Binary Patterns (LBP), and co-occurrence matrices to capture writing texture characteristics. Contour-based features extracted boundary information, measuring curvature, slant, and shape descriptors.
+
+These traditional methods achieved moderate success in controlled environments but faced significant limitations. Feature engineering required domain expertise and extensive parameter tuning. Performance degraded substantially with writing variations, noise, and disguised samples. The fixed feature representations lacked adaptability to dataset-specific characteristics, limiting generalization capabilities.
+
+\subsection{Deep Learning for Writer Verification}
+
+The introduction of Convolutional Neural Networks (CNNs) revolutionized handwriting analysis by enabling automatic hierarchical feature learning. Early deep learning approaches applied standard CNNs trained for classification, using learned features for similarity computation through distance metrics. However, these methods suffered from limited discriminative power as networks were not explicitly trained for verification tasks.
+
+Siamese architectures addressed this limitation by directly learning similarity functions. Chopra et al. pioneered Contrastive Loss for face verification, demonstrating its effectiveness in learning discriminative embeddings. This approach was subsequently adapted to handwriting verification, showing substantial improvements over classification-based methods.
+
+\subsection{Siamese Networks and Metric Learning}
+
+Siamese networks employ twin networks with shared weights, processing paired inputs to learn embeddings optimized for similarity assessment. Three main paradigms have emerged for training these architectures:
+
+\textbf{Binary Cross-Entropy (BCE) Loss:} This approach treats verification as binary classification, training a decision head to predict whether pairs match. While intuitive and stable, BCE loss does not explicitly structure the embedding space, potentially leading to suboptimal feature distributions.
+
+\textbf{Contrastive Loss:} Introduced for metric learning, Contrastive Loss explicitly optimizes pairwise distances. Positive pairs are pulled together while negative pairs are pushed apart by a margin. This approach directly shapes the embedding geometry but requires careful margin tuning and suffers from convergence challenges with poor negative sampling.
+
+\textbf{Triplet Loss:} Extending pairwise learning, Triplet Loss jointly considers anchor, positive, and negative samples, enforcing that positive pairs are closer than negative pairs by a margin. This relative comparison provides stronger training signals but increases computational cost and requires sophisticated triplet mining strategies.
+
+Recent work has explored online hard negative mining, adaptive margins, and hybrid loss combinations to improve convergence and performance. However, comprehensive comparisons across loss paradigms with modern architectures remain limited in handwriting verification literature.
+
+\subsection{Modern CNN Architectures}
+
+The evolution of CNN architectures has provided increasingly efficient and accurate feature extractors. ResNet introduced residual connections, enabling training of very deep networks. EfficientNet achieved state-of-the-art accuracy with fewer parameters through compound scaling. MobileNet and DenseNet families prioritized computational efficiency through depthwise separable convolutions and dense connectivity patterns respectively.
+
+Transfer learning from ImageNet has become standard practice, leveraging features learned on large-scale natural image datasets. However, the domain gap between natural images and handwriting raises questions about optimal transfer strategies. Recent work suggests selective layer freezing and fine-tuning can improve adaptation, but systematic studies in handwriting verification are scarce.
+
+\subsection{Evaluation Metrics for Biometric Systems}
+
+Handwriting verification is fundamentally a biometric authentication task, requiring evaluation beyond simple classification accuracy. Equal Error Rate (EER), where False Accept Rate equals False Reject Rate, provides a single-number performance summary commonly used in biometric literature. ROC curves offer comprehensive performance visualization across all operating thresholds.
+
+Additional metrics include Decidability Index, measuring separation between genuine and impostor distributions, and operating point analysis at specific FAR values relevant to security applications. Despite their importance, many handwriting verification studies focus primarily on accuracy, limiting comparability with biometric systems literature.

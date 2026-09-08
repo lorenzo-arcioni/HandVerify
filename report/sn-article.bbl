@@ -1,0 +1,264 @@
+%% BioMed_Central_Bib_Style_v1.01
+
+\begin{thebibliography}{14}
+% BibTex style file: bmc-mathphys.bst (version 2.1), 2014-07-24
+\ifx \bisbn   \undefined \def \bisbn  #1{ISBN #1}\fi
+\ifx \binits  \undefined \def \binits#1{#1}\fi
+\ifx \bauthor  \undefined \def \bauthor#1{#1}\fi
+\ifx \batitle  \undefined \def \batitle#1{#1}\fi
+\ifx \bjtitle  \undefined \def \bjtitle#1{#1}\fi
+\ifx \bvolume  \undefined \def \bvolume#1{\textbf{#1}}\fi
+\ifx \byear  \undefined \def \byear#1{#1}\fi
+\ifx \bissue  \undefined \def \bissue#1{#1}\fi
+\ifx \bfpage  \undefined \def \bfpage#1{#1}\fi
+\ifx \blpage  \undefined \def \blpage #1{#1}\fi
+\ifx \burl  \undefined \def \burl#1{\textsf{#1}}\fi
+\ifx \doiurl  \undefined \def \doiurl#1{\url{https://doi.org/#1}}\fi
+\ifx \betal  \undefined \def \betal{\textit{et al.}}\fi
+\ifx \binstitute  \undefined \def \binstitute#1{#1}\fi
+\ifx \binstitutionaled  \undefined \def \binstitutionaled#1{#1}\fi
+\ifx \bctitle  \undefined \def \bctitle#1{#1}\fi
+\ifx \beditor  \undefined \def \beditor#1{#1}\fi
+\ifx \bpublisher  \undefined \def \bpublisher#1{#1}\fi
+\ifx \bbtitle  \undefined \def \bbtitle#1{#1}\fi
+\ifx \bedition  \undefined \def \bedition#1{#1}\fi
+\ifx \bseriesno  \undefined \def \bseriesno#1{#1}\fi
+\ifx \blocation  \undefined \def \blocation#1{#1}\fi
+\ifx \bsertitle  \undefined \def \bsertitle#1{#1}\fi
+\ifx \bsnm \undefined \def \bsnm#1{#1}\fi
+\ifx \bsuffix \undefined \def \bsuffix#1{#1}\fi
+\ifx \bparticle \undefined \def \bparticle#1{#1}\fi
+\ifx \barticle \undefined \def \barticle#1{#1}\fi
+\bibcommenthead
+\ifx \bconfdate \undefined \def \bconfdate #1{#1}\fi
+\ifx \botherref \undefined \def \botherref #1{#1}\fi
+\ifx \url \undefined \def \url#1{\textsf{#1}}\fi
+\ifx \bchapter \undefined \def \bchapter#1{#1}\fi
+\ifx \bbook \undefined \def \bbook#1{#1}\fi
+\ifx \bcomment \undefined \def \bcomment#1{#1}\fi
+\ifx \oauthor \undefined \def \oauthor#1{#1}\fi
+\ifx \citeauthoryear \undefined \def \citeauthoryear#1{#1}\fi
+\ifx \endbibitem  \undefined \def \endbibitem {}\fi
+\ifx \bconflocation  \undefined \def \bconflocation#1{#1}\fi
+\ifx \arxivurl  \undefined \def \arxivurl#1{\textsf{#1}}\fi
+\csname PreBibitemsHook\endcsname
+
+%%% 1
+\bibitem[\protect\citeauthoryear{Koch et~al.}{2015}]{koch2015siamese}
+\begin{bchapter}
+\bauthor{\bsnm{Koch}, \binits{G.}},
+\bauthor{\bsnm{Zemel}, \binits{R.}},
+\bauthor{\bsnm{Salakhutdinov}, \binits{R.}}:
+\bctitle{Siamese neural networks for one-shot image recognition}.
+In: \bbtitle{ICML Deep Learning Workshop},
+vol. \bseriesno{2}.
+\bconflocation{Lille, France}
+(\byear{2015}).
+\burl{https://www.cs.toronto.edu/\texttildelow zemel/documents/oneshot1.pdf}
+\end{bchapter}
+\endbibitem
+
+%%% 2
+\bibitem[\protect\citeauthoryear{He et~al.}{2016}]{he2016resnet}
+\begin{bchapter}
+\bauthor{\bsnm{He}, \binits{K.}},
+\bauthor{\bsnm{Zhang}, \binits{X.}},
+\bauthor{\bsnm{Ren}, \binits{S.}},
+\bauthor{\bsnm{Sun}, \binits{J.}}:
+\bctitle{Deep residual learning for image recognition}.
+In: \bbtitle{Proceedings of the IEEE Conference on Computer Vision and Pattern
+  Recognition (CVPR)},
+pp. \bfpage{770}--\blpage{778}.
+\bpublisher{IEEE},
+\blocation{Las Vegas, NV, USA}
+(\byear{2016}).
+\doiurl{10.1109/CVPR.2016.90}
+\end{bchapter}
+\endbibitem
+
+%%% 3
+\bibitem[\protect\citeauthoryear{Tan and Le}{2019}]{tan2019efficientnet}
+\begin{bchapter}
+\bauthor{\bsnm{Tan}, \binits{M.}},
+\bauthor{\bsnm{Le}, \binits{Q.}}:
+\bctitle{{EfficientNet}: Rethinking model scaling for convolutional neural
+  networks}.
+In: \bbtitle{Proceedings of the 36th International Conference on Machine
+  Learning (ICML)}.
+\bsertitle{Proceedings of Machine Learning Research},
+vol. \bseriesno{97},
+pp. \bfpage{6105}--\blpage{6114}.
+\bpublisher{PMLR}, \blocation{???}
+(\byear{2019}).
+\doiurl{10.48550/arXiv.1905.11946}
+\end{bchapter}
+\endbibitem
+
+%%% 4
+\bibitem[\protect\citeauthoryear{Howard et~al.}{2019}]{howard2019mobilenetv3}
+\begin{bchapter}
+\bauthor{\bsnm{Howard}, \binits{A.}},
+\bauthor{\bsnm{Sandler}, \binits{M.}},
+\bauthor{\bsnm{Chu}, \binits{G.}},
+\bauthor{\bsnm{Chen}, \binits{L.-C.}},
+\bauthor{\bsnm{Chen}, \binits{B.}},
+\bauthor{\bsnm{Tan}, \binits{M.}},
+\bauthor{\bsnm{Wang}, \binits{W.}},
+\bauthor{\bsnm{Zhu}, \binits{Y.}},
+\bauthor{\bsnm{Pang}, \binits{R.}},
+\bauthor{\bsnm{Vasudevan}, \binits{V.}},
+\bauthor{\bsnm{Le}, \binits{Q.V.}},
+\bauthor{\bsnm{Adam}, \binits{H.}}:
+\bctitle{Searching for {MobileNetV3}}.
+In: \bbtitle{Proceedings of the IEEE/CVF International Conference on Computer
+  Vision (ICCV)},
+pp. \bfpage{1314}--\blpage{1324}
+(\byear{2019}).
+\doiurl{10.48550/arXiv.1905.02244}
+\end{bchapter}
+\endbibitem
+
+%%% 5
+\bibitem[\protect\citeauthoryear{Deng et~al.}{2009}]{deng2009imagenet}
+\begin{bchapter}
+\bauthor{\bsnm{Deng}, \binits{J.}},
+\bauthor{\bsnm{Dong}, \binits{W.}},
+\bauthor{\bsnm{Socher}, \binits{R.}},
+\bauthor{\bsnm{Li}, \binits{L.-J.}},
+\bauthor{\bsnm{Li}, \binits{K.}},
+\bauthor{\bsnm{Fei-Fei}, \binits{L.}}:
+\bctitle{{ImageNet}: A large-scale hierarchical image database}.
+In: \bbtitle{Proceedings of the IEEE Conference on Computer Vision and Pattern
+  Recognition (CVPR)},
+pp. \bfpage{248}--\blpage{255}.
+\bpublisher{IEEE}, \blocation{???}
+(\byear{2009}).
+\doiurl{10.1109/CVPR.2009.5206848}
+\end{bchapter}
+\endbibitem
+
+%%% 6
+\bibitem[\protect\citeauthoryear{Hadsell et~al.}{2006}]{hadsell2006contrastive}
+\begin{bchapter}
+\bauthor{\bsnm{Hadsell}, \binits{R.}},
+\bauthor{\bsnm{Chopra}, \binits{S.}},
+\bauthor{\bsnm{LeCun}, \binits{Y.}}:
+\bctitle{Dimensionality reduction by learning an invariant mapping}.
+In: \bbtitle{Proceedings of the IEEE Computer Society Conference on Computer
+  Vision and Pattern Recognition (CVPR)},
+vol. \bseriesno{2},
+pp. \bfpage{1735}--\blpage{1742}.
+\bpublisher{IEEE Computer Society}, \blocation{???}
+(\byear{2006}).
+\doiurl{10.1109/CVPR.2006.100}
+\end{bchapter}
+\endbibitem
+
+%%% 7
+\bibitem[\protect\citeauthoryear{Schroff et~al.}{2015}]{schroff2015facenet}
+\begin{bchapter}
+\bauthor{\bsnm{Schroff}, \binits{F.}},
+\bauthor{\bsnm{Kalenichenko}, \binits{D.}},
+\bauthor{\bsnm{Philbin}, \binits{J.}}:
+\bctitle{{FaceNet}: A unified embedding for face recognition and clustering}.
+In: \bbtitle{Proceedings of the IEEE Conference on Computer Vision and Pattern
+  Recognition (CVPR)},
+pp. \bfpage{815}--\blpage{823}
+(\byear{2015}).
+\doiurl{10.1109/CVPR.2015.7298682}
+\end{bchapter}
+\endbibitem
+
+%%% 8
+\bibitem[\protect\citeauthoryear{}{}]{iam}
+\begin{botherref}
+\url{https://fki.tic.heia-fr.ch/databases/iam-handwriting-database}.
+[Accessed 07-09-2026]
+\end{botherref}
+\endbibitem
+
+%%% 9
+\bibitem[\protect\citeauthoryear{}{}]{rimes}
+\begin{botherref}
+{R}{I}{M}{E}{S}-{L}ines: {H}andwritten {O}{C}{R} {L}ine-{L}evel {D}ataset ---
+  kaggle.com.
+\url{https://www.kaggle.com/datasets/chaimaourgani/handwritten2text-training-dataset}.
+[Accessed 07-09-2026]
+\end{botherref}
+\endbibitem
+
+%%% 10
+\bibitem[\protect\citeauthoryear{Ioffe and Szegedy}{2015}]{ioffe2015batchnorm}
+\begin{bchapter}
+\bauthor{\bsnm{Ioffe}, \binits{S.}},
+\bauthor{\bsnm{Szegedy}, \binits{C.}}:
+\bctitle{Batch normalization: Accelerating deep network training by reducing
+  internal covariate shift}.
+In: \bbtitle{Proceedings of the 32nd International Conference on Machine
+  Learning (ICML)}.
+\bsertitle{Proceedings of Machine Learning Research},
+vol. \bseriesno{37},
+pp. \bfpage{448}--\blpage{456}.
+\bpublisher{PMLR},
+\blocation{Lille, France}
+(\byear{2015}).
+\doiurl{10.48550/arXiv.1502.03167}
+\end{bchapter}
+\endbibitem
+
+%%% 11
+\bibitem[\protect\citeauthoryear{He and Garcia}{2009}]{he2009imbalanced}
+\begin{barticle}
+\bauthor{\bsnm{He}, \binits{H.}},
+\bauthor{\bsnm{Garcia}, \binits{E.A.}}:
+\batitle{Learning from imbalanced data}.
+\bjtitle{IEEE Transactions on Knowledge and Data Engineering}
+\bvolume{21}(\bissue{9}),
+\bfpage{1263}--\blpage{1284}
+(\byear{2009})
+\doiurl{10.1109/TKDE.2008.239}
+\end{barticle}
+\endbibitem
+
+%%% 12
+\bibitem[\protect\citeauthoryear{Loshchilov and
+  Hutter}{2019}]{loshchilov2019adamw}
+\begin{bchapter}
+\bauthor{\bsnm{Loshchilov}, \binits{I.}},
+\bauthor{\bsnm{Hutter}, \binits{F.}}:
+\bctitle{Decoupled weight decay regularization}.
+In: \bbtitle{International Conference on Learning Representations (ICLR)}
+(\byear{2019}).
+\doiurl{10.48550/arXiv.1711.05101}
+\end{bchapter}
+\endbibitem
+
+%%% 13
+\bibitem[\protect\citeauthoryear{Rosenblum
+  et~al.}{2024}]{rosenblum2024incorrect}
+\begin{barticle}
+\bauthor{\bsnm{Rosenblum}, \binits{M.}},
+\bauthor{\bsnm{Garrett}, \binits{B.L.}},
+\bauthor{\bsnm{Scurich}, \binits{N.}}, \betal:
+\batitle{Incorrect statistical reasoning in {Guyll} et al. leads to biased
+  claims about strength of forensic evidence}.
+\bjtitle{Proceedings of the National Academy of Sciences}
+(\byear{2024})
+\doiurl{10.1073/pnas.2315431121}
+\end{barticle}
+\endbibitem
+
+%%% 14
+\bibitem[\protect\citeauthoryear{Moszczynski}{2019}]{MOSZCZYNSKI2019e4}
+\begin{barticle}
+\bauthor{\bsnm{Moszczynski}, \binits{J.}}:
+\batitle{The multi-individuality of handwriting}.
+\bjtitle{Forensic Science International}
+\bvolume{294},
+\bfpage{4}--\blpage{10}
+(\byear{2019})
+\doiurl{10.1016/j.forsciint.2018.10.030}
+\end{barticle}
+\endbibitem
+
+\end{thebibliography}

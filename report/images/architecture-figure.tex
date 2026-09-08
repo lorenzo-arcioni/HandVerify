@@ -1,0 +1,192 @@
+% ============================================================
+% FIGURE 1: Overall Siamese Architecture
+% ============================================================
+\begin{tikzpicture}[
+    node distance=1.2cm and 2cm,
+    block/.style={rectangle, draw, thick, fill=white, minimum width=2.5cm, minimum height=1cm, align=center},
+    input/.style={rectangle, draw, thick, fill=black!5, minimum width=2cm, minimum height=1.5cm, align=center},
+    feature/.style={rectangle, draw, thick, fill=blue!10, minimum width=2cm, minimum height=0.8cm, align=center},
+    embedding/.style={rectangle, draw, thick, fill=green!10, minimum width=2cm, minimum height=0.8cm, align=center},
+    arrow/.style={-Stealth, thick},
+    shared/.style={<->, dashed, thick, gray},
+]
+
+% Twin Network 1
+\node[input] (img1) {$\mathbf{x}_1$\\{\small (1×H×W)}};
+\node[block, below=of img1] (enc1) {Backbone\\Encoder $f_\theta$};
+\node[feature, below=of enc1] (feat1) {$\mathbf{z}_1$\\{\scriptsize (feature\_dim)}};
+\node[block, below=of feat1] (proj1) {Projection\\Head $g_\phi$};
+\node[embedding, below=of proj1] (emb1) {$\mathbf{h}_1$\\{\scriptsize (128-d)}};
+
+% Twin Network 2
+\node[input, right=4cm of img1] (img2) {$\mathbf{x}_2$\\{\small (1×H×W)}};
+\node[block, below=of img2] (enc2) {Backbone\\Encoder $f_\theta$};
+\node[feature, below=of enc2] (feat2) {$\mathbf{z}_2$\\{\scriptsize (feature\_dim)}};
+\node[block, below=of feat2] (proj2) {Projection\\Head $g_\phi$};
+\node[embedding, below=of proj2] (emb2) {$\mathbf{h}_2$\\{\scriptsize (128-d)}};
+
+% Decision block
+\node[block, below=3cm of $(emb1)!0.5!(emb2)$, minimum width=3cm] (decision) {Decision\\Mechanism};
+\node[block, below=of decision, fill=black!10] (output) {$y \in \{0,1\}$};
+
+% Arrows
+\draw[arrow] (img1) -- (enc1);
+\draw[arrow] (enc1) -- (feat1);
+\draw[arrow] (feat1) -- (proj1);
+\draw[arrow] (proj1) -- (emb1);
+
+\draw[arrow] (img2) -- (enc2);
+\draw[arrow] (enc2) -- (feat2);
+\draw[arrow] (feat2) -- (proj2);
+\draw[arrow] (proj2) -- (emb2);
+
+\draw[arrow] (emb1) -- (decision);
+\draw[arrow] (emb2) -- (decision);
+\draw[arrow] (decision) -- (output);
+
+% Shared weights annotations
+\draw[shared] ([yshift=0.3cm]enc1.north) -- ([yshift=0.3cm]enc2.north) node[midway, above, font=\small] {shared $\theta$};
+\draw[shared] ([yshift=-0.3cm]proj1.south) -- ([yshift=-0.3cm]proj2.south) node[midway, below, font=\small] {shared $\phi$};
+
+% Backbone options annotation
+\node[above=0.1cm of img1.north west, anchor=south west, align=left, font=\scriptsize] {
+    \textbf{Backbones:}\\
+    ResNet18/34\\
+    EfficientNet-B0/B1\\
+    MobileNetV3-S/L
+};
+
+% Caption
+\node[below=0.5cm of output, align=center, font=\small] {
+    \textbf{(a)} Overall Siamese Architecture
+};
+
+\end{tikzpicture}
+
+\vspace{2cm}
+
+% ============================================================
+% FIGURE 2: Detailed Projection Head for BCE
+% ============================================================
+\begin{tikzpicture}[
+    node distance=0.6cm,
+    layer/.style={rectangle, draw, thick, minimum width=4.5cm, minimum height=0.7cm, align=left, font=\small},
+    concat/.style={rectangle, draw, thick, fill=yellow!15, minimum width=4.5cm, minimum height=0.7cm, align=left, font=\small},
+    operation/.style={font=\scriptsize, align=center},
+]
+
+% Input features
+\node[layer, fill=blue!10] (input) {Concatenated Features: $[\mathbf{z}_1; \mathbf{z}_2]$ \hfill {\scriptsize (feature\_dim $\times$ 2)}};
+
+% Layer 1
+\node[layer, below=of input, fill=white] (fc1) {FC Layer 1 \hfill {\scriptsize → 512}};
+\node[operation, right=0.3cm of fc1.east, anchor=west] (op1) {Linear\\BatchNorm\\ReLU\\Dropout(0.5)};
+
+% Layer 2
+\node[layer, below=of fc1, fill=white] (fc2) {FC Layer 2 \hfill {\scriptsize → 256}};
+\node[operation, right=0.3cm of fc2.east, anchor=west] (op2) {Linear\\BatchNorm\\ReLU\\Dropout(0.5)};
+
+% Layer 3
+\node[layer, below=of fc2, fill=white] (fc3) {FC Layer 3 \hfill {\scriptsize → 128}};
+\node[operation, right=0.3cm of fc3.east, anchor=west] (op3) {Linear\\BatchNorm\\ReLU\\Dropout(0.4)};
+
+% Layer 4
+\node[layer, below=of fc3, fill=white] (fc4) {FC Layer 4 \hfill {\scriptsize → 64}};
+\node[operation, right=0.3cm of fc4.east, anchor=west] (op4) {Linear\\BatchNorm\\ReLU\\Dropout(0.3)};
+
+% Layer 5
+\node[layer, below=of fc4, fill=white] (fc5) {FC Layer 5 \hfill {\scriptsize → 32}};
+\node[operation, right=0.3cm of fc5.east, anchor=west] (op5) {Linear\\BatchNorm\\ReLU\\Dropout(0.3)};
+
+% Output layer
+\node[layer, below=of fc5, fill=green!15] (output_layer) {Output Layer \hfill {\scriptsize → 1}};
+\node[operation, right=0.3cm of output_layer.east, anchor=west] (op6) {Linear\\Sigmoid};
+
+% Arrows
+\foreach \i/\j in {input/fc1, fc1/fc2, fc2/fc3, fc3/fc4, fc4/fc5, fc5/output_layer} {
+    \draw[-Stealth, thick] (\i) -- (\j);
+}
+
+% Output
+\node[layer, below=of output_layer, fill=black!10] (final) {Similarity Score: $s \in [0,1]$};
+\draw[-Stealth, thick] (output_layer) -- (final);
+
+% Title
+\node[above=0.3cm of input, font=\small\bfseries] {Projection Head Architecture (BCE Loss)};
+
+% Equation annotation
+\node[right=1.5cm of fc3, align=left, font=\scriptsize] (eq) {
+    $\mathbf{h}^{(l+1)} = \text{Dropout}($\\
+    \hspace{0.5cm}$\text{ReLU}($\\
+    \hspace{1cm}$\text{BN}(\mathbf{W}^{(l)}\mathbf{h}^{(l)} + \mathbf{b}^{(l)})))$
+};
+
+% Caption
+\node[below=0.3cm of final, align=center, font=\small] {
+    \textbf{(b)} Projection Head for Binary Cross-Entropy Loss
+};
+
+\end{tikzpicture}
+
+\vspace{2cm}
+
+% ============================================================
+% FIGURE 3: Detailed Projection Head for Contrastive/Triplet
+% ============================================================
+\begin{tikzpicture}[
+    node distance=0.6cm,
+    layer/.style={rectangle, draw, thick, minimum width=4.5cm, minimum height=0.7cm, align=left, font=\small},
+    operation/.style={font=\scriptsize, align=center},
+]
+
+% Input features
+\node[layer, fill=blue!10] (input) {Input Features: $\mathbf{z}$ \hfill {\scriptsize (feature\_dim)}};
+
+% Layer 1
+\node[layer, below=of input, fill=white] (fc1) {FC Layer 1 \hfill {\scriptsize → 1024}};
+\node[operation, right=0.3cm of fc1.east, anchor=west] (op1) {Linear\\BatchNorm\\ReLU\\Dropout(0.5)};
+
+% Layer 2
+\node[layer, below=of fc1, fill=white] (fc2) {FC Layer 2 \hfill {\scriptsize → 512}};
+\node[operation, right=0.3cm of fc2.east, anchor=west] (op2) {Linear\\BatchNorm\\ReLU\\Dropout(0.5)};
+
+% Layer 3
+\node[layer, below=of fc2, fill=white] (fc3) {FC Layer 3 \hfill {\scriptsize → 256}};
+\node[operation, right=0.3cm of fc3.east, anchor=west] (op3) {Linear\\BatchNorm\\ReLU\\Dropout(0.4)};
+
+% Output layer
+\node[layer, below=of fc3, fill=white] (fc4) {FC Layer 4 \hfill {\scriptsize → 128}};
+\node[operation, right=0.3cm of fc4.east, anchor=west] (op4) {Linear\\BatchNorm\\ReLU\\Dropout(0.3)};
+
+% Normalization
+\node[layer, below=of fc4, fill=orange!15] (norm) {L2 Normalization};
+
+% Output
+\node[layer, below=of norm, fill=green!15] (output_emb) {Embedding: $\mathbf{h} \in \mathbb{R}^{128}$ \hfill {\scriptsize $\|\mathbf{h}\|_2 = 1$}};
+
+% Arrows
+\foreach \i/\j in {input/fc1, fc1/fc2, fc2/fc3, fc3/fc4, fc4/norm, norm/output_emb} {
+    \draw[-Stealth, thick] (\i) -- (\j);
+}
+
+% Title
+\node[above=0.3cm of input, font=\small\bfseries] {Projection Head Architecture (Contrastive \& Triplet Loss)};
+
+% Similarity computation
+\node[below=1cm of output_emb] (sim_block) {};
+\node[layer, below=0.1cm of output_emb, minimum width=6cm] (similarity) {Distance Metric: $d(\mathbf{h}_1, \mathbf{h}_2) = \|\mathbf{h}_1 - \mathbf{h}_2\|_2$};
+
+% Equation annotation
+\node[right=1.5cm of fc2, align=left, font=\scriptsize] (eq) {
+    Graduated Dropout:\\
+    Layer 1,2: 0.5\\
+    Layer 3: 0.4\\
+    Layer 4: 0.3
+};
+
+% Caption
+\node[below=0.3cm of similarity, align=center, font=\small] {
+    \textbf{(c)} Projection Head for Contrastive and Triplet Loss
+};
+
+\end{tikzpicture}

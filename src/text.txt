@@ -1,0 +1,4217 @@
+-e 
+
+===== ./data/transforms.py =====
+
+from torchvision import transforms
+
+
+def get_train_transforms(target_size: int = 448, aug: bool = False):
+    """
+    Get training transforms, con augmentation opzionale.
+
+    Args:
+        target_size: Target image size
+        aug: se True, aggiunge augmentation geometriche e fotometriche
+             (oltre a RandomResizedCrop + RandomRotation gia' presenti).
+             Se False (default), comportamento invariato rispetto a prima.
+    Returns:
+        Composed transforms
+    """
+    base = [
+        transforms.RandomResizedCrop(target_size, scale=(0.9, 1.1)),
+        transforms.RandomRotation(15),
+    ]
+
+    if aug:
+        base += [
+            # --- Geometriche aggiuntive (leggere) ---
+            transforms.RandomAffine(
+                degrees=0,              # rotazione gia' gestita sopra
+                translate=(0.03, 0.03), # shift minimo
+                shear=5,                # taglio leggero
+            ),
+            # --- Fotometriche (leggere) ---
+            transforms.ColorJitter(
+                brightness=0.15,
+                contrast=0.15,
+            ),
+            transforms.RandomApply(
+                [transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 1.0))],
+                p=0.3,
+            ),
+        ]
+
+    base.append(transforms.ToTensor())
+    return transforms.Compose(base)
+
+
+def get_test_transforms(target_size: int = 448):
+    """
+    Get test/validation transforms (no augmentation).
+    Args:
+        target_size: Target image size
+    Returns:
+        Composed transforms
+    """
+    return transforms.Compose([
+        transforms.Resize((target_size, target_size)),
+        transforms.ToTensor()
+    ])-e 
+
+===== ./data/dataloader_factory.py =====
+
+# ============================================================================
+# dataloader_factory.py
+# ============================================================================
+
+import os
+import numpy as np
+import random
+import torch
+
+from .siamese_dataset import SiameseDataset
+from .triplet_dataset import TripletDataset
+from .contrastive_dataset import ContrastiveDataset
+
+from torch.utils.data import DataLoader
+from sklearn.model_selection import train_test_split, KFold
+
+"""
+DataLoader Factory
+Unified functions to create dataloaders for any dataset type.
+
+Split a 3 vie (train / val / test) sui writer:
+  - train: usato per il training vero e proprio
+  - val:   usato per l'early stopping / model selection durante il training
+  - test:  held-out, mai visto durante training o model selection.
+           Va usato SOLO per il report finale delle metriche, per evitare
+           che lo stesso set che sceglie il checkpoint migliore sia anche
+           quello su cui si dichiarano i risultati (bias di selezione).
+"""
+
+
+def _list_writer_dirs(data_root: str):
+    return [
+        os.path.join(data_root, d)
+        for d in sorted(os.listdir(data_root))
+        if os.path.isdir(os.path.join(data_root, d))
+    ]
+
+
+def _worker_init_fn(worker_id):
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+
+
+def _make_loader(dataset, batch_size, shuffle, num_workers, random_state, drop_last=False):
+    if dataset is None:
+        return None
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        num_workers=num_workers,
+        worker_init_fn=_worker_init_fn,
+        generator=torch.Generator().manual_seed(random_state),
+        pin_memory=True,
+        drop_last=drop_last,
+    )
+
+
+def create_dataloaders(
+    dataset_class,
+    data_root: str,
+    batch_size: int = 16,
+    num_workers: int = 4,
+    val_size: float = 0.15,
+    test_size: float = 0.15,
+    target_size: int = 448,
+    random_state: int = 42,
+    **dataset_kwargs
+):
+    """
+    Split a 3 vie (train/val/test) sui writer, stesso dominio dati.
+
+    Args:
+        dataset_class: Dataset class da istanziare (SiameseDataset, etc.)
+        data_root: Directory radice con le sottocartelle per writer
+        batch_size: Batch size
+        num_workers: Numero di worker
+        val_size: Frazione di writer riservata a validation (early stopping)
+        test_size: Frazione di writer riservata a test (held-out, report finale)
+        target_size: Dimensione immagine
+        random_state: Seed
+        **dataset_kwargs: Argomenti aggiuntivi per il costruttore del dataset
+
+    Returns:
+        (train_loader, val_loader, test_loader,
+         train_dataset, val_dataset, test_dataset)
+
+        Un loader/dataset è None se la relativa frazione è 0.0.
+    """
+    if val_size < 0 or test_size < 0 or (val_size + test_size) >= 1.0:
+        raise ValueError(
+            f"val_size ({val_size}) + test_size ({test_size}) deve essere < 1.0 "
+            f"per lasciare una porzione di dati al training."
+        )
+
+    writer_dirs = _list_writer_dirs(data_root)
+
+    holdout_size = val_size + test_size
+    if holdout_size == 0.0:
+        train_dirs, val_dirs, test_dirs = writer_dirs, [], []
+    else:
+        train_dirs, temp_dirs = train_test_split(
+            writer_dirs, test_size=holdout_size, random_state=random_state
+        )
+        if val_size == 0.0:
+            val_dirs, test_dirs = [], temp_dirs
+        elif test_size == 0.0:
+            val_dirs, test_dirs = temp_dirs, []
+        else:
+            rel_test = test_size / holdout_size
+            val_dirs, test_dirs = train_test_split(
+                temp_dirs, test_size=rel_test, random_state=random_state
+            )
+
+    train_dataset = dataset_class(
+        train_dirs, train=True, target_size=target_size, **dataset_kwargs
+    ) if train_dirs else None
+
+    val_dataset = dataset_class(
+        val_dirs, train=False, target_size=target_size, **dataset_kwargs
+    ) if val_dirs else None
+
+    test_dataset = dataset_class(
+        test_dirs, train=False, target_size=target_size, **dataset_kwargs
+    ) if test_dirs else None
+
+    train_loader = _make_loader(train_dataset, batch_size, True, num_workers,
+                                 random_state, drop_last=True)
+    val_loader = _make_loader(val_dataset, batch_size, False, num_workers, random_state)
+    test_loader = _make_loader(test_dataset, batch_size, False, num_workers, random_state)
+
+    return train_loader, val_loader, test_loader, train_dataset, val_dataset, test_dataset
+
+
+def create_cross_dataset_dataloaders(
+    dataset_class,
+    train_root: str,
+    target_root: str,
+    batch_size: int = 16,
+    num_workers: int = 4,
+    val_size: float = 0.5,
+    target_size: int = 448,
+    random_state: int = 42,
+    **dataset_kwargs
+):
+    """
+    Split per esperimenti cross-dataset: tutti i writer di train_root vanno
+    in training; i writer di target_root vengono divisi in val (early
+    stopping) e test (held-out, report finale), così il test set del
+    dominio target resta comunque mai visto prima della valutazione finale.
+
+    Args:
+        dataset_class: Dataset class da istanziare
+        train_root: Directory radice del dominio di training (usato per intero)
+        target_root: Directory radice del dominio target, diviso in val/test
+        batch_size: Batch size
+        num_workers: Numero di worker
+        val_size: Frazione dei writer di target_root riservata a val
+                  (il resto, 1 - val_size, va a test)
+        target_size: Dimensione immagine
+        random_state: Seed
+        **dataset_kwargs: Argomenti aggiuntivi per il costruttore del dataset
+
+    Returns:
+        (train_loader, val_loader, test_loader,
+         train_dataset, val_dataset, test_dataset)
+    """
+    if not (0.0 < val_size < 1.0):
+        raise ValueError(f"val_size deve essere strettamente tra 0 e 1, ricevuto {val_size}")
+
+    train_dirs = _list_writer_dirs(train_root)
+    target_dirs = _list_writer_dirs(target_root)
+
+    val_dirs, test_dirs = train_test_split(
+        target_dirs, test_size=(1.0 - val_size), random_state=random_state
+    )
+
+    train_dataset = dataset_class(
+        train_dirs, train=True, target_size=target_size, **dataset_kwargs
+    )
+    val_dataset = dataset_class(
+        val_dirs, train=False, target_size=target_size, **dataset_kwargs
+    )
+    test_dataset = dataset_class(
+        test_dirs, train=False, target_size=target_size, **dataset_kwargs
+    )
+
+    train_loader = _make_loader(train_dataset, batch_size, True, num_workers,
+                                 random_state, drop_last=True)
+    val_loader = _make_loader(val_dataset, batch_size, False, num_workers, random_state)
+    test_loader = _make_loader(test_dataset, batch_size, False, num_workers, random_state)
+
+    return train_loader, val_loader, test_loader, train_dataset, val_dataset, test_dataset
+
+
+def create_kfold_dataloaders(
+    dataset_class,
+    data_root: str,
+    n_splits: int = 5,
+    current_fold: int = 0,
+    batch_size: int = 16,
+    num_workers: int = 4,
+    target_size: int = 448,
+    random_state: int = 42,
+    **dataset_kwargs
+):
+    """
+    Generic K-Fold dataloader creator.
+
+    Args:
+        dataset_class: Dataset class to instantiate
+        data_root: Root directory with writer subdirectories
+        n_splits: Number of folds
+        current_fold: Current fold index (0 to n_splits-1)
+        batch_size: Batch size
+        num_workers: Number of workers
+        target_size: Image size
+        random_state: Random seed
+        **dataset_kwargs: Additional args for dataset constructor
+
+    Returns:
+        (train_loader, val_loader, train_dataset, val_dataset)
+    """
+    # Get writer directories
+    writer_dirs = _list_writer_dirs(data_root)
+
+    # K-Fold split
+    kfold = KFold(n_splits=n_splits, shuffle=True, random_state=random_state)
+    splits = list(kfold.split(writer_dirs))
+    train_idx, val_idx = splits[current_fold]
+
+    train_dirs = [writer_dirs[i] for i in train_idx]
+    val_dirs = [writer_dirs[i] for i in val_idx]
+
+    # Create datasets
+    train_dataset = dataset_class(
+        train_dirs,
+        train=True,
+        target_size=target_size,
+        **dataset_kwargs
+    )
+
+    val_dataset = dataset_class(
+        val_dirs,
+        train=False,
+        target_size=target_size,
+        **dataset_kwargs
+    )
+
+    # Create dataloaders
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
+        drop_last=True
+    )
+
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True
+    )
+
+    return train_loader, val_loader, train_dataset, val_dataset
+
+
+# ============================================================================
+# Convenience wrappers (backward compatibility)
+# ============================================================================
+
+# Siamese
+def create_siamese_dataloaders(*args, **kwargs):
+    """Create Siamese dataloaders (train/val/test, stesso dominio)."""
+    return create_dataloaders(SiameseDataset, *args, **kwargs)
+
+def create_siamese_cross_dataset_dataloaders(*args, **kwargs):
+    """Create Siamese dataloaders (train/val/test, cross-dataset)."""
+    return create_cross_dataset_dataloaders(SiameseDataset, *args, **kwargs)
+
+def create_siamese_kfold_dataloaders(*args, **kwargs):
+    """Create Siamese K-Fold dataloaders."""
+    return create_kfold_dataloaders(SiameseDataset, *args, **kwargs)
+
+
+# Contrastive
+def create_contrastive_dataloaders(*args, **kwargs):
+    """Create Contrastive dataloaders (train/val/test, stesso dominio)."""
+    return create_dataloaders(ContrastiveDataset, *args, **kwargs)
+
+def create_contrastive_cross_dataset_dataloaders(*args, **kwargs):
+    """Create Contrastive dataloaders (train/val/test, cross-dataset)."""
+    return create_cross_dataset_dataloaders(ContrastiveDataset, *args, **kwargs)
+
+def create_contrastive_kfold_dataloaders(*args, **kwargs):
+    """Create Contrastive K-Fold dataloaders."""
+    return create_kfold_dataloaders(ContrastiveDataset, *args, **kwargs)
+
+
+# Triplet
+def create_triplet_dataloaders(*args, **kwargs):
+    """Create Triplet dataloaders (train/val/test, stesso dominio)."""
+    return create_dataloaders(TripletDataset, *args, **kwargs)
+
+def create_triplet_cross_dataset_dataloaders(*args, **kwargs):
+    """Create Triplet dataloaders (train/val/test, cross-dataset)."""
+    return create_cross_dataset_dataloaders(TripletDataset, *args, **kwargs)
+
+def create_triplet_kfold_dataloaders(*args, **kwargs):
+    """Create Triplet K-Fold dataloaders."""
+    return create_kfold_dataloaders(TripletDataset, *args, **kwargs)-e 
+
+===== ./data/siamese_dataset.py =====
+
+# ============================================================================
+# siamese_dataset.py
+# ============================================================================
+from typing import List, Tuple
+import torch
+from .base_dataset import BaseWriterDataset
+
+class SiameseDataset(BaseWriterDataset):
+    """Dataset for Siamese network training (positive/negative pairs)."""
+    
+    def __init__(
+        self,
+        writer_dirs: List[str],
+        train: bool = True,
+        positive_ratio: float = 0.5,
+        target_size: int = 448,
+        resample_negatives_every_n_epochs: int = 1,
+    ):
+        print(f"\n{'='*60}")
+        print(f"Initializing {'TRAIN' if train else 'VAL'} Siamese Dataset")
+        print(f"{'='*60}")
+        print(f"  Writers: {len(writer_dirs)}")
+        print(f"  Positive ratio: {positive_ratio:.2f}")
+        print(f"  Resample negatives every: {resample_negatives_every_n_epochs} epoch(s)")
+        
+        super().__init__(
+            writer_dirs=writer_dirs,
+            train=train,
+            target_size=target_size,
+            positive_ratio=positive_ratio,
+            resample_negatives_every_n_epochs=resample_negatives_every_n_epochs
+        )
+    
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        img1_path, img2_path, label = self.samples[idx]
+        img1 = self._load_image(img1_path)
+        img2 = self._load_image(img2_path)
+        return img1, img2, torch.tensor(label, dtype=torch.float32)
+    
+    def get_validation_pair(self, idx: int) -> Tuple[str, str, float]:
+        """
+        Get a validation pair from samples.
+        For Siamese, samples already contain pairs in the correct format.
+        """
+        return self.samples[idx]-e 
+
+===== ./data/triplet_dataset.py =====
+
+# ============================================================================
+# triplet_dataset.py
+# ============================================================================
+from typing import List, Tuple
+import torch
+import random
+from itertools import combinations
+
+from .base_dataset import BaseWriterDataset
+
+
+class TripletDataset(BaseWriterDataset):
+    """Dataset for Triplet network training."""
+    
+    def __init__(
+        self,
+        writer_dirs: List[str],
+        train: bool = True,
+        target_size: int = 448,
+        resample_negatives_every_n_epochs: int = 1,
+        positive_ratio: float = 0.5,  # For validation pairs
+        random_seed: int = 42
+    ):
+        print(f"\n{'='*60}")
+        print(f"Initializing {'TRAIN' if train else 'VAL'} Triplet Dataset")
+        print(f"{'='*60}")
+        print(f"  Writers: {len(writer_dirs)}")
+        print(f"  Resample negatives every: {resample_negatives_every_n_epochs} epoch(s)")
+
+        self.resample_negatives_every_n_epochs = resample_negatives_every_n_epochs
+        self.writer_dirs = writer_dirs
+        self.train = train
+        self.target_size = target_size
+        self.positive_ratio = positive_ratio
+        self.current_epoch = 0
+        self.random_seed = random_seed
+        
+        from .transforms import get_train_transforms, get_test_transforms
+        self.transform = (get_train_transforms(target_size) if train 
+                         else get_test_transforms(target_size))
+        
+        self.writer_images = self._load_writer_images()
+        self.writer_ids = list(self.writer_images.keys())
+        
+        # Genera tutte le genuine pairs (base per le triple E per validation)
+        self.all_genuine_pairs = self._generate_all_genuine_pairs()
+        print(f"  Generated {len(self.all_genuine_pairs)} genuine pairs (base for triplets)")
+        
+        # Pool di immagini negative per writer
+        self._create_negative_pool()
+        
+        # Genera le triple iniziali per training
+        self._resample_triplets()
+        
+        # Crea validation pairs (FIXED, non cambiano ad ogni epoca)
+        self._create_validation_pairs()
+    
+    def _load_writer_images(self) -> dict:
+        """Load image paths for each writer."""
+        from pathlib import Path
+        import os
+        
+        writer_images = {}
+        for writer_dir in self.writer_dirs:
+            writer_id = Path(writer_dir).name
+            images = [
+                os.path.join(writer_dir, f) 
+                for f in os.listdir(writer_dir) 
+                if f.lower().endswith(('.png', '.jpg', '.jpeg'))
+            ]
+            writer_images[writer_id] = images
+        return writer_images
+    
+    def _load_image(self, path: str) -> torch.Tensor:
+        """Load and transform a single image."""
+        from PIL import Image
+        img = Image.open(path).convert("L")
+        return self.transform(img)
+    
+    def _generate_all_genuine_pairs(self) -> List[Tuple[str, str, str]]:
+        """
+        Genera TUTTE le coppie genuine possibili (stesso writer).
+        Returns: Lista di (writer_id, img1_path, img2_path)
+        """
+        multi_image_writers = [w for w in self.writer_ids 
+                              if len(self.writer_images[w]) >= 2]
+        
+        genuine_pairs = []
+        for writer_id in multi_image_writers:
+            images = self.writer_images[writer_id]
+            for img1, img2 in combinations(images, 2):
+                genuine_pairs.append((writer_id, img1, img2))
+        
+        return genuine_pairs
+    
+    def _create_negative_pool(self):
+        """Crea un pool di immagini negative per ogni writer."""
+        self.negative_pool = {
+            writer_id: [
+                img
+                for other_id, images in self.writer_images.items()
+                if other_id != writer_id
+                for img in images
+            ]
+            for writer_id in self.writer_ids
+        }
+    
+    def _resample_triplets(self, epoch: int = 0):
+        """Genera le triple campionando casualmente i negativi dal pool."""
+        self.triplets = []
+        
+        for writer_id, anchor_path, positive_path in self.all_genuine_pairs:
+
+            epoch_rng = random.Random(self.random_seed + epoch)
+            
+            # Campiona un'immagine negativa casuale da un altro writer
+            negative_path = epoch_rng.choice(self.negative_pool[writer_id])
+            self.triplets.append((anchor_path, positive_path, negative_path))
+        
+        # Shuffle per randomizzare l'ordine
+        random.shuffle(self.triplets)
+        
+        print(f"  Generated {len(self.triplets)} triplets")
+    
+    def _create_validation_pairs(self):
+        """
+        Crea pairs (img1, img2, label) per validation comprehensive.
+        Usa tutte le genuine + campiona impostors per mantenere positive_ratio.
+        """
+        # Genuine pairs (tutte)
+        genuine_samples = [(img1, img2, 1.0) for _, img1, img2 in self.all_genuine_pairs]
+        
+        # Genera tutte le possibili impostor pairs
+        all_impostor_pairs = []
+        for w1, w2 in combinations(self.writer_ids, 2):
+            for img1 in self.writer_images[w1]:
+                for img2 in self.writer_images[w2]:
+                    all_impostor_pairs.append((img1, img2))
+        
+        # Calcola quanti impostors servono per mantenere positive_ratio
+        num_impostors_needed = int(
+            len(genuine_samples) * (1 - self.positive_ratio) / self.positive_ratio
+        )
+        
+        # Campiona impostors
+        if len(all_impostor_pairs) <= num_impostors_needed:
+            impostor_samples = [(img1, img2, 0.0) for img1, img2 in all_impostor_pairs]
+        else:
+            sampled_impostors = random.sample(all_impostor_pairs, num_impostors_needed)
+            impostor_samples = [(img1, img2, 0.0) for img1, img2 in sampled_impostors]
+        
+        # Combina e shuffla
+        self.validation_pairs = genuine_samples + impostor_samples
+        random.shuffle(self.validation_pairs)
+        
+        print(f"  Created {len(self.validation_pairs)} validation pairs "
+              f"({len(genuine_samples)} genuine + {len(impostor_samples)} impostor)")
+    
+    def on_epoch_end(self, epoch: int):
+        """
+        Chiamata alla fine di ogni epoca dal trainer.
+        Ricampiona i negativi se necessario.
+        
+        Args:
+            epoch: Numero dell'epoca appena completata (0-indexed)
+        """
+        if self.resample_negatives_every_n_epochs == 0:
+            # Disabilitato
+            return
+        
+        if (epoch + 1) % self.resample_negatives_every_n_epochs == 0:
+            print(f"\n🔄 Resampling triplet negatives for next epoch...")
+            self._resample_triplets(epoch + 1)
+    
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Get a triplet (anchor, positive, negative) for training."""
+        anchor_path, positive_path, negative_path = self.triplets[idx]
+        anchor = self._load_image(anchor_path)
+        positive = self._load_image(positive_path)
+        negative = self._load_image(negative_path)
+        return anchor, positive, negative
+    
+    def __len__(self) -> int:
+        return len(self.triplets)
+    
+    def get_validation_pair(self, idx: int) -> Tuple[str, str, float]:
+        """
+        Get a validation pair for comprehensive evaluation.
+        
+        For TripletDataset, this returns pairs from validation_pairs which are
+        created once during initialization and remain fixed.
+        
+        Args:
+            idx: Index of the validation pair
+            
+        Returns:
+            Tuple of (img1_path, img2_path, label)
+        """
+        return self.validation_pairs[idx]-e 
+
+===== ./data/__init__.py =====
+
+# src/data/__init__.py
+"""
+Data module - Refactored with modular structure
+"""
+
+from .base_dataset import BaseWriterDataset
+from .siamese_dataset import SiameseDataset
+from .contrastive_dataset import ContrastiveDataset
+from .triplet_dataset import TripletDataset
+
+from .dataloader_factory import (
+    create_dataloaders,
+    create_cross_dataset_dataloaders,
+    create_kfold_dataloaders,
+    # Convenience wrappers - Siamese
+    create_siamese_dataloaders,
+    create_siamese_cross_dataset_dataloaders,
+    create_siamese_kfold_dataloaders,
+    # Convenience wrappers - Contrastive
+    create_contrastive_dataloaders,
+    create_contrastive_cross_dataset_dataloaders,
+    create_contrastive_kfold_dataloaders,
+    # Convenience wrappers - Triplet
+    create_triplet_dataloaders,
+    create_triplet_cross_dataset_dataloaders,
+    create_triplet_kfold_dataloaders,
+)
+
+from .transforms import get_train_transforms, get_test_transforms
+
+__all__ = [
+    # Base class
+    'BaseWriterDataset',
+
+    # Dataset classes
+    'SiameseDataset',
+    'ContrastiveDataset',
+    'TripletDataset',
+
+    # Generic factory functions
+    'create_dataloaders',                  # train/val/test, stesso dominio
+    'create_cross_dataset_dataloaders',    # train/val/test, cross-dataset
+    'create_kfold_dataloaders',
+
+    # Type-specific convenience functions (backward compatibility)
+    'create_siamese_dataloaders',
+    'create_siamese_cross_dataset_dataloaders',
+    'create_siamese_kfold_dataloaders',
+    'create_contrastive_dataloaders',
+    'create_contrastive_cross_dataset_dataloaders',
+    'create_contrastive_kfold_dataloaders',
+    'create_triplet_dataloaders',
+    'create_triplet_cross_dataset_dataloaders',
+    'create_triplet_kfold_dataloaders',
+
+    # Transforms
+    'get_train_transforms',
+    'get_test_transforms',
+]-e 
+
+===== ./data/base_dataset.py =====
+
+"""
+Base Dataset Classes
+Provides common functionality for all dataset types.
+"""
+
+import os
+import random
+from pathlib import Path
+from typing import List, Tuple, Union
+from abc import ABC, abstractmethod
+from itertools import combinations, product
+
+import torch
+from torch.utils.data import Dataset
+from PIL import Image
+
+from .transforms import get_train_transforms, get_test_transforms
+
+
+class BaseWriterDataset(Dataset, ABC):
+    def __init__(
+        self,
+        writer_dirs: List[str],
+        train: bool = True,
+        target_size: int = 448,
+        positive_ratio: float = 0.5,
+        resample_negatives_every_n_epochs: int = 1,
+        random_seed: int = 42
+    ):
+        """
+        Args:
+            writer_dirs: Lista di directory degli writers
+            train: Se True, applica augmentation
+            target_size: Dimensione target delle immagini
+            positive_ratio: Rapporto genuine/(genuine+impostors)
+            resample_negatives_every_n_epochs: Ogni quante epoche ricampionare i negativi
+                                               (0 = mai, 1 = ogni epoca, N = ogni N epoche)
+        """
+        self.writer_dirs = writer_dirs
+        self.train = train
+        self.target_size = target_size
+        self.positive_ratio = positive_ratio
+        self.resample_negatives_every_n_epochs = resample_negatives_every_n_epochs
+        self.random_seed = random_seed
+        
+        self.transform = (get_train_transforms(target_size) if train 
+                         else get_test_transforms(target_size))
+        
+        self.writer_images = self._load_writer_images()
+        self.writer_ids = sorted(list(self.writer_images.keys()))
+        
+        # Genera tutte le genuine (rimangono fisse)
+        self.all_genuine_pairs = self._generate_all_genuine_pairs()
+        
+        # Genera TUTTE le possibili impostors (pool completo)
+        self.all_impostor_pairs = self._generate_all_impostor_pairs()
+        
+        print(f"  Generated {len(self.all_genuine_pairs)} genuine pairs (fixed)")
+        print(f"  Generated {len(self.all_impostor_pairs)} total impostor pairs (pool)")
+        
+        # Numero di impostors necessari per mantenere il positive_ratio
+        self.num_impostors_needed = int(
+            len(self.all_genuine_pairs) * (1 - positive_ratio) / positive_ratio
+        )
+        
+        # Campiona i negativi iniziali
+        self.current_impostor_pairs = []
+        self.current_epoch = 0
+        self._resample_negatives()
+    
+    def _load_writer_images(self) -> dict:
+        """Load image paths for each writer."""
+        writer_images = {}
+        
+        for writer_dir in self.writer_dirs:
+            writer_id = Path(writer_dir).name
+            images = [
+                os.path.join(writer_dir, f) 
+                for f in os.listdir(writer_dir) 
+                if f.lower().endswith(('.png', '.jpg', '.jpeg'))
+            ]
+            writer_images[writer_id] = images
+            
+        return writer_images
+    
+    def _load_image(self, path: str) -> torch.Tensor:
+        """Load and transform a single image."""
+        img = Image.open(path).convert("L")
+        return self.transform(img)
+    
+    def _generate_all_genuine_pairs(self) -> List[Tuple[str, str, str]]:
+        """
+        Genera TUTTE le coppie genuine possibili (stesso writer).
+        Returns: Lista di (writer_id, img1_path, img2_path)
+        """
+        multi_image_writers = [w for w in self.writer_ids 
+                              if len(self.writer_images[w]) >= 2]
+        
+        genuine_pairs = []
+        for writer_id in multi_image_writers:
+            images = self.writer_images[writer_id]
+            for img1, img2 in combinations(images, 2):
+                genuine_pairs.append((writer_id, img1, img2))
+        
+        return genuine_pairs
+    
+    def _generate_all_impostor_pairs(self) -> List[Tuple[str, str]]:
+        """
+        Genera TUTTE le coppie impostors possibili (writers diversi).
+        Returns: Lista di (img1_path, img2_path)
+        """
+        impostor_pairs = []
+        
+        for w1, w2 in combinations(self.writer_ids, 2):
+            for img1 in self.writer_images[w1]:
+                for img2 in self.writer_images[w2]:
+                    impostor_pairs.append((img1, img2))
+        
+        return impostor_pairs
+    
+    def _resample_negatives(self, epoch: int = 0):
+        """
+        Ricampiona casualmente un subset di impostors dal pool completo.
+        Mantiene il positive_ratio desiderato.
+        """
+        if len(self.all_impostor_pairs) <= self.num_impostors_needed:
+            # Se abbiamo meno impostors disponibili di quelli necessari, usali tutti
+            self.current_impostor_pairs = self.all_impostor_pairs.copy()
+        else:
+            epoch_rng = random.Random(self.random_seed + epoch)
+
+            # Campiona random un subset
+            self.current_impostor_pairs = epoch_rng.sample(
+                self.all_impostor_pairs, 
+                self.num_impostors_needed
+            )
+        
+        print(f"  Sampled {len(self.current_impostor_pairs)} impostors from pool of {len(self.all_impostor_pairs)}")
+        
+        # Crea il dataset completo per questa epoca
+        self._create_current_samples()
+    
+    def _create_current_samples(self):
+        """
+        Crea il dataset attuale combinando genuine fisse + impostors campionati.
+        """
+        # Genuine (sempre tutte)
+        genuine_samples = [(img1, img2, 1.0) for _, img1, img2 in self.all_genuine_pairs]
+        
+        # Impostors (campionati)
+        impostor_samples = [(img1, img2, 0.0) for img1, img2 in self.current_impostor_pairs]
+        
+        # Combina e shuffla
+        self.samples = genuine_samples + impostor_samples
+        random.shuffle(self.samples)
+        
+        actual_ratio = len(genuine_samples) / len(self.samples) * 100
+        print(f"  Created epoch dataset: {len(genuine_samples)} genuine + {len(impostor_samples)} impostors")
+        print(f"  Actual positive ratio: {actual_ratio:.1f}%")
+    
+    def on_epoch_end(self, epoch: int):
+        """
+        Chiamata alla fine di ogni epoca dal trainer.
+        Ricampiona i negativi se necessario.
+        
+        Args:
+            epoch: Numero dell'epoca appena completata (0-indexed)
+        """
+        if self.resample_negatives_every_n_epochs == 0:
+            # Disabilitato
+            return
+        
+        if (epoch + 1) % self.resample_negatives_every_n_epochs == 0:
+            print(f"\n🔄 Resampling negatives for next epoch...")
+            self._resample_negatives(epoch + 1)
+    
+    def __len__(self) -> int:
+        return len(self.samples)
+    
+    @abstractmethod
+    def __getitem__(self, idx: int):
+        """Generate a sample (must be implemented by subclasses)."""
+        pass
+    
+    @abstractmethod
+    def get_validation_pair(self, idx: int) -> Tuple[str, str, float]:
+        """
+        Get a validation pair for comprehensive evaluation.
+        
+        This method provides a consistent interface for validation across all dataset types.
+        Returns pairs in format (img1_path, img2_path, label) where label is 1.0 for 
+        genuine pairs and 0.0 for impostor pairs.
+        
+        Args:
+            idx: Index of the pair to retrieve
+            
+        Returns:
+            Tuple of (img1_path, img2_path, label)
+        """
+        pass-e 
+
+===== ./data/contrastive_dataset.py =====
+
+# ============================================================================
+# contrastive_dataset.py
+# ============================================================================
+from typing import List, Tuple
+import torch
+from .base_dataset import BaseWriterDataset
+
+
+class ContrastiveDataset(BaseWriterDataset):
+    """Dataset for Contrastive Learning (balanced 50/50 positive/negative)."""
+    
+    def __init__(
+        self,
+        writer_dirs: List[str],
+        train: bool = True,
+        target_size: int = 448,
+        positive_ratio: float = 0.5,
+        resample_negatives_every_n_epochs: int = 1,
+    ):
+        print(f"\n{'='*60}")
+        print(f"Initializing {'TRAIN' if train else 'VAL'} Contrastive Dataset")
+        print(f"{'='*60}")
+        print(f"  Writers: {len(writer_dirs)}")
+        print(f"  Positive ratio: {positive_ratio:.2f}")
+        print(f"  Resample negatives every: {resample_negatives_every_n_epochs} epoch(s)")
+        
+        super().__init__(
+            writer_dirs=writer_dirs,
+            train=train,
+            target_size=target_size,
+            positive_ratio=positive_ratio,
+            resample_negatives_every_n_epochs=resample_negatives_every_n_epochs
+        )
+    
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        img1_path, img2_path, label = self.samples[idx]
+        img1 = self._load_image(img1_path)
+        img2 = self._load_image(img2_path)
+        return img1, img2, torch.tensor(label, dtype=torch.float32)
+    
+    def get_validation_pair(self, idx: int) -> Tuple[str, str, float]:
+        """
+        Get a validation pair from samples.
+        For Contrastive, samples already contain pairs in the correct format.
+        """
+        return self.samples[idx]-e 
+
+===== ./evaluation/metrics.py =====
+
+"""
+Evaluation Metrics for Writer Verification
+Comprehensive metrics including classification and biometric verification.
+"""
+
+import numpy as np
+from sklearn.metrics import (
+    accuracy_score, precision_score, recall_score, f1_score,
+    roc_curve, auc
+)
+from typing import Dict, Tuple
+
+def compute_metrics(
+    genuine_vals: np.ndarray,
+    impostor_vals: np.ndarray,
+    distances_are_similarity: bool = False
+) -> Dict[str, float]:
+    """
+    Compute comprehensive verification metrics for biometric verification systems.
+
+    Args:
+        genuine_vals (np.ndarray):
+            Genuine pair values.
+            - If distances_are_similarity=False → distances (lower = more similar)
+            - If distances_are_similarity=True  → similarity scores (higher = more similar)
+
+        impostor_vals (np.ndarray):
+            Impostor pair values (same convention as genuine_vals)
+
+        distances_are_similarity (bool):
+            True  → values are similarity scores (e.g. BCE, cosine similarity)
+            False → values are distances (e.g. Euclidean, contrastive, triplet)
+
+    Returns:
+        Dict[str, float]:
+            Contains ROC/AUC, EER, classification metrics, FAR/FRR operating points,
+            d-prime, decidability index, and raw distributions.
+    """
+
+    # ------------------------------------------------------------------
+    # 1. Ground truth
+    # ------------------------------------------------------------------
+    y_true = np.array(
+        [1] * len(genuine_vals) +
+        [0] * len(impostor_vals)
+    )
+
+    # ------------------------------------------------------------------
+    # 2. Convert EVERYTHING to similarity scores for ROC & classification
+    #    (higher score = more genuine)
+    # ------------------------------------------------------------------
+    if distances_are_similarity:
+        genuine_scores = genuine_vals
+        impostor_scores = impostor_vals
+    else:
+        genuine_scores = -genuine_vals
+        impostor_scores = -impostor_vals
+
+    y_scores = np.concatenate([genuine_scores, impostor_scores])
+
+    # ------------------------------------------------------------------
+    # 3. ROC / AUC
+    # ------------------------------------------------------------------
+    fpr, tpr, thresholds = roc_curve(y_true, y_scores)
+    roc_auc = auc(fpr, tpr)
+
+    # ------------------------------------------------------------------
+    # 4. Equal Error Rate (EER)
+    # ------------------------------------------------------------------
+    fnr = 1 - tpr
+    eer_idx = np.argmin(np.abs(fpr - fnr))
+    eer = (fpr[eer_idx] + fnr[eer_idx]) / 2
+    eer_threshold = thresholds[eer_idx]
+
+    # ------------------------------------------------------------------
+    # 5. Classification metrics @ EER threshold
+    # ------------------------------------------------------------------
+    y_pred = (y_scores >= eer_threshold).astype(int)
+
+    cls_metrics = {
+        "accuracy": accuracy_score(y_true, y_pred),
+        "precision": precision_score(y_true, y_pred, zero_division=0),
+        "recall": recall_score(y_true, y_pred, zero_division=0),
+        "f1": f1_score(y_true, y_pred, zero_division=0),
+    }
+
+    # ------------------------------------------------------------------
+    # 6. FAR operating points
+    # ------------------------------------------------------------------
+    # DA CHIARIRE BENE
+    operating_points = {}
+
+    for far_target in [0.001, 0.01]:
+        key_prefix = f"far_{far_target}"
+
+        # inizializza tutto a None
+        operating_points[f"{key_prefix}_effective"] = None
+        operating_points[f"frr_at_{key_prefix}"] = None
+        operating_points[f"gar_at_{key_prefix}"] = None
+        operating_points[f"threshold_at_{key_prefix}"] = None
+
+        # cerca soglie che rispettano FAR <= target
+        valid_idxs = np.where(fpr <= far_target)[0]
+        if len(valid_idxs) == 0:
+            continue
+
+        idx = valid_idxs[-1]
+
+        far_eff = fpr[idx]
+        frr = fnr[idx]
+        gar = 1.0 - frr
+
+        operating_points[f"{key_prefix}_effective"] = far_eff
+        operating_points[f"frr_at_{key_prefix}"] = frr
+        operating_points[f"gar_at_{key_prefix}"] = gar
+        operating_points[f"threshold_at_{key_prefix}"] = thresholds[idx]
+
+    # ------------------------------------------------------------------
+    # 7. d-prime & decidability (computed on DISTANCES) ### DA CONTROLLARE
+    # ------------------------------------------------------------------
+    # mu_genuine / mu_impostor restano sulla STESSA scala di genuine_vals /
+    # impostor_vals (score grezzi, alto = piu' simile). Nessuna conversione
+    # in distanza: cosi' sono coerenti con i valori salvati e con
+    # calculate_biometric_metrics del notebook di analisi.
+    mu_g = np.mean(genuine_vals)
+    mu_i = np.mean(impostor_vals)
+
+    sigma_g = np.std(genuine_vals, ddof=1)
+    sigma_i = np.std(impostor_vals, ddof=1)
+
+    pooled_std = np.sqrt(0.5 * (sigma_g**2 + sigma_i**2))
+
+    if pooled_std > 0:
+        d_prime = (mu_g - mu_i) / pooled_std
+        decidability = abs(d_prime)
+    else:
+        d_prime = 0.0
+        decidability = 0.0
+
+    # ------------------------------------------------------------------
+    # 8. Collect metrics
+    # ------------------------------------------------------------------
+    metrics = {
+        # Primary
+        "auc": roc_auc,
+        "eer": eer,
+        "eer_threshold": eer_threshold,
+
+        # Classification
+        **cls_metrics,
+
+        # Discriminability
+        "d_prime": d_prime,
+        "decidability": decidability,
+
+        # Score statistics
+        "mu_genuine": mu_g,
+        "mu_impostor": mu_i,
+        "sigma_genuine": sigma_g,
+        "sigma_impostor": sigma_i,
+
+        # ROC curves
+        "fpr": fpr,
+        "tpr": tpr,
+        "thresholds": thresholds,
+
+        # Raw distributions (for plots)
+        "genuine_vals": genuine_vals,
+        "impostor_vals": impostor_vals,
+    }
+
+    metrics.update(operating_points)
+
+    return metrics
+
+def print_results(metrics: Dict[str, float], dataset_name: str = "Validation"):
+    """Print formatted verification results."""
+    print(f"\n{'='*70}")
+    print(f"VERIFICATION METRICS: {dataset_name}")
+    print(f"{'='*70}")
+    print(f"📊 PRIMARY METRICS:")
+    print(f"  EER (Equal Error Rate):     {metrics['eer']:.4f} ({metrics['eer']*100:.2f}%)")
+    print(f"  AUC-ROC:                     {metrics['auc']:.4f}")
+    
+    print(f"\n🎯 CLASSIFICATION METRICS (@ EER threshold):")
+    print(f"  Accuracy @ EER threshold:    {metrics['accuracy']:.4f}")
+    print(f"  Precision:                   {metrics['precision']:.4f}")
+    print(f"  Recall:                      {metrics['recall']:.4f}")
+    print(f"  F1-Score:                    {metrics['f1']:.4f}")
+    
+    print(f"\n📈 DISCRIMINABILITY:")
+    print(f"  d-prime (d'):                {metrics['d_prime']:.4f}")
+    print(f"  Decidability Index:          {metrics['decidability']:.4f}")
+    
+    print(f"\n📏 SCORE STATISTICS:")
+    print(f"  Genuine:  μ={metrics['mu_genuine']:.4f}, σ={metrics['sigma_genuine']:.4f}")
+    print(f"  Impostor: μ={metrics['mu_impostor']:.4f}, σ={metrics['sigma_impostor']:.4f}")
+    
+    print(f"\n⚙️ OPERATING POINTS:")
+    print(f"  EER Threshold:               {metrics['eer_threshold']:.4f}")
+
+    for far_target in [0.001, 0.01]:
+        key_prefix = f"far_{far_target}"
+
+        far_eff = metrics.get(f"{key_prefix}_effective")
+        frr = metrics.get(f"frr_at_{key_prefix}")
+        gar = metrics.get(f"gar_at_{key_prefix}")
+        thr = metrics.get(f"threshold_at_{key_prefix}")
+
+        print(f"\n  FAR Target = {far_target*100:.2f}%")
+
+        if far_eff is None:
+            print(f"    ❌ Operating point not reachable")
+        else:
+            print(f"    FAR (effective):           {far_eff*100:.4f}%")
+            print(f"    FRR @ FAR:                 {frr*100:.4f}%")
+            print(f"    GAR @ FAR:                 {gar*100:.4f}%")
+            print(f"    Threshold @ FAR:           {thr:.4f}")
+
+    print(f"{'='*70}\n")-e 
+
+===== ./evaluation/__init__.py =====
+
+"""
+Evaluation module
+Unified metrics and visualization for model evaluation.
+"""
+
+from .metrics import (
+    # Verification & classification metrics
+    compute_metrics,
+    print_results,
+)
+
+__all__ = [
+    # Metrics
+    'compute_metrics',
+    'print_results',
+]-e 
+
+===== ./models/utils.py =====
+
+"""
+Model Utilities
+Helper functions for model initialization and weight transfer.
+"""
+
+import torch
+import torch.nn as nn
+from typing import Union
+
+
+def adapt_conv_layer_for_grayscale(
+    conv_layer: nn.Conv2d,
+    target_in_channels: int = 1
+) -> nn.Conv2d:
+    """
+    Adapt a pretrained RGB convolutional layer for grayscale input.
+    
+    Transfers pretrained weights by averaging across RGB channels instead of
+    random initialization. This preserves learned low-level features.
+    
+    Args:
+        conv_layer: Pretrained Conv2d layer (typically with 3 input channels)
+        target_in_channels: Target number of input channels (default: 1 for grayscale)
+    
+    Returns:
+        New Conv2d layer with adapted weights
+        
+    Example:
+        >>> resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        >>> resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, target_in_channels=1)
+    """
+    
+    # If already the correct number of channels, return as-is
+    if conv_layer.in_channels == target_in_channels:
+        return conv_layer
+    
+    # Extract pretrained weights: [out_channels, in_channels, H, W]
+    pretrained_weights = conv_layer.weight.data
+    
+    # Average across input channels: [out_channels, 1, H, W]
+    # This preserves the learned edge/texture filters
+    adapted_weights = pretrained_weights.mean(dim=1, keepdim=True)
+    
+    # If target has more than 1 channel, repeat the averaged weights
+    if target_in_channels > 1:
+        adapted_weights = adapted_weights.repeat(1, target_in_channels, 1, 1)
+        # Normalize to maintain similar activation magnitudes
+        adapted_weights = adapted_weights / target_in_channels
+    
+    # Create new Conv2d layer with same architecture
+    new_conv = nn.Conv2d(
+        in_channels=target_in_channels,
+        out_channels=conv_layer.out_channels,
+        kernel_size=conv_layer.kernel_size,
+        stride=conv_layer.stride,
+        padding=conv_layer.padding,
+        dilation=conv_layer.dilation,
+        groups=conv_layer.groups,
+        bias=conv_layer.bias is not None,
+        padding_mode=conv_layer.padding_mode
+    )
+    
+    # Transfer adapted weights
+    new_conv.weight.data = adapted_weights
+    
+    # Transfer bias if present
+    if conv_layer.bias is not None:
+        new_conv.bias.data = conv_layer.bias.data.clone()
+    
+    return new_conv
+
+
+def adapt_model_for_grayscale(
+    model: nn.Module,
+    first_conv_path: str,
+    target_in_channels: int = 1
+) -> nn.Module:
+    """
+    Adapt a pretrained model's first convolutional layer for grayscale input.
+    
+    Supports nested module paths (e.g., 'features.0.0' for nested Sequential modules).
+    
+    Args:
+        model: Pretrained model
+        first_conv_path: Dot-separated path to first conv layer
+                        Examples: 'conv1', 'features.0.0', 'stem.0'
+        target_in_channels: Target number of input channels (default: 1)
+    
+    Returns:
+        Model with adapted first conv layer
+        
+    Examples:
+        >>> # Simple case: ResNet
+        >>> resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        >>> resnet = adapt_model_for_grayscale(resnet, 'conv1')
+        
+        >>> # Nested case: EfficientNet
+        >>> effnet = models.efficientnet_b0(weights=...)
+        >>> effnet = adapt_model_for_grayscale(effnet, 'features.0.0')
+    """
+    
+    # Navigate to parent module and get attribute name
+    path_parts = first_conv_path.split('.')
+    parent_module = model
+    
+    # Navigate to parent
+    for part in path_parts[:-1]:
+        parent_module = getattr(parent_module, part)
+    
+    # Get the conv layer
+    attr_name = path_parts[-1]
+    conv_layer = getattr(parent_module, attr_name)
+    
+    # Adapt and replace
+    adapted_conv = adapt_conv_layer_for_grayscale(conv_layer, target_in_channels)
+    setattr(parent_module, attr_name, adapted_conv)
+    
+    return model
+
+
+def print_weight_transfer_info(original_conv: nn.Conv2d, adapted_conv: nn.Conv2d):
+    """
+    Print information about weight transfer process.
+    
+    Args:
+        original_conv: Original pretrained conv layer
+        adapted_conv: Adapted conv layer
+    """
+    orig_shape = tuple(original_conv.weight.shape)
+    new_shape = tuple(adapted_conv.weight.shape)
+    
+    print(f"  ✓ Weight transfer: {orig_shape} → {new_shape}")
+    print(f"    Original channels: {original_conv.in_channels} (RGB)")
+    print(f"    Adapted channels:  {adapted_conv.in_channels} (Grayscale)")
+    print(f"    Method: Averaging across RGB channels")
+-e 
+
+===== ./models/contrastive_backbones.py =====
+
+"""
+Contrastive Network Backbones
+Implementation of various backbone architectures for contrastive learning.
+Updated with proper weight transfer from RGB to grayscale.
+"""
+
+import torch.nn as nn
+import torch.nn.functional as F
+from torchvision import models
+
+from .base import BaseContrastiveNetwork
+from .utils import adapt_conv_layer_for_grayscale
+
+
+class ContrastiveMobileNetV3Small(BaseContrastiveNetwork):
+    """Contrastive network based on MobileNetV3-Small"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        mobilenet = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
+        
+        # Adapt first conv with weight transfer
+        if in_channels != 3:
+            mobilenet.features[0][0] = adapt_conv_layer_for_grayscale(
+                mobilenet.features[0][0], in_channels
+            )
+        
+        encoder = nn.Sequential(
+            mobilenet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=576, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class ContrastiveMobileNetV3Large(BaseContrastiveNetwork):
+    """Contrastive network based on MobileNetV3-Large"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        mobilenet = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT)
+        
+        # Adapt first conv with weight transfer
+        if in_channels != 3:
+            mobilenet.features[0][0] = adapt_conv_layer_for_grayscale(
+                mobilenet.features[0][0], in_channels
+            )
+        
+        encoder = nn.Sequential(
+            mobilenet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=960, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class ContrastiveResNet18(BaseContrastiveNetwork):
+    """Contrastive network based on ResNet18"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        
+        # Adapt conv1 with weight transfer
+        if in_channels != 3:
+            resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
+        
+        encoder = nn.Sequential(
+            nn.Sequential(
+                resnet.conv1,
+                resnet.bn1,
+                resnet.relu,
+                resnet.maxpool,
+                resnet.layer1,
+                resnet.layer2,
+                resnet.layer3,
+                resnet.layer4,
+                resnet.avgpool
+            ),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=512, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class ContrastiveResNet34(BaseContrastiveNetwork):
+    """Contrastive network based on ResNet34"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        resnet = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
+        
+        # Adapt conv1 with weight transfer
+        if in_channels != 3:
+            resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
+        
+        encoder = nn.Sequential(
+            nn.Sequential(
+                resnet.conv1,
+                resnet.bn1,
+                resnet.relu,
+                resnet.maxpool,
+                resnet.layer1,
+                resnet.layer2,
+                resnet.layer3,
+                resnet.layer4,
+                resnet.avgpool
+            ),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=512, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class ContrastiveResNet50(BaseContrastiveNetwork):
+    """Contrastive network based on ResNet50"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        
+        # Adapt conv1 with weight transfer
+        if in_channels != 3:
+            resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
+        
+        encoder = nn.Sequential(
+            nn.Sequential(
+                resnet.conv1,
+                resnet.bn1,
+                resnet.relu,
+                resnet.maxpool,
+                resnet.layer1,
+                resnet.layer2,
+                resnet.layer3,
+                resnet.layer4,
+                resnet.avgpool
+            ),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=2048, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class ContrastiveEfficientNetB0(BaseContrastiveNetwork):
+    """Contrastive network based on EfficientNet-B0"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        effnet = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.DEFAULT)
+        
+        # Adapt first conv with weight transfer
+        if in_channels != 3:
+            effnet.features[0][0] = adapt_conv_layer_for_grayscale(
+                effnet.features[0][0], in_channels
+            )
+        
+        encoder = nn.Sequential(
+            effnet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=1280, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class ContrastiveEfficientNetB1(BaseContrastiveNetwork):
+    """Contrastive network based on EfficientNet-B1"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        effnet = models.efficientnet_b1(weights=models.EfficientNet_B1_Weights.DEFAULT)
+        
+        # Adapt first conv with weight transfer
+        if in_channels != 3:
+            effnet.features[0][0] = adapt_conv_layer_for_grayscale(
+                effnet.features[0][0], in_channels
+            )
+        
+        encoder = nn.Sequential(
+            effnet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=1280, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class ContrastiveDenseNet121(BaseContrastiveNetwork):
+    """Contrastive network based on DenseNet121"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        densenet = models.densenet121(weights=models.DenseNet121_Weights.DEFAULT)
+        
+        # Adapt first conv (conv0) with weight transfer
+        if in_channels != 3:
+            densenet.features.conv0 = adapt_conv_layer_for_grayscale(
+                densenet.features.conv0, in_channels
+            )
+        
+        encoder = nn.Sequential(
+            densenet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=1024, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+-e 
+
+===== ./models/registry.py =====
+
+"""
+Model Registry
+Central registry for all available model architectures (BCE, Contrastive, Triplet).
+Updated to support freeze_backbone_layers and dropout parameters.
+"""
+
+from typing import Dict, Type, Union
+from .base import BaseSiameseNetwork, BaseContrastiveNetwork, BaseTripletNetwork
+
+# Import BCE Siamese backbones
+from .bce_backbones import (
+    SiameseResNet18,
+    SiameseResNet34,
+    SiameseResNet50,
+    SiameseEfficientNetB0,
+    SiameseEfficientNetB1,
+    SiameseEfficientNetV2,
+    SiameseMobileNetV3Small,
+    SiameseMobileNetV3Large,
+    SiameseDenseNet121,
+    SiameseRegNetY400MF,
+)
+
+# Import Contrastive backbones
+from .contrastive_backbones import (
+    ContrastiveMobileNetV3Small,
+    ContrastiveMobileNetV3Large,
+    ContrastiveResNet18,
+    ContrastiveResNet34,
+    ContrastiveResNet50,
+    ContrastiveEfficientNetB0,
+    ContrastiveEfficientNetB1,
+    ContrastiveDenseNet121,
+)
+
+# Import Triplet backbones
+from .triplet_backbones import (
+    TripletMobileNetV3Small,
+    TripletMobileNetV3Large,
+    TripletResNet18,
+    TripletResNet34,
+    TripletResNet50,
+    TripletEfficientNetB0,
+    TripletEfficientNetB1
+)
+
+# ============================================================================
+# Model Registry organized by architecture type
+# ============================================================================
+
+BCE_MODELS: Dict[str, Type[BaseSiameseNetwork]] = {
+    # ResNet family
+    'resnet18': SiameseResNet18,
+    'resnet34': SiameseResNet34,
+    'resnet50': SiameseResNet50,
+    
+    # EfficientNet family
+    'efficientnet_b0': SiameseEfficientNetB0,
+    'efficientnet_b1': SiameseEfficientNetB1,
+    'efficientnet_v2': SiameseEfficientNetV2,
+    
+    # MobileNet family
+    'mobilenet_v3_small': SiameseMobileNetV3Small,
+    'mobilenet_v3_large': SiameseMobileNetV3Large,
+    
+    # DenseNet family
+    'densenet121': SiameseDenseNet121,
+    
+    # RegNet family
+    'regnet_y_400mf': SiameseRegNetY400MF,
+}
+
+CONTRASTIVE_MODELS: Dict[str, Type[BaseContrastiveNetwork]] = {
+    # MobileNet family
+    'mobilenet_v3_small': ContrastiveMobileNetV3Small,
+    'mobilenet_v3_large': ContrastiveMobileNetV3Large,
+    
+    # ResNet family
+    'resnet18': ContrastiveResNet18,
+    'resnet34': ContrastiveResNet34,
+    'resnet50': ContrastiveResNet50,
+    
+    # EfficientNet family
+    'efficientnet_b0': ContrastiveEfficientNetB0,
+    'efficientnet_b1': ContrastiveEfficientNetB1,
+    
+    # DenseNet family
+    'densenet121': ContrastiveDenseNet121,
+}
+
+TRIPLET_MODELS: Dict[str, Type[BaseTripletNetwork]] = {
+    # MobileNet family
+    'mobilenet_v3_small': TripletMobileNetV3Small,
+    'mobilenet_v3_large': TripletMobileNetV3Large,
+    
+    # ResNet family
+    'resnet18': TripletResNet18,
+    'resnet34': TripletResNet34,
+    'resnet50': TripletResNet50,
+    
+    # EfficientNet family
+    'efficientnet_b0': TripletEfficientNetB0,
+    'efficientnet_b1': TripletEfficientNetB1
+}
+
+
+# ============================================================================
+# Main API Functions
+# ============================================================================
+
+def get_model(
+    model_name: str,
+    model_type: str = 'bce',
+    freeze_backbone_layers: int = 2,
+    dropout: float = 0.5,
+    **kwargs
+) -> Union[BaseSiameseNetwork, BaseContrastiveNetwork, BaseTripletNetwork]:
+    """
+    Get a model instance by name and type.
+    
+    Args:
+        model_name: Name of the backbone architecture (e.g., 'resnet18')
+        model_type: Type of model - 'bce', 'contrastive', or 'triplet'
+        freeze_backbone_layers: Number of initial encoder layers to freeze (default: 2)
+                               Set to 0 to disable freezing
+        dropout: Dropout rate for regularization (default: 0.5)
+        **kwargs: Additional arguments to pass to model constructor
+                  - in_channels: Number of input channels (default: 1)
+                  - projection_dim: For BCE models (default: 512)
+                  - embedding_dim: For Contrastive/Triplet models (default: 128)
+        
+    Returns:
+        Instantiated model
+        
+    Raises:
+        ValueError: If model_name or model_type not found in registry
+        
+    Examples:
+        >>> # BCE Siamese with frozen layers
+        >>> model = get_model('resnet18', model_type='bce', 
+        ...                   freeze_backbone_layers=2, dropout=0.5)
+        
+        >>> # Contrastive without freezing
+        >>> model = get_model('resnet18', model_type='contrastive', 
+        ...                   freeze_backbone_layers=0, dropout=0.6)
+        
+        >>> # Triplet with 3 frozen layers
+        >>> model = get_model('resnet18', model_type='triplet', 
+        ...                   freeze_backbone_layers=3, dropout=0.5)
+    """
+    model_type = model_type.lower()
+    
+    # Select registry based on model type
+    if model_type == 'bce':
+        registry = BCE_MODELS
+    elif model_type == 'contrastive':
+        registry = CONTRASTIVE_MODELS
+    elif model_type == 'triplet':
+        registry = TRIPLET_MODELS
+    else:
+        raise ValueError(
+            f"Invalid model_type '{model_type}'. "
+            f"Must be one of: 'bce', 'contrastive', 'triplet'"
+        )
+    
+    # Check if model exists in registry
+    if model_name not in registry:
+        available = ', '.join(registry.keys())
+        raise ValueError(
+            f"Model '{model_name}' not found in {model_type.upper()} registry. "
+            f"Available models: {available}"
+        )
+    
+    # Handle parameter naming differences
+    if model_type == 'bce':
+        # BCE uses 'projection_dim'
+        if 'embedding_dim' in kwargs and 'projection_dim' not in kwargs:
+            kwargs['projection_dim'] = kwargs.pop('embedding_dim')
+    else:
+        # Contrastive/Triplet use 'embedding_dim'
+        if 'projection_dim' in kwargs and 'embedding_dim' not in kwargs:
+            kwargs['embedding_dim'] = kwargs.pop('projection_dim')
+    
+    # Add freeze and dropout parameters
+    kwargs['freeze_backbone_layers'] = freeze_backbone_layers
+    kwargs['dropout'] = dropout
+    
+    # Instantiate model
+    model_class = registry[model_name]
+    return model_class(**kwargs)
+
+
+def list_models(model_type: str = None) -> Dict[str, list]:
+    """
+    Get list of available model names.
+    
+    Args:
+        model_type: If specified, return only models of this type.
+                   If None, return all models organized by type.
+        
+    Returns:
+        Dictionary mapping model types to lists of model names,
+        or a single list if model_type is specified.
+        
+    Examples:
+        >>> # Get all models
+        >>> list_models()
+        {'bce': [...], 'contrastive': [...], 'triplet': [...]}
+        
+        >>> # Get only BCE models
+        >>> list_models('bce')
+        ['resnet18', 'resnet34', ...]
+    """
+    all_models = {
+        'bce': list(BCE_MODELS.keys()),
+        'contrastive': list(CONTRASTIVE_MODELS.keys()),
+        'triplet': list(TRIPLET_MODELS.keys()),
+    }
+    
+    if model_type is None:
+        return all_models
+    
+    model_type = model_type.lower()
+    if model_type not in all_models:
+        raise ValueError(
+            f"Invalid model_type '{model_type}'. "
+            f"Must be one of: 'bce', 'contrastive', 'triplet'"
+        )
+    
+    return all_models[model_type]
+
+
+def get_model_info(model_name: str = None) -> Dict:
+    """
+    Get information about available model architectures.
+    
+    Args:
+        model_name: If specified, return info for this model only.
+                   If None, return info for all models.
+    
+    Returns:
+        Dictionary with model availability across different types
+        
+    Examples:
+        >>> get_model_info('resnet18')
+        {'resnet18': {'bce': True, 'contrastive': True, 'triplet': True}}
+        
+        >>> get_model_info()  # All models
+    """
+    all_model_names = set(
+        list(BCE_MODELS.keys()) + 
+        list(CONTRASTIVE_MODELS.keys()) + 
+        list(TRIPLET_MODELS.keys())
+    )
+    
+    if model_name is not None:
+        if model_name not in all_model_names:
+            raise ValueError(f"Model '{model_name}' not found in any registry")
+        all_model_names = {model_name}
+    
+    info = {}
+    for name in sorted(all_model_names):
+        info[name] = {
+            'bce': name in BCE_MODELS,
+            'contrastive': name in CONTRASTIVE_MODELS,
+            'triplet': name in TRIPLET_MODELS,
+        }
+    
+    return info-e 
+
+===== ./models/bce_backbones.py =====
+
+"""
+Siamese Network Backbones
+Implementation of various backbone architectures for handwriting verification.
+Updated with proper weight transfer from RGB to grayscale.
+"""
+
+import torch.nn as nn
+from torchvision import models
+from .base import BaseSiameseNetwork
+from .utils import adapt_conv_layer_for_grayscale
+
+
+class SiameseResNet18(BaseSiameseNetwork):
+    """Siamese network based on ResNet18"""
+
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+
+        # Adapt conv1 with weight transfer
+        if in_channels != 3:
+            resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
+
+        encoder = nn.Sequential(
+            nn.Sequential(
+                resnet.conv1,
+                resnet.bn1,
+                resnet.relu,
+                resnet.maxpool,
+                resnet.layer1,
+                resnet.layer2,
+                resnet.layer3,
+                resnet.layer4,
+                resnet.avgpool
+            ),
+            nn.Flatten()
+        )
+
+        super().__init__(
+            encoder=encoder,
+            feature_dim=512,
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class SiameseResNet34(BaseSiameseNetwork):
+    """Siamese network based on ResNet34"""
+
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        resnet = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
+
+        # Adapt conv1 with weight transfer
+        if in_channels != 3:
+            resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
+
+        encoder = nn.Sequential(
+            nn.Sequential(
+                resnet.conv1,
+                resnet.bn1,
+                resnet.relu,
+                resnet.maxpool,
+                resnet.layer1,
+                resnet.layer2,
+                resnet.layer3,
+                resnet.layer4,
+                resnet.avgpool
+            ),
+            nn.Flatten()
+        )
+
+        super().__init__(
+            encoder=encoder,
+            feature_dim=512,
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class SiameseResNet50(BaseSiameseNetwork):
+    """Siamese network based on ResNet50"""
+
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+
+        # Adapt conv1 with weight transfer
+        if in_channels != 3:
+            resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
+
+        encoder = nn.Sequential(
+            nn.Sequential(
+                resnet.conv1,
+                resnet.bn1,
+                resnet.relu,
+                resnet.maxpool,
+                resnet.layer1,
+                resnet.layer2,
+                resnet.layer3,
+                resnet.layer4,
+                resnet.avgpool
+            ),
+            nn.Flatten()
+        )
+
+        super().__init__(
+            encoder=encoder,
+            feature_dim=2048,
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class SiameseEfficientNetB0(BaseSiameseNetwork):
+    """Siamese network based on EfficientNet-B0"""
+
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        effnet = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.DEFAULT)
+
+        # Adapt first conv with weight transfer
+        if in_channels != 3:
+            effnet.features[0][0] = adapt_conv_layer_for_grayscale(
+                effnet.features[0][0], in_channels
+            )
+
+        encoder = nn.Sequential(
+            effnet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+
+        super().__init__(
+            encoder=encoder,
+            feature_dim=1280,
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class SiameseEfficientNetB1(BaseSiameseNetwork):
+    """Siamese network based on EfficientNet-B1"""
+
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        effnet = models.efficientnet_b1(weights=models.EfficientNet_B1_Weights.DEFAULT)
+
+        # Adapt first conv with weight transfer
+        if in_channels != 3:
+            effnet.features[0][0] = adapt_conv_layer_for_grayscale(
+                effnet.features[0][0], in_channels
+            )
+
+        encoder = nn.Sequential(
+            effnet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+
+        super().__init__(
+            encoder=encoder,
+            feature_dim=1280,
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class SiameseEfficientNetV2(BaseSiameseNetwork):
+    """Siamese network based on EfficientNetV2-S"""
+
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        backbone = models.efficientnet_v2_s(weights=models.EfficientNet_V2_S_Weights.DEFAULT)
+
+        # Adapt first conv with weight transfer
+        if in_channels != 3:
+            backbone.features[0][0] = adapt_conv_layer_for_grayscale(
+                backbone.features[0][0], in_channels
+            )
+
+        encoder = nn.Sequential(
+            backbone.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+
+        super().__init__(
+            encoder=encoder,
+            feature_dim=1280,
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class SiameseMobileNetV3Small(BaseSiameseNetwork):
+    """Siamese network based on MobileNetV3-Small"""
+
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        mobilenet = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
+
+        # Adapt first conv with weight transfer
+        if in_channels != 3:
+            mobilenet.features[0][0] = adapt_conv_layer_for_grayscale(
+                mobilenet.features[0][0], in_channels
+            )
+
+        encoder = nn.Sequential(
+            mobilenet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+
+        super().__init__(
+            encoder=encoder,
+            feature_dim=576,
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class SiameseMobileNetV3Large(BaseSiameseNetwork):
+    """Siamese network based on MobileNetV3-Large"""
+
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        mobilenet = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT)
+
+        # Adapt first conv with weight transfer
+        if in_channels != 3:
+            mobilenet.features[0][0] = adapt_conv_layer_for_grayscale(
+                mobilenet.features[0][0], in_channels
+            )
+
+        encoder = nn.Sequential(
+            mobilenet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+
+        super().__init__(
+            encoder=encoder,
+            feature_dim=960,
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class SiameseDenseNet121(BaseSiameseNetwork):
+    """Siamese network based on DenseNet121"""
+
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        densenet = models.densenet121(weights=models.DenseNet121_Weights.DEFAULT)
+
+        # Adapt first conv (conv0) with weight transfer
+        if in_channels != 3:
+            densenet.features.conv0 = adapt_conv_layer_for_grayscale(
+                densenet.features.conv0, in_channels
+            )
+
+        encoder = nn.Sequential(
+            densenet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+
+        super().__init__(
+            encoder=encoder,
+            feature_dim=1024,
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class SiameseRegNetY400MF(BaseSiameseNetwork):
+    """Siamese network based on RegNet-Y-400MF"""
+
+    def __init__(self, in_channels: int = 1, projection_dim: int = 512,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        regnet = models.regnet_y_400mf(weights=models.RegNet_Y_400MF_Weights.DEFAULT)
+
+        # Adapt first conv in stem with weight transfer
+        if in_channels != 3:
+            regnet.stem[0] = adapt_conv_layer_for_grayscale(
+                regnet.stem[0], in_channels
+            )
+
+        # NOTA: qui manteniamo la struttura "flat" perché RegNet non ha un
+        # blocco contenitore unico equivalente a resnet.layer1..4: i suoi
+        # children (stem, trunk_output, avgpool) sono già i blocchi giusti
+        # su cui contare/congelare i "layer". encoder[0] è regnet.stem,
+        # anch'esso un Sequential con più children, quindi compatibile con
+        # _freeze_encoder_layers.
+        encoder = nn.Sequential(
+            *list(regnet.children())[:-1],
+            nn.AdaptiveAvgPool2d(1)
+        )
+
+        super().__init__(
+            encoder=encoder,
+            feature_dim=440,
+            projection_dim=projection_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )-e 
+
+===== ./models/triplet_backbones.py =====
+
+"""
+Triplet Network Backbones
+Implementation of various backbone architectures for triplet learning.
+Updated with proper weight transfer from RGB to grayscale.
+"""
+
+import torch.nn as nn
+import torch.nn.functional as F
+from torchvision import models
+
+from .base import BaseTripletNetwork
+from .utils import adapt_conv_layer_for_grayscale
+
+
+class TripletMobileNetV3Small(BaseTripletNetwork):
+    """Triplet network based on MobileNetV3-Small"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        mobilenet = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
+        
+        # Adapt first conv with weight transfer
+        if in_channels != 3:
+            mobilenet.features[0][0] = adapt_conv_layer_for_grayscale(
+                mobilenet.features[0][0], in_channels
+            )
+        
+        encoder = nn.Sequential(
+            mobilenet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=576, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class TripletMobileNetV3Large(BaseTripletNetwork):
+    """Triplet network based on MobileNetV3-Large"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        mobilenet = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT)
+        
+        # Adapt first conv with weight transfer
+        if in_channels != 3:
+            mobilenet.features[0][0] = adapt_conv_layer_for_grayscale(
+                mobilenet.features[0][0], in_channels
+            )
+        
+        encoder = nn.Sequential(
+            mobilenet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=960, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class TripletResNet18(BaseTripletNetwork):
+    """Triplet network based on ResNet18"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        
+        # Adapt conv1 with weight transfer
+        if in_channels != 3:
+            resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
+        
+        encoder = nn.Sequential(
+            nn.Sequential(
+                resnet.conv1,
+                resnet.bn1,
+                resnet.relu,
+                resnet.maxpool,
+                resnet.layer1,
+                resnet.layer2,
+                resnet.layer3,
+                resnet.layer4,
+                resnet.avgpool
+            ),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=512, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class TripletResNet34(BaseTripletNetwork):
+    """Triplet network based on ResNet34"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        resnet = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
+        
+        # Adapt conv1 with weight transfer
+        if in_channels != 3:
+            resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
+        
+        encoder = nn.Sequential(
+            nn.Sequential(
+                resnet.conv1,
+                resnet.bn1,
+                resnet.relu,
+                resnet.maxpool,
+                resnet.layer1,
+                resnet.layer2,
+                resnet.layer3,
+                resnet.layer4,
+                resnet.avgpool
+            ),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=512, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class TripletResNet50(BaseTripletNetwork):
+    """Triplet network based on ResNet50"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        
+        # Adapt conv1 with weight transfer
+        if in_channels != 3:
+            resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
+        
+        encoder = nn.Sequential(
+            nn.Sequential(
+                resnet.conv1,
+                resnet.bn1,
+                resnet.relu,
+                resnet.maxpool,
+                resnet.layer1,
+                resnet.layer2,
+                resnet.layer3,
+                resnet.layer4,
+                resnet.avgpool
+            ),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=2048, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class TripletEfficientNetB0(BaseTripletNetwork):
+    """Triplet network based on EfficientNet-B0"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        effnet = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.DEFAULT)
+        
+        # Adapt first conv with weight transfer
+        if in_channels != 3:
+            effnet.features[0][0] = adapt_conv_layer_for_grayscale(
+                effnet.features[0][0], in_channels
+            )
+        
+        encoder = nn.Sequential(
+            effnet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=1280, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+
+
+class TripletEfficientNetB1(BaseTripletNetwork):
+    """Triplet network based on EfficientNet-B1"""
+    
+    def __init__(self, in_channels: int = 1, embedding_dim: int = 128,
+                 freeze_backbone_layers: int = 2, dropout: float = 0.5):
+        effnet = models.efficientnet_b1(weights=models.EfficientNet_B1_Weights.DEFAULT)
+        
+        # Adapt first conv with weight transfer
+        if in_channels != 3:
+            effnet.features[0][0] = adapt_conv_layer_for_grayscale(
+                effnet.features[0][0], in_channels
+            )
+        
+        encoder = nn.Sequential(
+            effnet.features,
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten()
+        )
+        
+        super().__init__(
+            encoder=encoder, 
+            feature_dim=1280, 
+            embedding_dim=embedding_dim,
+            freeze_backbone_layers=freeze_backbone_layers,
+            dropout=dropout
+        )
+-e 
+
+===== ./models/base.py =====
+
+"""
+Base Siamese Network Module
+Defines the base architecture for Siamese networks with shared encoder.
+"""
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+
+class BaseSiameseNetwork(nn.Module):
+    """
+    Base class for Siamese networks.
+    All specific architectures should inherit from this class.
+    """
+    
+    def __init__(
+        self, 
+        encoder: nn.Module, 
+        feature_dim: int, 
+        projection_dim: int = 512,
+        freeze_backbone_layers: int = 0,
+        dropout: float = 0.5
+    ):
+        """
+        Args:
+            encoder: Backbone network for feature extraction
+            feature_dim: Dimension of features from encoder
+            projection_dim: Dimension of projection layer
+            freeze_backbone_layers: Number of initial encoder layers to freeze (0 = no freezing)
+            dropout: Dropout rate for regularization (default: 0.5)
+        """
+        super().__init__()
+        self.encoder = encoder
+        self.feature_dim = feature_dim
+        self.projection_dim = projection_dim
+        self.freeze_backbone_layers = freeze_backbone_layers
+        
+        # Freeze initial layers if requested
+        if freeze_backbone_layers > 0:
+            self._freeze_encoder_layers(freeze_backbone_layers)
+        
+        # Classifier for similarity prediction (deeper with more dropout)
+        self.fc = self._build_fc_block(feature_dim * 2, projection_dim, dropout)
+    
+    def _freeze_encoder_layers(self, num_layers: int):
+        """
+        Freeze the first N layers of the encoder backbone.
+        This helps prevent overfitting by keeping low-level features generic.
+        
+        Args:
+            num_layers: Number of initial layers to freeze
+        """
+        frozen_count = 0
+        
+        # For sequential models, freeze by child modules
+        for i, child in enumerate(self.encoder[0].children()):
+            if frozen_count < num_layers:
+                for param in child.parameters():
+                    param.requires_grad = False
+                frozen_count += 1
+            else:
+                break
+        
+        # Count total frozen parameters
+        frozen_params = sum(p.numel() for p in self.encoder[0].parameters() if not p.requires_grad)
+        total_params = sum(p.numel() for p in self.encoder[0].parameters())
+        
+        print("Total encoder layers:", len(self.encoder[0]))
+        print(f"  ❄️  Frozen {frozen_count} encoder layers")
+        print(f"  ❄️  Frozen parameters: {frozen_params:,} / {total_params:,} "
+              f"({100*frozen_params/total_params:.1f}%)")
+    
+    def _build_fc_block(self, input_dim: int, projection_dim: int, dropout: float) -> nn.Sequential:
+        """
+        Builds the fully connected block for similarity classification.
+        Enhanced with more layers and higher dropout for better regularization.
+        
+        Args:
+            input_dim: Input dimension (concatenated features)
+            projection_dim: Intermediate projection dimension
+            dropout: Dropout rate
+            
+        Returns:
+            Sequential module for classification
+        """
+        # More granular layer sizes
+        layer1 = projection_dim           # 512
+        layer2 = projection_dim // 2      # 256
+        layer3 = projection_dim // 4      # 128
+        layer4 = projection_dim // 8      # 64
+        layer5 = projection_dim // 16     # 32
+        
+        return nn.Sequential(
+            # Layer 1
+            nn.Linear(input_dim, layer1),
+            nn.BatchNorm1d(layer1),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout),  # 0.5
+            
+            # Layer 2
+            nn.Linear(layer1, layer2),
+            nn.BatchNorm1d(layer2),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout),  # 0.5
+            
+            # Layer 3
+            nn.Linear(layer2, layer3),
+            nn.BatchNorm1d(layer3),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout * 0.9),  # 0.45
+            
+            # Layer 4 (NEW)
+            nn.Linear(layer3, layer4),
+            nn.BatchNorm1d(layer4),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout * 0.8),  # 0.4
+            
+            # Layer 5 (NEW)
+            nn.Linear(layer4, layer5),
+            nn.BatchNorm1d(layer5),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout * 0.6),  # 0.3
+            
+            # Output
+            nn.Linear(layer5, 1),
+            nn.Sigmoid()
+        )
+    
+    def forward_one(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass for a single image through the encoder.
+        
+        Args:
+            x: Input image tensor
+            
+        Returns:
+            Feature vector
+        """
+        x = self.encoder(x)
+        return x.view(x.size(0), -1)
+    
+    def forward(self, img1: torch.Tensor, img2: torch.Tensor, 
+                return_embeddings: bool = False):
+        """
+        Forward pass for image pair.
+        
+        Args:
+            img1: First image
+            img2: Second image
+            return_embeddings: If True, return normalized embeddings instead of similarity
+            
+        Returns:
+            Similarity score or embeddings tuple
+        """
+        feat1 = self.forward_one(img1)
+        feat2 = self.forward_one(img2)
+        
+        if return_embeddings:
+            # Normalize for metric learning
+            feat1 = F.normalize(feat1, p=2, dim=1)
+            feat2 = F.normalize(feat2, p=2, dim=1)
+            return feat1, feat2
+        
+        # Concatenate and classify
+        combined = torch.cat([feat1, feat2], dim=1)
+        return self.fc(combined)
+
+class BaseContrastiveNetwork(nn.Module):
+    """
+    Base class for Contrastive Learning networks.
+    Projects features to a lower-dimensional embedding space.
+    Enhanced with deeper projection head and stronger regularization.
+    """
+    
+    def __init__(
+        self, 
+        encoder: nn.Module, 
+        feature_dim: int, 
+        embedding_dim: int = 128,
+        freeze_backbone_layers: int = 0,
+        dropout: float = 0.5
+    ):
+        """
+        Args:
+            encoder: Backbone network for feature extraction
+            feature_dim: Dimension of features from encoder
+            embedding_dim: Dimension of projection head output
+            freeze_backbone_layers: Number of initial encoder layers to freeze (0 = no freezing)
+            dropout: Dropout rate for regularization (default: 0.5)
+        """
+        super().__init__()
+        self.encoder = encoder
+        self.feature_dim = feature_dim
+        self.embedding_dim = embedding_dim
+        self.freeze_backbone_layers = freeze_backbone_layers
+        
+        # Freeze initial layers if requested
+        if freeze_backbone_layers > 0:
+            self._freeze_encoder_layers(freeze_backbone_layers)
+        
+        # Projection head (deeper MLP with more regularization)
+        self.projection = self._build_projection_head(feature_dim, embedding_dim, dropout)
+    
+    def _freeze_encoder_layers(self, num_layers: int):
+        """
+        Freeze the first N layers of the encoder backbone.
+        
+        Args:
+            num_layers: Number of initial layers to freeze
+        """
+        frozen_count = 0
+        
+        for i, child in enumerate(self.encoder[0].children()):
+            if frozen_count < num_layers:
+                for param in child.parameters():
+                    param.requires_grad = False
+                frozen_count += 1
+            else:
+                break
+        
+        frozen_params = sum(p.numel() for p in self.encoder[0].parameters() if not p.requires_grad)
+        total_params = sum(p.numel() for p in self.encoder[0].parameters())
+        
+        print("Total encoder layers:", len(self.encoder[0]))
+        print(f"  ❄️  Frozen {frozen_count} encoder layers")
+        print(f"  ❄️  Frozen parameters: {frozen_params:,} / {total_params:,} "
+              f"({100*frozen_params/total_params:.1f}%)")
+    
+    def _build_projection_head(self, feature_dim: int, embedding_dim: int, dropout: float) -> nn.Sequential:
+        """
+        Build deeper projection head with stronger regularization.
+        
+        Args:
+            feature_dim: Input feature dimension
+            embedding_dim: Output embedding dimension
+            dropout: Dropout rate
+            
+        Returns:
+            Sequential projection head
+        """
+        # Intermediate dimensions
+        hidden1 = 1024
+        hidden2 = 512
+        hidden3 = 256
+        
+        return nn.Sequential(
+            # Layer 1
+            nn.Linear(feature_dim, hidden1),
+            nn.BatchNorm1d(hidden1),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout),  # 0.5
+            
+            # Layer 2
+            nn.Linear(hidden1, hidden2),
+            nn.BatchNorm1d(hidden2),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout),  # 0.5
+            
+            # Layer 3 (NEW)
+            nn.Linear(hidden2, hidden3),
+            nn.BatchNorm1d(hidden3),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout * 0.8),  # 0.4
+            
+            # Output
+            nn.Linear(hidden3, embedding_dim)
+        )
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass to get normalized embeddings.
+        
+        Args:
+            x: Input image
+            
+        Returns:
+            L2-normalized projection
+        """
+        # Extract features
+        features = self.encoder(x)
+        features = features.view(features.size(0), -1)
+        
+        # Project to embedding space
+        embedding = self.projection(features)
+        
+        # Normalize
+        return F.normalize(embedding, p=2, dim=1)
+    
+    def get_embedding(self, x: torch.Tensor) -> torch.Tensor:
+        """Alias for forward"""
+        return self.forward(x)
+
+class BaseTripletNetwork(nn.Module):
+    """
+    Base class for Triplet networks.
+    Enhanced with deeper projection head and stronger regularization.
+    """
+    
+    def __init__(
+        self, 
+        encoder: nn.Module, 
+        feature_dim: int, 
+        embedding_dim: int = 128,
+        freeze_backbone_layers: int = 0,
+        dropout: float = 0.5
+    ):
+        """
+        Args:
+            encoder: Backbone network for feature extraction
+            feature_dim: Dimension of features from encoder
+            embedding_dim: Dimension of final embedding
+            freeze_backbone_layers: Number of initial encoder layers to freeze (0 = no freezing)
+            dropout: Dropout rate for regularization (default: 0.5)
+        """
+        super().__init__()
+        self.encoder = encoder
+        self.feature_dim = feature_dim
+        self.embedding_dim = embedding_dim
+        self.freeze_backbone_layers = freeze_backbone_layers
+        
+        # Freeze initial layers if requested
+        if freeze_backbone_layers > 0:
+            self._freeze_encoder_layers(freeze_backbone_layers)
+        
+        # Projection head (deeper with more regularization)
+        self.fc = self._build_projection_head(feature_dim, embedding_dim, dropout)
+    
+    def _freeze_encoder_layers(self, num_layers: int):
+        """
+        Freeze the first N layers of the encoder backbone.
+        
+        Args:
+            num_layers: Number of initial layers to freeze
+        """
+        frozen_count = 0
+        
+        for i, child in enumerate(self.encoder[0].children()):
+            if frozen_count < num_layers:
+                for param in child.parameters():
+                    param.requires_grad = False
+                frozen_count += 1
+            else:
+                break
+        
+        frozen_params = sum(p.numel() for p in self.encoder[0].parameters() if not p.requires_grad)
+        total_params = sum(p.numel() for p in self.encoder[0].parameters())
+        
+        print("Total encoder layers:", len(self.encoder[0]))
+        print(f"  ❄️  Frozen {frozen_count} encoder layers")
+        print(f"  ❄️  Frozen parameters: {frozen_params:,} / {total_params:,} "
+              f"({100*frozen_params/total_params:.1f}%)")
+    
+    def _build_projection_head(self, feature_dim: int, embedding_dim: int, dropout: float) -> nn.Sequential:
+        """
+        Build deeper projection head with stronger regularization.
+        
+        Args:
+            feature_dim: Input feature dimension
+            embedding_dim: Output embedding dimension
+            dropout: Dropout rate
+            
+        Returns:
+            Sequential projection head
+        """
+        # Intermediate dimensions
+        hidden1 = 1024
+        hidden2 = 512
+        hidden3 = 256
+        
+        return nn.Sequential(
+            # Layer 1
+            nn.Linear(feature_dim, hidden1),
+            nn.BatchNorm1d(hidden1),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout),  # 0.5
+            
+            # Layer 2
+            nn.Linear(hidden1, hidden2),
+            nn.BatchNorm1d(hidden2),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout),  # 0.5
+            
+            # Layer 3 (NEW)
+            nn.Linear(hidden2, hidden3),
+            nn.BatchNorm1d(hidden3),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout * 0.8),  # 0.4
+            
+            # Output
+            nn.Linear(hidden3, embedding_dim)
+        )
+    
+    def forward(self, x):
+        """
+        Forward pass to get normalized embeddings.
+        
+        Args:
+            x: Input image
+            
+        Returns:
+            L2-normalized embedding
+        """
+        x = self.encoder(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+        return F.normalize(x, p=2, dim=1)
+    
+    def get_embedding(self, x):
+        """Alias for forward"""
+        return self.forward(x)
+-e 
+
+===== ./models/__init__.py =====
+
+# src/models/__init__.py
+"""
+Models module
+Unified access to all model architectures (BCE, Contrastive, Triplet)
+"""
+
+from .base import BaseSiameseNetwork, BaseTripletNetwork, BaseContrastiveNetwork
+
+from .registry import (
+    get_model,
+    list_models,
+    get_model_info,
+    BCE_MODELS,
+    CONTRASTIVE_MODELS,
+    TRIPLET_MODELS,
+)
+
+from .bce_backbones import (
+    SiameseResNet18,
+    SiameseResNet34,
+    SiameseResNet50,
+    SiameseEfficientNetB0,
+    SiameseEfficientNetB1,
+    SiameseEfficientNetV2,
+    SiameseMobileNetV3Small,
+    SiameseMobileNetV3Large,
+    SiameseDenseNet121,
+    SiameseRegNetY400MF,
+)
+
+from .triplet_backbones import (
+    TripletMobileNetV3Small,
+    TripletMobileNetV3Large,
+    TripletResNet18,
+    TripletResNet34,
+    TripletResNet50,
+    TripletEfficientNetB0,
+    TripletEfficientNetB1
+)
+
+from .contrastive_backbones import (
+    ContrastiveMobileNetV3Small,
+    ContrastiveMobileNetV3Large,
+    ContrastiveResNet18,
+    ContrastiveResNet34,
+    ContrastiveResNet50,
+    ContrastiveEfficientNetB0,
+    ContrastiveEfficientNetB1,
+    ContrastiveDenseNet121,
+)
+
+__all__ = [
+    # ========================================================================
+    # Base classes
+    # ========================================================================
+    'BaseSiameseNetwork',
+    'BaseTripletNetwork',
+    'BaseContrastiveNetwork',
+    
+    # ========================================================================
+    # Registry API (main interface)
+    # ========================================================================
+    'get_model',           # Main function to instantiate models
+    'list_models',         # List available models by type
+    'get_model_info',      # Get model availability info
+    
+    # ========================================================================
+    # Registry dictionaries (for advanced usage)
+    # ========================================================================
+    'BCE_MODELS',          # All BCE Siamese models
+    'CONTRASTIVE_MODELS',  # All Contrastive models
+    'TRIPLET_MODELS',      # All Triplet models
+    
+    # ========================================================================
+    # BCE Siamese models (direct import)
+    # ========================================================================
+    'SiameseResNet18',
+    'SiameseResNet34',
+    'SiameseResNet50',
+    'SiameseEfficientNetB0',
+    'SiameseEfficientNetB1',
+    'SiameseEfficientNetV2',
+    'SiameseMobileNetV3Small',
+    'SiameseMobileNetV3Large',
+    'SiameseDenseNet121',
+    'SiameseRegNetY400MF',
+    
+    # ========================================================================
+    # Triplet models (direct import)
+    # ========================================================================
+    'TripletMobileNetV3Small',
+    'TripletMobileNetV3Large',
+    'TripletResNet18',
+    'TripletResNet34',
+    'TripletResNet50',
+    'TripletEfficientNetB0',
+    'TripletEfficientNetB1',
+    
+    # ========================================================================
+    # Contrastive models (direct import)
+    # ========================================================================
+    'ContrastiveMobileNetV3Small',
+    'ContrastiveMobileNetV3Large',
+    'ContrastiveResNet18',
+    'ContrastiveResNet34',
+    'ContrastiveResNet50',
+    'ContrastiveEfficientNetB0',
+    'ContrastiveEfficientNetB1',
+    'ContrastiveDenseNet121',
+]-e 
+
+===== ./__init__.py =====
+
+# src/__init__.py
+"""
+Handwriting Verification Package
+"""
+
+__version__ = "0.1.0"-e 
+
+===== ./training/base_trainer.py =====
+
+# src/training/base_trainer.py
+"""
+Base Trainer Class
+Common functionality for all trainer types.
+"""
+
+import os
+import gc
+import random
+from typing import Dict, Optional
+from abc import ABC, abstractmethod
+
+import torch
+import torch.nn.functional as F
+import pandas as pd
+import numpy as np
+from PIL import Image
+from tqdm import tqdm
+
+from ..evaluation.metrics import compute_metrics, print_results
+
+
+class BaseTrainer(ABC):
+    """Base class for all trainers with common validation and saving logic."""
+
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        model_name: str,
+        device: torch.device,
+        results_dir: str = "results",
+    ):
+        self.model = model.to(device)
+        self.model_name = model_name
+        self.device = device
+        self.results_dir = results_dir
+
+        os.makedirs(results_dir, exist_ok=True)
+
+        # Training history (only loss per epoch)
+        self.history = {
+            'epoch': [],
+            'train_loss': [],
+            'val_loss': [],
+        }
+
+        self.best_loss = float('inf')
+
+    @abstractmethod
+    def _setup_optimizer(self):
+        """Setup optimizer and scheduler (implemented by subclasses)."""
+        pass
+
+    @abstractmethod
+    def train_epoch(self, train_loader):
+        """Train for one epoch (implemented by subclasses)."""
+        pass
+
+    @abstractmethod
+    def validate_loss(self, val_loader) -> float:
+        """
+        Calculate validation loss (implemented by subclasses).
+
+        Args:
+            val_loader: Validation dataloader
+
+        Returns:
+            Average validation loss
+        """
+        pass
+
+    @torch.no_grad()
+    def validate_comprehensive(self, eval_dataset) -> Dict[str, float]:
+        """
+        Comprehensive validation computing all verification metrics.
+        Uses validation pairs from eval_dataset.get_validation_pair().
+
+        Il nome del parametro è generico (eval_dataset) perché questo metodo
+        viene usato sia per il monitoraggio sul validation set durante il
+        training, sia per il report finale su un test set held-out.
+
+        If the subclass implements _get_embeddings, it's used for computing
+        similarity metrics (contrastive/triplet). Otherwise, assumes BCE
+        Siamese and uses model output directly.
+
+        Args:
+            eval_dataset: Dataset con metodo get_validation_pair()
+
+        Returns:
+            Dictionary with all metrics
+        """
+        self.model.eval()
+
+        genuine_scores = []
+        impostor_scores = []
+
+        # Check if subclass has implemented _get_embeddings
+        use_embeddings = hasattr(self, "_get_embeddings") and callable(getattr(self, "_get_embeddings"))
+
+        # Determine total number of validation pairs
+        # For TripletDataset, use validation_pairs; for others, use samples
+        if hasattr(eval_dataset, 'validation_pairs'):
+            num_pairs = len(eval_dataset.validation_pairs)
+        elif hasattr(eval_dataset, 'samples'):
+            num_pairs = len(eval_dataset.samples)
+        else:
+            raise AttributeError("Dataset must have either 'validation_pairs' or 'samples' attribute")
+
+        print(f"\n🔍 Computing verification metrics on {num_pairs} pairs...")
+
+        for idx in tqdm(range(num_pairs), desc="  Evaluating pairs"):
+            # Use the unified interface
+            img1_path, img2_path, label = eval_dataset.get_validation_pair(idx)
+
+            # Load images
+            img1 = eval_dataset.transform(Image.open(img1_path).convert("L")).unsqueeze(0).to(self.device)
+            img2 = eval_dataset.transform(Image.open(img2_path).convert("L")).unsqueeze(0).to(self.device)
+
+            if use_embeddings:
+                # Metric learning: contrastive / triplet
+                emb1, emb2 = self._get_embeddings(img1, img2)
+                score = F.cosine_similarity(emb1, emb2).item()
+            else:
+                # BCE Siamese: direct output
+                score = self.model(img1, img2).item()
+
+            if label == 1.0:
+                genuine_scores.append(score)
+            else:
+                impostor_scores.append(score)
+
+        # Decide if scores are already similarity or need to be inverted
+        distances_are_similarity = not use_embeddings  # BCE → already similarity
+
+        metrics = compute_metrics(
+            np.array(genuine_scores),
+            np.array(impostor_scores),
+            distances_are_similarity=True #distances_are_similarity
+        )
+
+        print(f"\n  ✓ Evaluated {len(genuine_scores)} genuine + {len(impostor_scores)} impostor pairs")
+        actual_ratio = len(genuine_scores) / (len(genuine_scores) + len(impostor_scores)) * 100
+        print(f"  Actual ratio: {actual_ratio:.1f}% genuine")
+
+        return metrics
+
+    def _update_history(self, epoch: int, train_loss: float, val_loss: float):
+        """Update history with losses only."""
+        self.history['epoch'].append(epoch)
+        self.history['train_loss'].append(train_loss)
+        self.history['val_loss'].append(val_loss)
+
+    def _print_epoch_summary(self, epoch: int, epochs: int, train_loss: float, val_loss: float):
+        """Print formatted epoch summary."""
+        print(f"\nEpoch {epoch+1}/{epochs} - Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
+
+    def train(
+        self,
+        train_loader,
+        val_loader,
+        val_dataset,
+        test_dataset=None,
+        epochs: int = 50,
+        patience: int = 7,
+        fold: int = None,
+    ) -> Dict:
+        """
+        Main training loop (same for all trainers).
+
+        Args:
+            train_loader: Training dataloader
+            val_loader: Validation dataloader (for loss calculation / early stopping)
+            val_dataset: Validation dataset (per il monitoring/model selection)
+            test_dataset: Dataset held-out opzionale, mai visto in training né
+                per l'early stopping. Se fornito, le metriche finali
+                (validate_comprehensive) vengono calcolate su di esso invece
+                che su val_dataset, evitando di riportare come "risultato
+                finale" lo stesso set usato per scegliere il checkpoint.
+            epochs: Number of epochs
+            patience: Early stopping patience
+            fold: Fold number (for K-Fold)
+
+        Returns:
+            (history, final_metrics)
+        """
+        print(f"\n{'='*60}")
+        print(f"Training {self.model_name}")
+        print(f"{'='*60}\n")
+
+        patience_counter = 0
+        train_dataset = train_loader.dataset
+
+        for epoch in range(epochs):
+            # Train
+            train_loss = self.train_epoch(train_loader)
+
+            # Validate loss only
+            val_loss = self.validate_loss(val_loader)
+
+            # Update scheduler (if exists)
+            if hasattr(self, 'scheduler'):
+                if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                    self.scheduler.step(val_loss)
+                else:
+                    self.scheduler.step()
+
+            # Update history
+            self._update_history(epoch + 1, train_loss, val_loss)
+
+            # Print summary
+            self._print_epoch_summary(epoch, epochs, train_loss, val_loss)
+
+            # Early stopping on validation loss
+            if val_loss < self.best_loss:
+                self.best_loss = val_loss
+                patience_counter = 0
+                self.save_checkpoint(is_best=True, fold=fold)
+                print(f"  ✓ Saved best model (Val Loss={self.best_loss:.4f})")
+            else:
+                patience_counter += 1
+                print(f"  Patience: {patience_counter}/{patience}")
+
+                if patience_counter >= patience:
+                    print("  ⚠ Early stopping triggered")
+                    break
+
+            # === NEGATIVE RESAMPLING ===
+            # Notify dataset that epoch has ended
+            if hasattr(train_dataset, 'on_epoch_end'):
+                train_dataset.on_epoch_end(epoch)
+
+        # ------------------------------------------------------------
+        # Ricarica esplicitamente il best checkpoint prima della
+        # valutazione finale. Senza questo, se scatta l'early stopping,
+        # self.model resta nello stato dell'ULTIMA epoca (peggiore),
+        # non del checkpoint effettivamente salvato come "best".
+        # ------------------------------------------------------------
+        self._load_best_checkpoint(fold=fold)
+
+        # Final comprehensive validation
+        print(f"\n{'='*60}")
+        print("FINAL COMPREHENSIVE VALIDATION")
+        print(f"{'='*60}")
+
+        if test_dataset is not None:
+            print("ℹ️  Valutazione finale su TEST set held-out "
+                  "(non usato per training né per l'early stopping)")
+            eval_dataset = test_dataset
+        else:
+            print("⚠️  Nessun test_dataset fornito: valutazione finale sul val_dataset "
+                  "(stesso set usato per l'early stopping — il risultato è "
+                  "potenzialmente ottimistico, vedi model selection bias)")
+            eval_dataset = val_dataset
+
+        final_metrics = self.validate_comprehensive(eval_dataset)
+        print_results(final_metrics)
+
+        # Save final checkpoint and metrics
+        self.save_checkpoint(is_best=False, fold=fold)
+        if fold is None: self.save_history()
+        self.save_final_metrics(final_metrics, fold=fold)
+
+        print(f"\n✓ Training completed! Best Val Loss={self.best_loss:.4f}\n")
+
+        return self.history, final_metrics
+
+    def train_kfold(
+        self,
+        data_root: str,
+        n_splits: int = 5,
+        batch_size: int = 16,
+        num_workers: int = 4,
+        samples_per_writer: int = 100,
+        target_size: int = 448,
+        epochs: int = 50,
+        patience: int = 7,
+        random_state: int = 42,
+    ) -> Dict:
+        """K-Fold Cross-Validation (implemented by subclasses with specific dataloader)."""
+        raise NotImplementedError("Subclasses must implement train_kfold with appropriate dataloader")
+
+    def _reset_weights(self, m):
+        """Reset model weights."""
+        if hasattr(m, 'reset_parameters'):
+            m.reset_parameters()
+
+    def save_checkpoint(self, is_best: bool = False, fold: int = None):
+        """Save model checkpoint."""
+        suffix = "best" if is_best else "final"
+        if fold is not None:
+            path = os.path.join(self.results_dir, f"{self.model_name}_fold{fold}_{suffix}.pth")
+        else:
+            path = os.path.join(self.results_dir, f"{self.model_name}_{suffix}.pth")
+        torch.save(self.model.state_dict(), path)
+
+    def _load_best_checkpoint(self, fold: int = None):
+        """
+        Ricarica in self.model i pesi del checkpoint 'best' salvato su disco.
+
+        Se il checkpoint non esiste (es. nessuna epoca ha migliorato
+        best_loss, caso limite ma possibile con patience molto bassa),
+        lascia self.model così com'è e avvisa a schermo invece di fallire.
+        """
+        suffix = "best"
+        if fold is not None:
+            path = os.path.join(self.results_dir, f"{self.model_name}_fold{fold}_{suffix}.pth")
+        else:
+            path = os.path.join(self.results_dir, f"{self.model_name}_{suffix}.pth")
+
+        if not os.path.exists(path):
+            print(f"  ⚠ Nessun checkpoint 'best' trovato in {path}: "
+                  f"uso lo stato corrente del modello.")
+            return
+
+        state_dict = torch.load(path, map_location=self.device)
+        self.model.load_state_dict(state_dict)
+        self.model.to(self.device).eval()
+        print(f"  ✓ Ricaricato best checkpoint da {path}")
+
+    def save_history(self):
+        """Save training history to CSV."""
+        path = os.path.join(self.results_dir, f"{self.model_name}_history.csv")
+        pd.DataFrame(self.history).to_csv(path, index=False)
+
+    def save_final_metrics(self, metrics: Dict, fold: int = None):
+        """Save final comprehensive metrics to CSV."""
+
+        if fold is not None:
+            path = os.path.join(self.results_dir, f"{self.model_name}_fold{fold}_final_metrics.csv")
+        else:
+            path = os.path.join(self.results_dir, f"{self.model_name}_final_metrics.csv")
+
+        # Prepara i dati da salvare
+        metrics_to_save = {}
+        for key, value in metrics.items():
+            if isinstance(value, np.ndarray):
+                # Disabilita il troncamento e converti in lista
+                np.set_printoptions(threshold=np.inf, linewidth=np.inf)
+                # Converti in lista per evitare troncamenti
+                metrics_to_save[key] = str(value.tolist())
+            else:
+                metrics_to_save[key] = value
+
+        # Salva su CSV
+        pd.DataFrame([metrics_to_save]).to_csv(path, index=False)
+
+    def _init_history(self):
+        """Initialize empty history dict."""
+        return {k: [] for k in self.history.keys()}
+
+    def cleanup(self):
+        """Cleanup resources."""
+        self.model.cpu()
+        del self.model
+        torch.cuda.empty_cache()
+        gc.collect()-e 
+
+===== ./training/trainer_triplet.py =====
+
+"""
+Triplet Loss Trainer
+Trainer class for triplet networks with comprehensive biometric evaluation.
+"""
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+import pandas as pd
+import numpy as np
+
+from .base_trainer import BaseTrainer
+from .losses import TripletLoss
+
+
+class TripletTrainer(BaseTrainer):
+    """Trainer for triplet networks."""
+
+    def __init__(
+        self,
+        model,
+        model_name: str,
+        device: torch.device,
+        margin: float = 0.5,
+        results_dir: str = "results",
+    ):
+        super().__init__(model, model_name, device, results_dir)
+        self.margin = margin
+        self.criterion = TripletLoss(margin=margin)
+        self._setup_optimizer()
+
+    def _setup_optimizer(self):
+        """Setup optimizer for triplet learning."""
+        num_params = sum(p.numel() for p in self.model.parameters())
+        lr = 5e-5 if num_params > 15e6 else 1e-4
+
+        self.optimizer = torch.optim.AdamW(
+            self.model.parameters(),
+            lr=lr,
+            weight_decay=1e-4,
+            betas=(0.9, 0.999),
+            eps=1e-8
+        )
+
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            self.optimizer,
+            mode='min',
+            factor=0.5,
+            patience=2
+        )
+
+    def train_epoch(self, train_loader: DataLoader) -> float:
+        """Train for one epoch."""
+        self.model.train()
+        train_loss = 0.0
+
+        for anchor, positive, negative in tqdm(train_loader, desc="Training"):
+            anchor = anchor.to(self.device)
+            positive = positive.to(self.device)
+            negative = negative.to(self.device)
+
+            self.optimizer.zero_grad()
+
+            anchor_emb = self.model(anchor)
+            positive_emb = self.model(positive)
+            negative_emb = self.model(negative)
+
+            loss = self.criterion(anchor_emb, positive_emb, negative_emb)
+
+            loss.backward()
+            self.optimizer.step()
+
+            train_loss += loss.item()
+
+        return train_loss / len(train_loader)
+
+    @torch.no_grad()
+    def validate_loss(self, val_loader: DataLoader) -> float:
+        """Calculate Triplet validation loss."""
+        self.model.eval()
+        val_loss = 0.0
+
+        for anchor, positive, negative in tqdm(val_loader, desc="Validation"):
+            anchor = anchor.to(self.device)
+            positive = positive.to(self.device)
+            negative = negative.to(self.device)
+
+            # Get embeddings
+            anchor_emb = self.model(anchor)
+            positive_emb = self.model(positive)
+            negative_emb = self.model(negative)
+
+            # Triplet loss
+            loss = self.criterion(anchor_emb, positive_emb, negative_emb)
+            val_loss += loss.item()
+
+        return val_loss / len(val_loader)
+
+    def _get_embeddings(self, img1, img2):
+        """Get embeddings from triplet network."""
+        emb1 = self.model(img1)
+        emb2 = self.model(img2)
+        return emb1, emb2
+
+    def train_kfold(
+        self,
+        data_root: str,
+        n_splits: int = 5,
+        batch_size: int = 16,
+        num_workers: int = 4,
+        target_size: int = 448,
+        resample_negatives_every_n_epochs: int = 1,
+        epochs: int = 50,
+        patience: int = 7,
+        random_state: int = 42,
+    ):
+        """K-Fold Cross-Validation for Triplet."""
+        from ..data import create_triplet_kfold_dataloaders
+
+        print(f"\n{'='*70}")
+        print(f"K-FOLD TRAINING: {self.model_name} ({n_splits} folds)")
+        print(f"{'='*70}\n")
+
+        all_fold_histories = []
+        all_fold_metrics = []
+
+        for fold in range(n_splits):
+            print(f"\n{'#'*70}")
+            print(f"# FOLD {fold+1}/{n_splits}")
+            print(f"{'#'*70}\n")
+
+            train_loader, val_loader, train_dataset, val_dataset = create_triplet_kfold_dataloaders(
+                data_root=data_root,
+                n_splits=n_splits,
+                current_fold=fold,
+                batch_size=batch_size,
+                num_workers=num_workers,
+                target_size=target_size,
+                resample_negatives_every_n_epochs=resample_negatives_every_n_epochs,
+                random_state=random_state
+            )
+
+            # Reset model and optimizer
+            self.model.apply(self._reset_weights)
+            self._setup_optimizer()
+            self.history = self._init_history()
+            self.best_loss = float('inf')
+
+            # Train this fold
+            fold_history, fold_metrics = self.train(
+                train_loader=train_loader,
+                val_loader=val_loader,
+                val_dataset=val_dataset,
+                epochs=epochs,
+                patience=patience,
+                fold=fold + 1
+            )
+
+            # Save fold results
+            fold_df = pd.DataFrame(fold_history)
+            fold_df['fold'] = fold + 1
+            all_fold_histories.append(fold_df)
+
+            # Save fold metrics
+            fold_metrics['fold'] = fold + 1
+            all_fold_metrics.append(fold_metrics)
+
+            print(f"\n✓ Fold {fold+1} - Best Val Loss={self.best_loss:.4f}, Final EER={fold_metrics['eer']:.4f}\n")
+
+        # Save detailed results
+        combined_history = pd.concat(all_fold_histories, ignore_index=True)
+        combined_history.to_csv(
+            f"{self.results_dir}/{self.model_name}_kfold_detailed.csv",
+            index=False
+        )
+
+        # Compute aggregated stats
+        fold_eers = [m['eer'] for m in all_fold_metrics]
+
+        aggregated = {
+            'mean_eer': np.mean(fold_eers),
+            'std_eer': np.std(fold_eers),
+            'all_folds_eer': fold_eers
+        }
+
+        print(f"\n{'='*70}")
+        print(f"K-FOLD RESULTS")
+        print(f"{'='*70}")
+        print(f"EER: {aggregated['mean_eer']:.4f} ± {aggregated['std_eer']:.4f}")
+        print(f"Per-fold: {fold_eers}")
+        print(f"{'='*70}\n")
+
+        return aggregated-e 
+
+===== ./training/trainer_bce.py =====
+
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+import pandas as pd
+import numpy as np
+
+from .base_trainer import BaseTrainer
+from .losses import BCELoss
+
+class BCETrainer(BaseTrainer):
+    """Trainer for Siamese networks using BCE loss."""
+
+    def __init__(
+        self,
+        model,
+        model_name: str,
+        device: torch.device,
+        results_dir: str = "results",
+    ):
+        super().__init__(model, model_name, device, results_dir)
+        self.criterion = BCELoss()
+        self._setup_optimizer()
+
+    def _setup_optimizer(self):
+        """Setup optimizer based on model size."""
+        num_params = sum(p.numel() for p in self.model.parameters())
+        lr = 5e-5 if num_params > 15e6 else 1e-4
+
+        self.optimizer = torch.optim.AdamW(
+            self.model.parameters(),
+            lr=lr,
+            weight_decay=1e-4,
+            betas=(0.9, 0.999),
+            eps=1e-8
+        )
+
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            self.optimizer,
+            mode='min',
+            factor=0.5,
+            patience=2
+        )
+
+    def train_epoch(self, train_loader: DataLoader) -> float:
+        """Train for one epoch."""
+        self.model.train()
+        train_loss = 0
+
+        for img1, img2, labels in tqdm(train_loader, desc="Training"):
+            img1 = img1.to(self.device)
+            img2 = img2.to(self.device)
+            labels = labels.to(self.device)
+
+            self.optimizer.zero_grad()
+            outputs = self.model(img1, img2).squeeze(1)
+            loss = self.criterion(outputs, labels)
+
+            loss.backward()
+            self.optimizer.step()
+
+            train_loss += loss.item()
+
+        return train_loss / len(train_loader)
+
+    @torch.no_grad()
+    def validate_loss(self, val_loader: DataLoader) -> float:
+        """Calculate BCE validation loss."""
+        self.model.eval()
+        val_loss = 0.0
+
+        for img1, img2, labels in tqdm(val_loader, desc="Validation"):
+            img1, img2, labels = img1.to(self.device), img2.to(self.device), labels.to(self.device)
+
+            # Forward pass
+            outputs = self.model(img1, img2).squeeze(1)
+
+            # BCE loss
+            loss = self.criterion(outputs, labels)
+            val_loss += loss.item()
+
+        return val_loss / len(val_loader)
+
+    def train_kfold(
+        self,
+        data_root: str,
+        n_splits: int = 5,
+        batch_size: int = 16,
+        num_workers: int = 4,
+        target_size: int = 448,
+        epochs: int = 50,
+        patience: int = 5,
+        random_state: int = 42,
+    ):
+        """K-Fold Cross-Validation for BCE."""
+        from ..data import create_siamese_kfold_dataloaders
+
+        print(f"\n{'='*70}")
+        print(f"K-FOLD TRAINING: {self.model_name} ({n_splits} folds)")
+        print(f"{'='*70}\n")
+
+        all_fold_histories = []
+        all_fold_metrics = []
+
+        for fold in range(n_splits):
+            print(f"\n{'#'*70}")
+            print(f"# FOLD {fold+1}/{n_splits}")
+            print(f"{'#'*70}\n")
+
+            train_loader, val_loader, train_dataset, val_dataset = create_siamese_kfold_dataloaders(
+                data_root=data_root,
+                n_splits=n_splits,
+                current_fold=fold,
+                batch_size=batch_size,
+                num_workers=num_workers,
+                target_size=target_size,
+                random_state=random_state
+            )
+
+            # Reset model and optimizer
+            self.model.apply(self._reset_weights)
+            self._setup_optimizer()
+            self.history = self._init_history()
+            self.best_loss = float('inf')
+
+            # Train this fold
+            # Nota: il K-Fold non prevede un test set held-out separato (il
+            # "test" per ogni fold è, per costruzione, il fold di val stesso
+            # che ruota ad ogni iterazione): non passiamo test_dataset qui.
+            fold_history, fold_metrics = self.train(
+                train_loader=train_loader,
+                val_loader=val_loader,
+                val_dataset=val_dataset,
+                epochs=epochs,
+                patience=patience,
+                fold=fold + 1
+            )
+
+            # Save fold results
+            fold_df = pd.DataFrame(fold_history)
+            fold_df['fold'] = fold + 1
+            all_fold_histories.append(fold_df)
+
+            # Save fold metrics
+            fold_metrics['fold'] = fold + 1
+            all_fold_metrics.append(fold_metrics)
+
+            print(f"\n✓ Fold {fold+1} - Best Val Loss={self.best_loss:.4f}, Final EER={fold_metrics['eer']:.4f}\n")
+
+        # Save detailed results
+        combined_history = pd.concat(all_fold_histories, ignore_index=True)
+        combined_history.to_csv(
+            f"{self.results_dir}/{self.model_name}_kfold_detailed.csv",
+            index=False
+        )
+
+        # Compute aggregated stats
+        fold_eers = [m['eer'] for m in all_fold_metrics]
+
+        aggregated = {
+            'mean_eer': np.mean(fold_eers),
+            'std_eer': np.std(fold_eers),
+            'all_folds_eer': fold_eers
+        }
+
+        print(f"\n{'='*70}")
+        print(f"K-FOLD RESULTS")
+        print(f"{'='*70}")
+        print(f"EER: {aggregated['mean_eer']:.4f} ± {aggregated['std_eer']:.4f}")
+        print(f"Per-fold: {fold_eers}")
+        print(f"{'='*70}\n")
+
+        return aggregated-e 
+
+===== ./training/trainer_contrastive.py =====
+
+"""
+Contrastive Loss Trainer
+Trainer class for contrastive learning with comprehensive biometric evaluation.
+"""
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+import pandas as pd
+import numpy as np
+
+from .base_trainer import BaseTrainer
+from .losses import ContrastiveLoss
+
+
+class ContrastiveTrainer(BaseTrainer):
+    """Trainer for contrastive learning on binary pair datasets."""
+
+    def __init__(
+        self,
+        model,
+        model_name: str,
+        device: torch.device,
+        margin: float = 1.0,
+        results_dir: str = "results",
+    ):
+        super().__init__(model, model_name, device, results_dir)
+        self.margin = margin
+        self.criterion = ContrastiveLoss(margin=margin)
+        self._setup_optimizer()
+
+    def _setup_optimizer(self):
+        """Setup optimizer for contrastive learning."""
+        num_params = sum(p.numel() for p in self.model.parameters())
+        lr = 5e-5 if num_params > 15e6 else 1e-4
+
+        self.optimizer = torch.optim.AdamW(
+            self.model.parameters(),
+            lr=lr,
+            weight_decay=1e-4,
+            betas=(0.9, 0.999),
+            eps=1e-8
+        )
+
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            self.optimizer,
+            mode='min',
+            factor=0.5,
+            patience=2
+        )
+
+    def train_epoch(self, train_loader: DataLoader) -> float:
+        """Train for one epoch on pairwise data."""
+        self.model.train()
+        train_loss = 0.0
+
+        for img1, img2, labels in tqdm(train_loader, desc="Training"):
+            img1 = img1.to(self.device)
+            img2 = img2.to(self.device)
+            labels = labels.float().to(self.device)
+
+            self.optimizer.zero_grad()
+
+            emb1 = self.model(img1)
+            emb2 = self.model(img2)
+
+            loss = self.criterion(emb1, emb2, labels)
+
+            loss.backward()
+            self.optimizer.step()
+
+            train_loss += loss.item()
+
+        return train_loss / len(train_loader)
+
+    @torch.no_grad()
+    def validate_loss(self, val_loader: DataLoader) -> float:
+        """Calculate Contrastive validation loss."""
+        self.model.eval()
+        val_loss = 0.0
+
+        for img1, img2, labels in tqdm(val_loader, desc="Validation"):
+            img1, img2, labels = img1.to(self.device), img2.to(self.device), labels.float().to(self.device)
+
+            # Get embeddings
+            emb1 = self.model(img1)
+            emb2 = self.model(img2)
+
+            # Contrastive loss
+            loss = self.criterion(emb1, emb2, labels)
+            val_loss += loss.item()
+
+        return val_loss / len(val_loader)
+
+    def _get_embeddings(self, img1, img2):
+        """Get embeddings from contrastive network."""
+        emb1 = self.model(img1)
+        emb2 = self.model(img2)
+        return emb1, emb2
+
+    def train_kfold(
+        self,
+        data_root: str,
+        n_splits: int = 5,
+        batch_size: int = 16,
+        num_workers: int = 4,
+        target_size: int = 448,
+        positive_ratio: float = 0.5,
+        resample_negatives_every_n_epochs: int = 1,
+        epochs: int = 50,
+        patience: int = 7,
+        random_state: int = 42,
+    ):
+        """K-Fold Cross-Validation for Contrastive."""
+        from ..data import create_contrastive_kfold_dataloaders
+
+        print(f"\n{'='*70}")
+        print(f"K-FOLD TRAINING: {self.model_name} ({n_splits} folds)")
+        print(f"{'='*70}\n")
+
+        all_fold_histories = []
+        all_fold_metrics = []
+
+        for fold in range(n_splits):
+            print(f"\n{'#'*70}")
+            print(f"# FOLD {fold+1}/{n_splits}")
+            print(f"{'#'*70}\n")
+
+            train_loader, val_loader, train_dataset, val_dataset = create_contrastive_kfold_dataloaders(
+                data_root=data_root,
+                n_splits=n_splits,
+                current_fold=fold,
+                batch_size=batch_size,
+                num_workers=num_workers,
+                target_size=target_size,
+                positive_ratio=positive_ratio,
+                resample_negatives_every_n_epochs=resample_negatives_every_n_epochs,
+                random_state=random_state
+            )
+
+            # Reset model and optimizer
+            self.model.apply(self._reset_weights)
+            self._setup_optimizer()
+            self.history = self._init_history()
+            self.best_loss = float('inf')
+
+            # Train this fold
+            fold_history, fold_metrics = self.train(
+                train_loader=train_loader,
+                val_loader=val_loader,
+                val_dataset=val_dataset,
+                epochs=epochs,
+                patience=patience,
+                fold=fold + 1
+            )
+
+            # Save fold results
+            fold_df = pd.DataFrame(fold_history)
+            fold_df['fold'] = fold + 1
+            all_fold_histories.append(fold_df)
+
+            # Save fold metrics
+            fold_metrics['fold'] = fold + 1
+            all_fold_metrics.append(fold_metrics)
+
+            print(f"\n✓ Fold {fold+1} - Best Val Loss={self.best_loss:.4f}, Final EER={fold_metrics['eer']:.4f}\n")
+
+        # Save detailed results
+        combined_history = pd.concat(all_fold_histories, ignore_index=True)
+        combined_history.to_csv(
+            f"{self.results_dir}/{self.model_name}_kfold_detailed.csv",
+            index=False
+        )
+
+        # Compute aggregated stats
+        fold_eers = [m['eer'] for m in all_fold_metrics]
+
+        aggregated = {
+            'mean_eer': np.mean(fold_eers),
+            'std_eer': np.std(fold_eers),
+            'all_folds_eer': fold_eers
+        }
+
+        print(f"\n{'='*70}")
+        print(f"K-FOLD RESULTS")
+        print(f"{'='*70}")
+        print(f"EER: {aggregated['mean_eer']:.4f} ± {aggregated['std_eer']:.4f}")
+        print(f"Per-fold: {fold_eers}")
+        print(f"{'='*70}\n")
+
+        return aggregated-e 
+
+===== ./training/losses.py =====
+
+"""
+Loss Functions
+Various loss functions for Siamese and Triplet networks.
+"""
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+
+class BCELoss(nn.Module):
+    """Binary Cross-Entropy Loss for similarity classification"""
+    
+    def __init__(self):
+        super().__init__()
+        self.loss_fn = nn.BCELoss()
+    
+    def forward(self, predictions: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            predictions: Predicted similarities (0-1)
+            labels: Ground truth labels (0 or 1)
+            
+        Returns:
+            Loss value
+        """
+        return self.loss_fn(predictions, labels)
+
+class ContrastiveLoss(nn.Module):
+    """
+    Contrastive Loss using Cosine Similarity.
+    Forces similar pairs to have high cosine similarity (close to 1)
+    and dissimilar pairs to have low cosine similarity (below margin).
+    """
+    
+    def __init__(self, margin: float = 0.5):
+        """
+        Args:
+            margin: Margin for negative pairs (in cosine similarity space)
+                   Typical values: 0.2-0.5
+        """
+        super().__init__()
+        self.margin = margin
+    
+    def forward(self, feat1: torch.Tensor, feat2: torch.Tensor, 
+                labels: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            feat1: Features from first image (will be normalized)
+            feat2: Features from second image (will be normalized)
+            labels: 1 for similar, 0 for dissimilar
+            
+        Returns:
+            Loss value
+        """
+        # L2 normalize features (project onto unit hypersphere)
+        feat1 = F.normalize(feat1, p=2, dim=1)
+        feat2 = F.normalize(feat2, p=2, dim=1)
+        
+        # Cosine similarity ∈ [-1, 1]
+        cosine_sim = F.cosine_similarity(feat1, feat2)
+        
+        # Convert to distance: higher similarity = lower distance
+        # distance ∈ [0, 2], where 0 = identical, 2 = opposite
+        distances = 1 - cosine_sim
+        
+        # Contrastive loss
+        # Positive pairs: minimize distance (maximize similarity)
+        loss_positive = labels * torch.pow(distances, 2)
+        
+        # Negative pairs: enforce distance > margin
+        # (enforce similarity < 1 - margin)
+        loss_negative = (1 - labels) * torch.pow(
+            torch.clamp(self.margin - distances, min=0.0), 2
+        )
+        
+        return torch.mean(loss_positive + loss_negative)
+
+class TripletLoss(nn.Module):
+    """
+    Triplet Loss directly on Cosine Similarity.
+    Maximizes sim(anchor, positive) - sim(anchor, negative).
+    """
+    
+    def __init__(self, margin: float = 0.3):
+        super().__init__()
+        self.margin = margin
+    
+    def forward(self, anchor: torch.Tensor, positive: torch.Tensor,
+            negative: torch.Tensor) -> torch.Tensor:
+
+        # L2 normalization
+        anchor = F.normalize(anchor, p=2, dim=1)
+        positive = F.normalize(positive, p=2, dim=1)
+        negative = F.normalize(negative, p=2, dim=1)
+
+        # Cosine distance: d = 1 - cosine_similarity
+        pos_dist = 1 - F.cosine_similarity(anchor, positive)
+        neg_dist = 1 - F.cosine_similarity(anchor, negative)
+
+        # Want: d(anchor, positive) + margin < d(anchor, negative)
+        # Loss: max(d_pos - d_neg + margin, 0)
+        losses = F.relu(
+            pos_dist - neg_dist + self.margin
+        )
+
+        return losses.mean()
+
+
+class CombinedLoss(nn.Module):
+    """
+    Combines BCE loss with contrastive loss for stronger training signal.
+    """
+    
+    def __init__(self, margin: float = 1.0, alpha: float = 0.5):
+        """
+        Args:
+            margin: Margin for contrastive loss
+            alpha: Weight for BCE loss (1-alpha for contrastive)
+        """
+        super().__init__()
+        self.bce_loss = BCELoss()
+        self.contrastive_loss = ContrastiveLoss(margin=margin)
+        self.alpha = alpha
+    
+    def forward(self, predictions: torch.Tensor, feat1: torch.Tensor, 
+                feat2: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            predictions: Predicted similarities from classifier
+            feat1: Normalized features from first image
+            feat2: Normalized features from second image
+            labels: Ground truth labels
+            
+        Returns:
+            Combined loss value
+        """
+        bce = self.bce_loss(predictions, labels)
+        contrastive = self.contrastive_loss(feat1, feat2, labels)
+        
+        return self.alpha * bce + (1 - self.alpha) * contrastive-e 
+
+===== ./training/__init__.py =====
+
+# src/training/__init__.py
+"""
+Training module
+Aggregates trainers and loss functions for easy import.
+"""
+
+# Loss functions
+from .losses import BCELoss, ContrastiveLoss, TripletLoss, CombinedLoss
+
+# Trainers
+from .trainer_bce import BCETrainer
+from .trainer_triplet import TripletTrainer
+from .trainer_contrastive import ContrastiveTrainer
+
+__all__ = [
+    # Losses
+    'BCELoss',
+    'ContrastiveLoss',
+    'TripletLoss',
+    'CombinedLoss',
+    
+    # Trainers
+    'BCETrainer',
+    'TripletTrainer',
+    'ContrastiveTrainer',
+]-e 
+
+===== ./utils/helpers.py =====
+
+"""
+Utility Helper Functions
+General utility functions for the project.
+"""
+
+import os
+import random
+import numpy as np
+import torch
+
+
+def set_seed(seed: int = 42):
+    """
+    Set random seeds for reproducibility.
+    
+    Args:
+        seed: Random seed value
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
+def get_device() -> torch.device:
+    """
+    Get the appropriate device (CUDA if available, else CPU).
+    
+    Returns:
+        torch.device object
+    """
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"Using device: {device}")
+    if torch.cuda.is_available():
+        print(f"GPU: {torch.cuda.get_device_name(0)}")
+    return device
+
+
+def count_parameters(model: torch.nn.Module) -> int:
+    """
+    Count total number of trainable parameters in a model.
+    
+    Args:
+        model: PyTorch model
+        
+    Returns:
+        Number of trainable parameters
+    """
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
+def format_number(num: int) -> str:
+    """
+    Format large numbers with K/M/B suffixes.
+    
+    Args:
+        num: Number to format
+        
+    Returns:
+        Formatted string
+    """
+    if num >= 1e9:
+        return f"{num/1e9:.2f}B"
+    elif num >= 1e6:
+        return f"{num/1e6:.2f}M"
+    elif num >= 1e3:
+        return f"{num/1e3:.2f}K"
+    return str(num)
+
+
+def print_model_info(model: torch.nn.Module, model_name: str):
+    """
+    Print information about a model.
+    
+    Args:
+        model: PyTorch model
+        model_name: Name of the model
+    """
+    num_params = count_parameters(model)
+    print(f"\n{'='*60}")
+    print(f"Model: {model_name}")
+    print(f"Parameters: {format_number(num_params)} ({num_params:,})")
+    print(f"{'='*60}\n")
+
+
+def ensure_dir(directory: str):
+    """
+    Ensure a directory exists, create if it doesn't.
+    
+    Args:
+        directory: Path to directory
+    """
+    os.makedirs(directory, exist_ok=True)
+
+
+def load_checkpoint(
+    model: torch.nn.Module,
+    checkpoint_path: str,
+    device: torch.device
+) -> torch.nn.Module:
+    """
+    Load model weights from checkpoint.
+    
+    Args:
+        model: Model to load weights into
+        checkpoint_path: Path to checkpoint file
+        device: Device to load model on
+        
+    Returns:
+        Model with loaded weights
+    """
+    if not os.path.exists(checkpoint_path):
+        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
+    
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    model.load_state_dict(checkpoint)
+    model.to(device)
+    print(f"✓ Loaded checkpoint from {checkpoint_path}")
+    
+    return model
+
+
+def save_checkpoint(
+    model: torch.nn.Module,
+    save_path: str
+):
+    """
+    Save model checkpoint.
+    
+    Args:
+        model: Model to save
+        save_path: Path to save checkpoint
+    """
+    ensure_dir(os.path.dirname(save_path))
+    torch.save(model.state_dict(), save_path)
+    print(f"✓ Saved checkpoint to {save_path}")-e 
+
+===== ./utils/__init__.py =====
+
+# src/utils/__init__.py
+"""
+Utilities module
+"""
+
+from .helpers import (
+    set_seed,
+    get_device,
+    count_parameters,
+    format_number,
+    print_model_info,
+    ensure_dir,
+    load_checkpoint,
+    save_checkpoint
+)
+
+__all__ = [
+    'set_seed',
+    'get_device',
+    'count_parameters',
+    'format_number',
+    'print_model_info',
+    'ensure_dir',
+    'load_checkpoint',
+    'save_checkpoint',
+]

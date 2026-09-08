@@ -1,0 +1,94 @@
+\section{Conclusion}\label{sec:conclusion}
+
+This work presented HandVerify, a framework for offline handwriting verification based on deep Siamese networks. We systematically evaluated 72 (backbone, loss, dataset-pairing) configurations -- six CNN backbones (ResNet-18/34, EfficientNet-B0/B1, MobileNetV3-Small/Large) trained under three loss paradigms (BCE, Contrastive, Triplet) and assessed on four train$\to$test dataset pairings spanning IAM and RIMES -- establishing baselines and providing practical guidance for verification system design. Each configuration was trained once, with a single random seed and a single writer-disjoint split; no repeated-fold cross-validation was performed.
+
+The principal contributions are as follows: (i) a systematic comparison of three learning paradigms across six CNN backbones, under both same-dataset and cross-dataset evaluation; (ii) the introduction of two training strategies, epoch-wise dynamic negative resampling and selective backbone-layer freezing; (iii) a biometric evaluation using EER, AUC, decidability, and fixed-FAR operating points, with a best same-dataset EER of 3.1\% (IAM$\to$IAM, MobileNetV3-Large + Contrastive) and a best cross-dataset EER of 8.2\% (RIMES$\to$IAM, EfficientNet-B0 + Contrastive); and (iv) a paired statistical analysis (Wilcoxon signed-rank) confirming the consistency of the Contrastive-loss advantage across backbones and splits.
+
+Overall, Contrastive Loss consistently outperformed BCE and Triplet Loss across nearly all backbones, splits, and evaluation regimes, at both the aggregate and best-single-model level, though its advantage was not uniform: gains were largest for backbones where BCE training was unstable (e.g., MobileNetV3-Small) and smallest for ResNet-18, the only backbone with no collapsed BCE configurations. Cross-dataset generalization remained substantially harder than same-dataset evaluation for all losses, particularly under strict low-FAR operating conditions.
+
+\subsection{Future Directions}
+
+Several avenues merit further investigation:
+
+\textbf{Statistical robustness.} Multi-seed training and bootstrap confidence intervals would allow the point estimates reported here to be complemented with proper uncertainty quantification, and would strengthen the independence assumptions underlying the significance analysis.
+
+\textbf{Broader architectural coverage.} Extending the sweep to transformer-based and attention-augmented architectures, and to additional backbone families, could clarify whether the observed loss-function ordering generalizes beyond the six CNN backbones considered here.
+
+\textbf{Advanced negative sampling.} Online hard-negative mining and embedding-distance-based adaptive sampling may further improve Triplet Loss training beyond simple epoch-wise resampling.
+
+\textbf{Fine-grained failure analysis.} A systematic, writer- and pair-level failure analysis across the full test sets -- rather than the single-backbone, top-2-error inspection performed here -- could clarify whether errors concentrate on low-sample-count writers or on genuinely multi-style writers.
+
+\textbf{Explainability.} Visualization techniques such as Grad-CAM could elucidate the regions driving verification decisions, improving interpretability and user trust.
+
+\textbf{Multi-modal integration.} Combining offline handwriting with complementary biometric modalities (e.g., signatures, online writing dynamics) may improve overall system robustness.
+
+\subsection{Limitations and Confounding Factors}
+\label{sec:limitations}
+
+\begin{itemize}
+  \item \textbf{Single seed.} Each configuration was trained with a
+  single random seed; no per-model bootstrap confidence intervals
+  were computed for this revision, so the reported figures are point
+  estimates, not interval estimates, of evaluation uncertainty.
+
+  \item \textbf{EER-threshold calibration.} Classification metrics
+  (accuracy, precision, recall, F1; Table~\ref{tab:classification-metrics})
+  were computed and evaluated on the same set, without an independent
+  calibration split, and are therefore mildly optimistic.
+
+  \item \textbf{Single-split same-dataset evaluation.} Same-dataset
+  experiments employed a single train/test split rather than
+  $k$-fold cross-validation, owing to computational and GPU-hour
+  constraints on the Kaggle platform. The reported same-dataset
+  performance may therefore be sensitive to the particular writer
+  partition, and its variability across alternative splits could not
+  be assessed within the present study.
+
+  \item \textbf{Limited data augmentation.} The training pipeline
+  employed only RandomResizedCrop, with a relatively narrow scale
+  range of $(0.9, 1.1)$, and RandomRotation with a maximum angle of
+  $15^\circ$, adopted primarily due to computational constraints.
+  Additional geometric and photometric perturbations (e.g., small
+  translations, shear, brightness/contrast variation, mild Gaussian
+  blur) were not evaluated and remain an open direction.
+
+  \item \textbf{Cross-loss metric comparability.} Raw similarity
+  scores are not directly comparable across loss functions in
+  absolute terms (BCE yields sigmoid probabilities in $[0,1]$;
+  Contrastive/Triplet yield cosine similarities in $[-1,1]$);
+  accordingly, only rank-based metrics (AUC, EER, FAR/FRR) and the
+  affine-invariant decidability index $d'$ support the comparative
+  claims made in this work.
+
+  \item \textbf{Non-Gaussian score distributions.} Non-normality was
+  confirmed for all 72 configurations (Section~\ref{sec:distributions});
+  $d'$/decidability are therefore used strictly as descriptive
+  indices, not as parametric inferential statistics.
+
+  \item \textbf{Non-independence in Wilcoxon testing.} The 24 paired
+  observations analyzed in Section~\ref{sec:significance} share
+  backbones, data splits, and single-seed training runs; the
+  corresponding significance results should be interpreted as
+  evidence of directional consistency rather than as 24 statistically
+  independent replicates.
+
+  \item \textbf{Granularity of failure-case analysis.} The
+  qualitative analysis in Section~\ref{sec:failure-analysis} is
+  restricted to distribution- and curve-level patterns for a single
+  backbone (ResNet-18), plus a top-2-error pair-level inspection for
+  a single (backbone, loss, split) triple; individual false-accept/
+  false-reject pairs, writer identifiers, and per-pair scores were
+  not systematically retained. A finer-grained, image- and
+  writer-level failure analysis is left to future work.
+
+  \item \textbf{Scope of exhaustive validation.} The exhaustive
+  impostor-pool validation reported in Section~\ref{sec:exhaustive}
+  covers a single (backbone, loss, split) triple (ResNet-18 +
+  Contrastive, RIMES$\to$IAM) and does not extend to the remaining
+  three splits or to other backbone/loss combinations.
+
+  \item \textbf{Training dynamics.} Per-configuration epoch counts
+  and stopping criteria (early stopping vs.\ epoch cap) were not
+  available in consolidated form for this revision; raw logs were
+  inspected directly only for a subset of BCE/EfficientNet-B1 runs.
+\end{itemize}
