@@ -209,14 +209,14 @@ Contrastive (AUC $0.950$) is close to same-dataset RIMES$\to$RIMES
   \small
   \begin{tabular}{lccccc}
     \toprule
-    Backbone & AUC & EER (\%) & $d'$ & GAR@FAR1\% & GAR@FAR0.1\% \\
+    Backbone            & AUC   & EER (\%) & $d'$ & GAR@FAR1\% & GAR@FAR0.1\% \\
     \midrule
-    ResNet-18            & \textbf{0.869} & \textbf{19.2} & \textbf{1.84} & 9.8\%  & 23.3\% \\
-    EfficientNet-B0      & 0.849 & 20.2 & 1.75 & 10.0\% & 25.3\% \\
-    EfficientNet-B1      & 0.838 & 21.1 & 1.77 & 14.3\% & \textbf{31.0\%} \\
-    MobileNetV3-Large    & 0.833 & 22.3 & 1.59 & 13.1\% & 27.1\% \\
-    ResNet-34            & 0.828 & 23.1 & 1.52 & 9.8\%  & 20.2\% \\
-    MobileNetV3-Small    & 0.788 & 26.3 & 1.38 & \textbf{14.8\%} & 25.0\% \\
+    ResNet-18           & \textbf{0.869} & \textbf{19.2} & \textbf{1.84} & 23.3\% & 9.8\%  \\
+    EfficientNet-B0     & 0.849 & 20.2 & 1.75 & 25.3\% & 10.0\% \\
+    EfficientNet-B1     & 0.838 & 21.1 & 1.77 & \textbf{31.0\%} & 14.3\% \\
+    MobileNetV3-Large   & 0.833 & 22.3 & 1.59 & 27.1\% & 13.1\% \\
+    ResNet-34           & 0.828 & 23.1 & 1.52 & 20.2\% & 9.8\%  \\
+    MobileNetV3-Small   & 0.788 & 26.3 & 1.38 & 25.0\% & \textbf{14.8\%} \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -228,13 +228,12 @@ Contrastive (AUC $0.950$) is close to same-dataset RIMES$\to$RIMES
   functions and dataset splits. Axis ranges scaled between observed
   min/max per metric; annotated values are raw means
   (Table~\ref{tab:radar-values}). Color by architecture family (blue:
-  ResNet, orange: EfficientNet, green: MobileNetV3), darker shade =
-  larger variant.}
+  ResNet, orange: EfficientNet, green: MobileNetV3). Darker shade = larger variant.}
   \label{fig:radar-backbone}
 \end{figure}
 
-ResNet-18 ranks first on AUC, EER and $d'$, but has the lowest
-GAR@FAR1\% (9.8\%) and second-lowest GAR@FAR0.1\% (23.3\%) of all six
+ResNet-18 ranks first on AUC, EER and $d'$, but has the second lowest
+GAR@FAR1\% (23.3\%) and lowest GAR@FAR0.1\% (9.8\%, near-tied with ResNet-34) of all six
 backbones. Overall separability and low-FAR-tail behavior are
 therefore decoupled for this backbone: a small number of
 high-scoring impostor pairs depresses GAR at strict thresholds without
@@ -243,16 +242,16 @@ tail reported for ResNet-18 under Contrastive on cross-dataset splits
 (Section~\ref{sec:failure-analysis}).
 
 EfficientNet-B1 shows the inverse profile: fourth on AUC, third on
-EER/$d'$, but highest GAR@FAR0.1\% (31.0\%, $+7.7$ points over
+EER/$d'$, but highest GAR@FAR1\% (31.0\%, $+7.7$ points over
 ResNet-18).
 
 MobileNetV3-Small has the worst AUC, EER and $d'$ of all six backbones,
 consistent with its two collapsed BCE configurations, yet the highest
-GAR@FAR1\% (14.8\%) — an isolated-threshold effect, not a
+GAR@FAR0.1\% (14.8\%) — an isolated-threshold effect, not a
 discriminability advantage.
 
 Within the ResNet family, ResNet-34 underperforms ResNet-18 on every
-metric except GAR@FAR1\% (near-tied, 9.8\% vs.\ 9.8\%), despite twice
+metric except GAR@FAR0.1\% (near-tied, 9.8\% vs.\ 9.8\%), despite twice
 the parameter count; no comparable inversion occurs between
 EfficientNet-B0/B1. ResNet-34 is the only backbone that leads on no
 metric in Table~\ref{tab:radar-values}.
@@ -397,8 +396,7 @@ generalization gap discussed in Section~\ref{sec:cross-dataset}.
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=\textwidth]{images/det_curves_resnet18.png}
-  \caption{DET curves (log-log), ResNet-18, all losses/splits
-  (supplementary).}
+  \caption{DET curves (log-log), ResNet-18, all losses/splits.}
   \label{fig:det}
 \end{figure}
 
@@ -484,10 +482,8 @@ mirroring the EER ordering across splits
 \subsection{Failure-case analysis}
 \label{sec:failure-analysis}
 
-We inspect failure modes of the strongest configuration per split
-(Table~\ref{tab:ours-best}) using the ResNet-18 distribution plots
-(Figure~\ref{fig:distributions}) and, for RIMES$\to$IAM (ResNet-18 +
-Contrastive), a pair-level export of the top false accepts and false
+We inspect the two most relevant failure cases for the RIMES$\to$IAM (ResNet-18 +
+Contrastive) configuration, a pair-level export of the top false accepts and false
 rejects.
 
 \begin{itemize}

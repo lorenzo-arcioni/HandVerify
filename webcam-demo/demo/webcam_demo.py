@@ -1,8 +1,7 @@
 """
 HandVerify - webcam live + ROI disegnata a mano.
 
-Stessa interfaccia della vecchia demo (feed live threaded, controllo
-focus manuale, cambio camera, barra soglie) ma le due ROI (campione A e
+Le due ROI (campione A e
 campione B) non sono piu' rettangoli fissi: le disegni tu trascinando il
 mouse sul video, poi premi SPAZIO per catturare ed eseguire la verifica.
 
@@ -20,10 +19,6 @@ Controlli:
 Slider "SOGLIA BINARIZZAZIONE (GRIGIO)" nel pannello di destra: regola in
 tempo reale la soglia di binarizzazione usata nel preprocessing (0-255,
 default 128). Si vede subito l'effetto nel MODEL INPUT PREVIEW.
-
-Nota: SPAZIO funziona sempre, anche senza aver prima cliccato su un altro
-controllo (e' collegato a una scorciatoia globale dell'applicazione,
-indipendente dal focus da tastiera).
 """
 import sys
 import os
