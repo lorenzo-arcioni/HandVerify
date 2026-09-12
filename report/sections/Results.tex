@@ -289,27 +289,48 @@ For ResNet-18 + Contrastive trained on RIMES and evaluated on the
 protocol's impostor count), the exhaustive-pool re-evaluation gives:
 
 \begin{table}[htbp]
-  \centering
-  \caption{Exhaustive-impostor-pool validation, RIMES$\to$IAM,
+\centering
+\caption{Exhaustive-impostor-pool validation, RIMES$\to$IAM,
   ResNet-18 + Contrastive, vs.\ the balanced protocol.}
-  \label{tab:exhaustive}
-  \small
-  \begin{tabular}{lcccc}
-    \toprule
-    Protocol & Impostor pairs & AUC & EER & GAR@1\% \\
-    \midrule
-    Balanced   & 4{,}051       & 0.967 & 8.2\%  & 62.6\% \\
-    Exhaustive & 1{,}179{,}440 & 0.945 & 13.0\% & 34.5\% \\
-    \bottomrule
-  \end{tabular}
+\label{tab:exhaustive}
+\small
+\begin{tabular}{lccccccc}
+\toprule
+    Protocol & Impostor pairs & AUC & EER & FAR@0.1\%$^\dagger$ & GAR@0.1\% & FAR@1\%$^\dagger$ & GAR@1\% \\
+\midrule
+    Balanced   & 4{,}051       & 0.943 & 13.4\% & 0.078\% & 8.0\% & 0.989\% & 34.0\% \\
+    Exhaustive & 1{,}179{,}440 & 0.945 & 13.0\% & 0.100\% & 9.6\% & 1.000\% & 34.5\% \\
+\bottomrule
+\end{tabular}
+\begin{tablenotes}
+\footnotesize
+\item[$\dagger$] Effective FAR achieved at the threshold selected for the corresponding
+  nominal FAR target (0.1\% or 1\%), not the nominal target itself.
+\end{tablenotes}
 \end{table}
 
-The exhaustive pool shows a genuine, non-trivial degradation relative
-to the balanced protocol (AUC $0.967\to0.945$; EER $8.2\%\to13.0\%$;
-GAR@1\% $62.6\%\to34.5\%$), indicating that 1:1 balanced impostor
-subsampling in the main sweep was moderately optimistic for this
-configuration. This is run for a single (backbone, loss, split) triple
-only, given the cost of exhaustive scoring, and does not revisit the
+The exhaustive pool yields results that are essentially in line with
+the balanced protocol across all metrics (AUC $0.943\to0.945$; EER
+$13.4\%\to13.0\%$; GAR@1\% $34.0\%\to34.5\%$), indicating that 1:1
+balanced impostor subsampling in the main sweep was already a
+reliable estimate for this configuration. At the 1\% FAR target, the
+effective FAR is nearly identical between the two protocols
+(0.989\% for balanced vs.\ 1.000\% for exhaustive), and GAR@1\%
+tracks closely as a result ($34.0\%\to34.5\%$). At the stricter
+0.1\% FAR target, the effective FAR achieved is somewhat lower for
+the balanced protocol (0.078\%) than for the exhaustive one
+(0.100\%): with only 4{,}051 impostor pairs, the balanced protocol
+cannot finely resolve thresholds in the low-FAR regime, so the
+selected threshold ends up more conservative than intended, which in
+turn explains most of the gap in GAR@0.1\% ($8.0\%\to9.6\%$) — the
+exhaustive pool, precisely by including far more impostor pairs, is
+able to hit the 0.1\% target much more accurately. Overall, no
+meaningful degradation in discriminability is observed when the
+impostor pool is expanded to its full exhaustive size; the residual
+differences at strict FAR targets are attributable to threshold
+resolution rather than to overfitting of the balanced subsampling.
+This is run for a single (backbone, loss, split) triple only, given
+the cost of exhaustive scoring, and does not revisit the
 per-backbone (Section~\ref{sec:per-backbone}) or Wilcoxon
 (Section~\ref{sec:significance}) analyses.
 
@@ -572,38 +593,62 @@ low-sample-count writers, is left to future work
 \subsection{Comparison with prior work}
 \label{sec:sota}
 
-Direct comparison is limited: most prior CNN-based work on IAM/RIMES
-addresses closed-set \emph{identification} (top-1/mAP), not the
-open-set, pairwise \emph{verification} protocol (EER/AUC) used here;
-and methodologically comparable Siamese-verification studies are
-evaluated on different scripts (Arabic/Chinese/Japanese), not
-IAM/RIMES. With this caveat, Table~\ref{tab:sota} situates our EER
-range within the broader literature rather than claiming a leaderboard
-rank.
+Direct benchmarking against the literature is constrained by three
+methodological gaps, so we position our results as a contextual reference
+rather than a leaderboard ranking (Table~\ref{tab:sota}).
+
+\emph{Task mismatch.} Most CNN work on IAM and comparable corpora addresses
+closed-set identification~\cite{fiel2015,christlein2015}, reporting top-$1$
+accuracy or mAP. These numbers are not commensurable with the open-set,
+pairwise EER/AUC used here: identification assumes every probe has an enrolled
+match and only ranks candidates, whereas verification must also reject unseen
+writers at a fixed threshold. The closest methodological neighbour, the triplet
+CNN of Keglevic et al.~\cite{keglevic2018}, is likewise a retrieval system
+evaluated by mAP.
+
+\emph{Protocol mismatch.} Comparable Siamese \emph{verification} studies are
+typically evaluated on different scripts—Arabic, Chinese or Japanese—or under
+same-dataset splits only, so neither the data distribution nor the
+cross-dataset stress test we apply is reproduced. We are not aware of prior
+work reporting BCE, Contrastive and Triplet objectives under one fixed training
+recipe across a shared backbone set on IAM and RIMES, which is the specific
+comparison our study isolates.
+
+\emph{Operating-point reporting.} Prior studies rarely report GAR at strict
+FAR; a low EER can coexist with a sharp collapse in genuine acceptance at
+$\text{FAR}=0.1\%$, as our results show (Section~\ref{sec:operating-points}). This
+limits comparability with the security-oriented regime and is a dimension we
+make explicit.
+
 
 \begin{table}[htbp]
   \centering
   \caption{Prior work on CNN-based writer identification/verification.}
   \label{tab:sota}
-  \small
-  \begin{tabular}{lllll}
+  \footnotesize
+  \begin{tabularx}{\textwidth}{@{}l L L l L@{}}
     \toprule
     Method & Task & Dataset & Metric & Value \\
     \midrule
     Fiel \& Sablatnig~\cite{fiel2015} & Identification (closed-set) & IAM (train), ICDAR13/CVL (eval) & Acc./mAP & not comparable (task) \\
     Christlein et al.~\cite{christlein2017} & Identification (closed-set) & ICDAR13, CVL & mAP & not comparable (task) \\
-    Afzali et al.\ (CSCNN)~\cite{afzali2024} & Verification, Siamese + combined loss & IAM, IFN/ENIT & EER/Acc. & \emph{unverified -- value could not be confirmed against source} \\
-    Anon., CAE+Siamese~\cite{caewriter2019} & Verification, text-indep.\ & script/dataset not IAM/RIMES & EER/AUC & EER $=26.4\%$, AUC $=0.818$ -- partially comparable \\
+    Keglevic et al.\ (triplet CNN)~\cite{keglevic2018} & Retrieval / identification, triplet metric learning & ICDAR13 & mAP & mAP $86.1\%$ -- not comparable (task) \\
+    Afzali et al.\ (CSCNN)~\cite{afzali2024} & Verification, Siamese + combined loss & IAM, IFN/ENIT & Accuracy, FAR, FRR & Partially comparable (different metrics/protocol) \\
     Scribe verification~\cite{scribeverif2026} & Verification, same protocol family & Bamboo Slips, MCCD & AUC/EER-like & AUC $0.86$--$0.96$, EER-like $7.8$--$21\%$ -- partially comparable (script differs) \\
     \textbf{Ours (best, Contrastive)} & Verification & RIMES$\to$IAM & AUC/EER & 0.967 / 8.2\% (EfficientNet-B0) \\
     \textbf{Ours (best, Contrastive)} & Verification & IAM$\to$IAM & AUC/EER & 0.995 / 3.1\% (MobileNetV3-Large) \\
     \bottomrule
-  \end{tabular}
+  \end{tabularx}
 \end{table}
 
-Our best cross-dataset result (RIMES$\to$IAM, EER $=8.2\%$) falls
-within the closest comparable prior range ($7.8$--$21\%$);
-same-dataset results are markedly better (EER $=3.1\%$), as expected
-given the easier regime. We make no ranking claim given the dataset
-and protocol differences; Afzali et al.'s IAM figure remains
-unverified pending a check against the original source.
+Within these caveats, our best cross-dataset configuration
+(RIMES$\rightarrow$IAM, EER $=8.2\%$) falls inside the range reported by the
+closest comparable Siamese-verification work ($7.8$--$21\%$), and our
+same-dataset result (IAM$\rightarrow$IAM, EER $=3.1\%$) is numerically lower
+than that range, although a direct comparison is not warranted, since the
+datasets and protocols differ.
+Rather than claiming state-of-the-art, our contribution is a controlled, uniformly-evaluated
+comparison: across every dataset split the metric-learning objectives dominate
+BCE, and Contrastive is the most consistent—a conclusion the heterogeneous
+prior literature, mixing tasks, scripts and protocols, does not allow one to
+draw directly.

@@ -1,37 +1,87 @@
-\section{Related Work}\label{sec:related}
+\section{Related Work}
+\label{sec:related}
 
 \subsection{Traditional Handwriting Verification}
+Early writer verification relied on handcrafted descriptors extracted from
+the handwritten trace. Three families dominated: \emph{grapheme-based}
+methods, which model the statistical distribution of elementary stroke
+shapes~\cite{bensefia2005}; \emph{texture-based} methods, which treat
+handwriting as an oriented texture and encode it with Gabor filters or
+grey-level co-occurrence statistics~\cite{said2000}; and
+\emph{contour-based} methods, which measure slant, curvature and shape
+along ink boundaries~\cite{schomaker2004}. Textural and
+allographic features were combined into strong text-independent baselines by
+Bulacu and Schomaker~\cite{bulacu2007}, within the broader framing of the
+handwriting-recognition problem surveyed by Plamondon and
+Srihari~\cite{plamondon2000}. These approaches perform well in controlled
+settings but degrade under writing variabilityand noise and
+require expert feature engineering that transfers poorly across datasets.
 
-Early handwriting verification systems relied on handcrafted feature extraction methods. Grapheme-based approaches decomposed handwriting into fundamental stroke patterns, analyzing their statistical distributions. Texture-based methods applied filters like Gabor wavelets, Local Binary Patterns (LBP), and co-occurrence matrices to capture writing texture characteristics. Contour-based features extracted boundary information, measuring curvature, slant, and shape descriptors.
+\subsection{Deep Learning for Writer Analysis}
+Convolutional Neural Networks (CNNs) replaced hand-designed descriptors with
+hierarchical features learned directly from pixels. In writer identification,
+Fiel and Sablatnig~\cite{fiel2015} used CNN activations as a per-writer
+feature vector, while Christlein et al.~\cite{christlein2015} employed
+penultimate-layer activations as local descriptors aggregated into a global
+GMM supervector; the same group subsequently removed the need for writer
+labels altogether, learning descriptors by unsupervised training on
+surrogate classes~\cite{christlein2017}. Later work moved to deeper,
+fragment-level representations, as in FragNet~\cite{he2020fragnet}. These
+systems, however, target \emph{closed-set identification}: they assign a
+probe to one of a fixed set of enrolled writers and are evaluated with
+top-$k$ accuracy or mean average precision (mAP).
 
-These traditional methods achieved moderate success in controlled environments but faced significant limitations. Feature engineering required domain expertise and extensive parameter tuning. Performance degraded substantially with writing variations, noise, and disguised samples. The fixed feature representations lacked adaptability to dataset-specific characteristics, limiting generalization capabilities.
-
-\subsection{Deep Learning for Writer Verification}
-
-The introduction of Convolutional Neural Networks (CNNs) revolutionized handwriting analysis by enabling automatic hierarchical feature learning. Early deep learning approaches applied standard CNNs trained for classification, using learned features for similarity computation through distance metrics. However, these methods suffered from limited discriminative power as networks were not explicitly trained for verification tasks.
-
-Siamese architectures addressed this limitation by directly learning similarity functions. Chopra et al. pioneered Contrastive Loss for face verification, demonstrating its effectiveness in learning discriminative embeddings. This approach was subsequently adapted to handwriting verification, showing substantial improvements over classification-based methods.
+They do not
+address the \emph{open-set verification} question—whether two arbitrary
+samples share an author—which requires an explicit similarity model and a
+decision threshold rather than a closed classifier, and which is the setting
+targeted here.
 
 \subsection{Siamese Networks and Metric Learning}
+Verification is naturally cast as metric learning: a Siamese architecture
+applies two weight-sharing encoders to an input pair and learns an embedding
+in which same-writer samples are close and different-writer samples are far
+apart. The paradigm originates with Bromley et al.~\cite{bromley1994siamese},
+who introduced twin networks for signature verification, and was later
+popularised for one-shot recognition by Koch et al.~\cite{koch2015siamese}.
+Two metric objectives shape the embedding geometry explicitly: the Contrastive
+Loss of Hadsell et al.~\cite{hadsell2006contrastive}, which pulls genuine
+pairs together and pushes impostor pairs beyond a margin, and the Triplet Loss
+of Schroff et al. ~\cite{schroff2015facenet}, which enforces a \emph{relative}
+constraint—an anchor must be closer to a positive than to a negative by a
+margin—yielding embeddings well suited to open-set biometrics. In handwriting,
+triplet CNNs were applied to writer retrieval by
+Keglevic et al.~\cite{keglevic2018}. A third, non-metric option keeps the
+Siamese encoder but trains a decision head directly on the pair with Binary
+Cross-Entropy (BCE), as in the one-shot formulation of Koch et
+al.~\cite{koch2015siamese}; this remains the conventional
+pairwise-classification baseline. The three objectives therefore compete for
+the same architecture, each structuring the embedding space differently: BCE
+optimises a decision head without explicitly constraining the space, whereas
+the two metric losses act on pairwise geometry directly. To the best of our
+knowledge, no prior study compares these three objectives under a single
+fixed training recipe across a shared set of modern backbones on handwriting
+data, and that is the gap this work addresses.
 
-Siamese networks employ twin networks with shared weights, processing paired inputs to learn embeddings optimized for similarity assessment. Three main paradigms have emerged for training these architectures:
+\subsection{Backbone Architectures and Transfer Learning}
+The encoder choice governs the quality of the learned representation. Residual
+connections~\cite{he2016resnet} enabled very deep networks;
+EfficientNet~\cite{tan2019efficientnet} reached comparable accuracy at a
+fraction of the parameters through compound scaling; and
+MobileNetV3~\cite{howard2019mobilenetv3} prioritised efficiency via
+depthwise-separable convolutions. Fine-tuning
+ImageNet-pretrained~\cite{deng2009imagenet} backbones is now standard, but the
+domain gap between natural images and near-binary handwriting makes the
+optimal backbone and transfer strategy for verification non-obvious—motivating
+the controlled backbone sweep reported here.
 
-\textbf{Binary Cross-Entropy (BCE) Loss:} This approach treats verification as binary classification, training a decision head to predict whether pairs match. While intuitive and stable, BCE loss does not explicitly structure the embedding space, potentially leading to suboptimal feature distributions.
-
-\textbf{Contrastive Loss:} Introduced for metric learning, Contrastive Loss explicitly optimizes pairwise distances. Positive pairs are pulled together while negative pairs are pushed apart by a margin. This approach directly shapes the embedding geometry but requires careful margin tuning and suffers from convergence challenges with poor negative sampling.
-
-\textbf{Triplet Loss:} Extending pairwise learning, Triplet Loss jointly considers anchor, positive, and negative samples, enforcing that positive pairs are closer than negative pairs by a margin. This relative comparison provides stronger training signals but increases computational cost and requires sophisticated triplet mining strategies.
-
-Recent work has explored online hard negative mining, adaptive margins, and hybrid loss combinations to improve convergence and performance. However, comprehensive comparisons across loss paradigms with modern architectures remain limited in handwriting verification literature.
-
-\subsection{Modern CNN Architectures}
-
-The evolution of CNN architectures has provided increasingly efficient and accurate feature extractors. ResNet introduced residual connections, enabling training of very deep networks. EfficientNet achieved state-of-the-art accuracy with fewer parameters through compound scaling. MobileNet and DenseNet families prioritized computational efficiency through depthwise separable convolutions and dense connectivity patterns respectively.
-
-Transfer learning from ImageNet has become standard practice, leveraging features learned on large-scale natural image datasets. However, the domain gap between natural images and handwriting raises questions about optimal transfer strategies. Recent work suggests selective layer freezing and fine-tuning can improve adaptation, but systematic studies in handwriting verification are scarce.
-
-\subsection{Evaluation Metrics for Biometric Systems}
-
-Handwriting verification is fundamentally a biometric authentication task, requiring evaluation beyond simple classification accuracy. Equal Error Rate (EER), where False Accept Rate equals False Reject Rate, provides a single-number performance summary commonly used in biometric literature. ROC curves offer comprehensive performance visualization across all operating thresholds.
-
-Additional metrics include Decidability Index, measuring separation between genuine and impostor distributions, and operating point analysis at specific FAR values relevant to security applications. Despite their importance, many handwriting verification studies focus primarily on accuracy, limiting comparability with biometric systems literature.
+\subsection{Evaluation of Biometric Verification}
+As a biometric authentication task, writer verification must be evaluated with
+detection-oriented metrics rather than plain accuracy. The Equal Error Rate
+(EER), the operating point at which the False Acceptance Rate equals the False
+Rejection Rate, provides a single-number, threshold-independent summary, while
+the ROC curve and its area (AUC) characterise performance across all
+thresholds; decidability ($d'$) quantifies the separation between the genuine
+and impostor score distributions~\cite{mansfield2002}. We adopt this protocol
+throughout and additionally report operation at fixed low-FAR points, the
+regime relevant to deployed systems and not captured by the EER alone.

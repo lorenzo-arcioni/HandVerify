@@ -30,6 +30,10 @@
     footskip=10mm
 }
 
+\usepackage{tabularx}%
+\usepackage{array}%
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+
 %% Theorem styles
 \theoremstyle{thmstyleone}%
 \newtheorem{theorem}{Theorem}%
@@ -48,15 +52,33 @@
 
 \title[HandVerify: Handwriting Verification]{HandVerify: A Comparative Study of Deep Learning Architectures for Writer Verification}
 
-\author*[1]{\fnm{First} \sur{Author}}\email{first.author@university.edu}
+\author*[1]{\fnm{Lorenzo} \sur{Arcioni}}\email{arcioni.1885377@studenti.uniroma1.it}
 \equalcont{These authors contributed equally to this work.}
 
-\author[1]{\fnm{Second} \sur{Author}}\email{second.author@university.edu}
+\author[1]{\fnm{Enrico} \sur{Giordani}}\email{giordani.2143412@studenti.uniroma1.it}
 \equalcont{These authors contributed equally to this work.}
 
 \affil*[1]{\orgdiv{Department of Computer Science}, \orgname{Sapienza University of Rome}, \orgaddress{\street{Via Salaria 113}, \city{Rome}, \postcode{00198}, \state{Italy}}}
 
-\abstract{Writer verification is a critical biometric task with applications in forensic document analysis, security systems, and authentication. This paper presents HandVerify, a comprehensive framework for offline handwriting verification using deep Siamese neural networks. We systematically evaluate three learning paradigms: Binary Cross-Entropy (BCE) classification, Contrastive Learning, and Triplet Loss, across ten state-of-the-art CNN architectures including ResNet, EfficientNet and MobileNet families. We conduct extensive experiments on two benchmark datasets: RIMES (French) and IAM (English), enabling evaluation across different languages. Through rigorous 5-fold cross-validation, we demonstrate that appropriate architecture selection combined with task-specific loss functions achieves Equal Error Rates (EER) below 5\% on both datasets. Our results reveal that metric learning approaches (Contrastive and Triplet losses) consistently outperform BCE classification, particularly when combined with lightweight architectures such as MobileNetV3. The modular design of HandVerify enables rapid prototyping and fair comparison across architectural choices, establishing strong baselines for future research. All code and experimental protocols are publicly available.}
+\abstract{Writer verification is a critical biometric task with applications 
+in forensic document analysis, security systems, and authentication. 
+This paper presents HandVerify, a modular framework for offline handwriting 
+verification using deep Siamese neural networks. We systematically evaluate 
+three training objectives---Binary Cross-Entropy (BCE) classification, Contrastive 
+Loss and Triplet Loss---across six ImageNet-pretrained CNN backbones drawn from 
+the ResNet, EfficientNet and MobileNetV3 families, on two benchmark datasets: IAM 
+(English) and RIMES (French). We train and evaluate all 72 (backbone, loss, 
+dataset-pairing) combinations over two within-dataset and two cross-dataset 
+pairings, reporting EER, AUC, decidability and genuine acceptance rate at fixed 
+low false-acceptance rates. The two metric-learning objectives consistently outperform 
+BCE, with Contrastive the most consistent across backbones and splits (paired Wilcoxon 
+signed-rank, $p<10^{-6}$). The best same-dataset configuration reaches an EER of 3.1\% 
+(IAM$\to$IAM) and the best cross-dataset configuration 8.2\% (RIMES$\to$IAM), while 
+genuine acceptance degrades sharply at FAR $=0.1\%$---showing that a low EER does not 
+imply usable operation under strict false-acceptance constraints. Each configuration 
+was trained once, with a single random seed and a single writer-disjoint split; the 
+reported figures are therefore point estimates. All code and experimental protocols 
+are publicly available.} 
 
 \keywords{Handwriting Verification, Siamese Networks, Contrastive Learning, Triplet Loss, Computer Vision, Deep Learning, Biometric Authentication, Transfer Learning}
 
@@ -87,13 +109,13 @@ The authors declare no competing interests.
 Not applicable.
 
 \bmhead{Data availability}
-The datasets used in this study are publicly available at the dataset links: \href{https://www.kaggle.com/datasets/chaimaourgani/handwritten2text-training-dataset}{RIMES} and \href{https://www.kaggle.com/datasets/naderabdelghany/iam-handwritten-forms-dataset}{IAM
+The datasets used in this study are publicly available at the dataset links: \href{https://www.kaggle.com/datasets/chaimaourgani/handwritten2text-training-dataset}{RIMES} and \href{https://www.kaggle.com/datasets/naderabdelghany/iam-handwritten-forms-dataset}{IAM}
 
 \bmhead{Code availability}
 The HandVerify framework is implemented in PyTorch and it is publicly available on \href{https://github.com/lorenzo-arcioni/HandVerify}{GitHub} under the MIT License.
 
 \bmhead{Author contributions}
-Both authors contributed equally to this work. L.A. designed the framework architecture and conducted the training and testing experiments. E.G. implemented the application design, deployed the application, and verified its correct functionality. Both authors wrote and reviewed the manuscript.
+Both authors contributed equally to this work. L.A. designed the framework architecture and conducted the training and testing experiments. E.G. implemented the application design, deployed the application, verified its correct functionality. Both authors wrote and reviewed the manuscript.
 
 \input{sections/Appendix}
 

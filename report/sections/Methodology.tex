@@ -134,7 +134,7 @@ p_l \in \{0.20,0.20,0.18,0.16,0.12\}
 After the final hidden representation:
 
 \begin{equation}
-\mathbf{h}^{(5)}\in\mathbb{R}^{32}
+\mathbf{h}^{(5)}\in\mathbb{R}^{2}
 \end{equation}
 
 the last linear layer produces a scalar logit:
@@ -190,15 +190,15 @@ in Figure~\ref{fig:bce-architecture}.
 For contrastive and triplet learning objectives, the shared encoder extracts feature representations from two input images:
 
 \begin{equation}
-\mathbf{x}_1,\mathbf{x}_2\in\mathbb{R}^{D}
+\mathbf{z}_1,\mathbf{z}_2\in\mathbb{R}^{D}
 \end{equation}
 
 where $D$ denotes the dimensionality of the backbone features. The two feature vectors are independently processed by the same projection head with shared parameters:
 
 \begin{equation}
-\mathbf{e}_1=g_{\phi}(\mathbf{x}_1),
+\mathbf{e}_1=g_{\phi}(\mathbf{z}_1),
 \qquad
-\mathbf{e}_2=g_{\phi}(\mathbf{x}_2)
+\mathbf{e}_2=g_{\phi}(\mathbf{z}_2)
 \end{equation}
 
 where $g_{\phi}$ denotes the MLP projection head and $\phi$ represents its learnable
@@ -275,7 +275,7 @@ The final projection layer produces the 32-dimensional embedding without applyin
 The resulting embeddings are normalized independently using $\ell_2$ normalization:
 
 \begin{equation}
-\mathbf{z}_i
+\hat{\mathbf{e}}_i
 =
 \frac{\mathbf{e}_i}
 {\|\mathbf{e}_i\|_2},
@@ -285,9 +285,9 @@ The resulting embeddings are normalized independently using $\ell_2$ normalizati
 obtaining unit-length embeddings:
 
 \begin{equation}
-\mathbf{z}_1,\mathbf{z}_2\in\mathbb{R}^{32},
+\hat{\mathbf{e}}_1,\hat{\mathbf{e}}_2\in\mathbb{R}^{32},
 \qquad
-\|\mathbf{z}_1\|_2=\|\mathbf{z}_2\|_2=1
+\|\hat{\mathbf{e}}_1\|_2=\|\hat{\mathbf{e}}_2\|_2=1
 \end{equation}
 
 The dropout probabilities applied after the hidden layers are:
@@ -301,14 +301,14 @@ The two normalized embeddings are then compared through cosine similarity:
 \begin{equation}
 s_{12}
 =
-\frac{\mathbf{z}_1^T\mathbf{z}_2}
-{\|\mathbf{z}_1\|_2\|\mathbf{z}_2\|_2}
+\frac{\hat{\mathbf{e}}_1^T\hat{\mathbf{e}}_2}
+{\|\hat{\mathbf{e}}_1\|_2\|\hat{\mathbf{e}}_2\|_2}
 \end{equation}
 
 Since the embeddings are normalized:
 
 \begin{equation}
-s_{12}=\mathbf{z}_1^T\mathbf{z}_2
+s_{12}=\hat{\mathbf{e}}_1^T\hat{\mathbf{e}}_2
 \end{equation}
 
 For contrastive learning, the similarity score is optimized directly by minimizing the distance between genuine pairs and enforcing a margin separation between impostor pairs.

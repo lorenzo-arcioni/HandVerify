@@ -1,6 +1,6 @@
 %% BioMed_Central_Bib_Style_v1.01
 
-\begin{thebibliography}{14}
+\begin{thebibliography}{28}
 % BibTex style file: bmc-mathphys.bst (version 2.1), 2014-07-24
 \ifx \bisbn   \undefined \def \bisbn  #1{ISBN #1}\fi
 \ifx \binits  \undefined \def \binits#1{#1}\fi
@@ -188,6 +188,189 @@ pp. \bfpage{815}--\blpage{823}
 \endbibitem
 
 %%% 10
+\bibitem[\protect\citeauthoryear{Bensefia et~al.}{2005}]{bensefia2005}
+\begin{barticle}
+\bauthor{\bsnm{Bensefia}, \binits{A.}},
+\bauthor{\bsnm{Paquet}, \binits{T.}},
+\bauthor{\bsnm{Heutte}, \binits{L.}}:
+\batitle{A writer identification and verification system}.
+\bjtitle{Pattern Recognition Letters}
+\bvolume{26}(\bissue{13}),
+\bfpage{2080}--\blpage{2092}
+(\byear{2005})
+\end{barticle}
+\endbibitem
+
+%%% 11
+\bibitem[\protect\citeauthoryear{Said et~al.}{2000}]{said2000}
+\begin{barticle}
+\bauthor{\bsnm{Said}, \binits{H.E.S.}},
+\bauthor{\bsnm{Tan}, \binits{T.N.}},
+\bauthor{\bsnm{Baker}, \binits{K.D.}}:
+\batitle{Personal identification based on handwriting}.
+\bjtitle{Pattern Recognition}
+\bvolume{33}(\bissue{1}),
+\bfpage{149}--\blpage{160}
+(\byear{2000})
+\end{barticle}
+\endbibitem
+
+%%% 12
+\bibitem[\protect\citeauthoryear{Schomaker and Bulacu}{2004}]{schomaker2004}
+\begin{barticle}
+\bauthor{\bsnm{Schomaker}, \binits{L.}},
+\bauthor{\bsnm{Bulacu}, \binits{M.}}:
+\batitle{Automatic writer identification using connected-component contours and
+  edge-based features of uppercase western script}.
+\bjtitle{IEEE Transactions on Pattern Analysis and Machine Intelligence}
+\bvolume{26}(\bissue{6}),
+\bfpage{787}--\blpage{798}
+(\byear{2004})
+\end{barticle}
+\endbibitem
+
+%%% 13
+\bibitem[\protect\citeauthoryear{Bulacu and Schomaker}{2007}]{bulacu2007}
+\begin{barticle}
+\bauthor{\bsnm{Bulacu}, \binits{M.}},
+\bauthor{\bsnm{Schomaker}, \binits{L.}}:
+\batitle{Text-independent writer identification and verification using textural
+  and allographic features}.
+\bjtitle{IEEE Transactions on Pattern Analysis and Machine Intelligence}
+\bvolume{29}(\bissue{4}),
+\bfpage{701}--\blpage{717}
+(\byear{2007})
+\doiurl{10.1109/TPAMI.2007.1009}
+\end{barticle}
+\endbibitem
+
+%%% 14
+\bibitem[\protect\citeauthoryear{Plamondon and Srihari}{2000}]{plamondon2000}
+\begin{barticle}
+\bauthor{\bsnm{Plamondon}, \binits{R.}},
+\bauthor{\bsnm{Srihari}, \binits{S.N.}}:
+\batitle{Online and off-line handwriting recognition: A comprehensive survey}.
+\bjtitle{IEEE Transactions on Pattern Analysis and Machine Intelligence}
+\bvolume{22}(\bissue{1}),
+\bfpage{63}--\blpage{84}
+(\byear{2000})
+\doiurl{10.1109/34.824821}
+\end{barticle}
+\endbibitem
+
+%%% 15
+\bibitem[\protect\citeauthoryear{Fiel and Sablatnig}{2015}]{fiel2015}
+\begin{bchapter}
+\bauthor{\bsnm{Fiel}, \binits{S.}},
+\bauthor{\bsnm{Sablatnig}, \binits{R.}}:
+\bctitle{Writer identification and retrieval using a convolutional neural
+  network}.
+In: \bbtitle{Computer Analysis of Images and Patterns (CAIP)}.
+\bsertitle{LNCS},
+vol. \bseriesno{9257},
+pp. \bfpage{26}--\blpage{37}.
+\bpublisher{Springer}, \blocation{???}
+(\byear{2015}).
+\doiurl{10.1007/978-3-319-23117-4_3}
+\end{bchapter}
+\endbibitem
+
+%%% 16
+\bibitem[\protect\citeauthoryear{Christlein et~al.}{2015}]{christlein2015}
+\begin{bchapter}
+\bauthor{\bsnm{Christlein}, \binits{V.}},
+\bauthor{\bsnm{Bernecker}, \binits{D.}},
+\bauthor{\bsnm{Maier}, \binits{A.}},
+\bauthor{\bsnm{Angelopoulou}, \binits{E.}}:
+\bctitle{Offline writer identification using convolutional neural network
+  activation features}.
+In: \bbtitle{Pattern Recognition (GCPR)}.
+\bsertitle{LNCS},
+vol. \bseriesno{9358},
+pp. \bfpage{540}--\blpage{552}.
+\bpublisher{Springer}, \blocation{???}
+(\byear{2015}).
+\doiurl{10.1007/978-3-319-24947-6_45}
+\end{bchapter}
+\endbibitem
+
+%%% 17
+\bibitem[\protect\citeauthoryear{Christlein et~al.}{2017}]{christlein2017}
+\begin{bchapter}
+\bauthor{\bsnm{Christlein}, \binits{V.}},
+\bauthor{\bsnm{Gropp}, \binits{M.}},
+\bauthor{\bsnm{Fiel}, \binits{S.}},
+\bauthor{\bsnm{Maier}, \binits{A.}}:
+\bctitle{Unsupervised feature learning for writer identification and writer
+  retrieval}.
+In: \bbtitle{14th IAPR International Conference on Document Analysis and
+  Recognition (ICDAR)},
+pp. \bfpage{991}--\blpage{997}
+(\byear{2017})
+\end{bchapter}
+\endbibitem
+
+%%% 18
+\bibitem[\protect\citeauthoryear{He and Schomaker}{2020}]{he2020fragnet}
+\begin{barticle}
+\bauthor{\bsnm{He}, \binits{S.}},
+\bauthor{\bsnm{Schomaker}, \binits{L.}}:
+\batitle{Fragnet: Writer identification using deep fragment networks}.
+\bjtitle{IEEE Transactions on Information Forensics and Security}
+\bvolume{15},
+\bfpage{3013}--\blpage{3022}
+(\byear{2020})
+\end{barticle}
+\endbibitem
+
+%%% 19
+\bibitem[\protect\citeauthoryear{Bromley et~al.}{1994}]{bromley1994siamese}
+\begin{bchapter}
+\bauthor{\bsnm{Bromley}, \binits{J.}},
+\bauthor{\bsnm{Guyon}, \binits{I.}},
+\bauthor{\bsnm{LeCun}, \binits{Y.}},
+\bauthor{\bsnm{S{\"a}ckinger}, \binits{E.}},
+\bauthor{\bsnm{Shah}, \binits{R.}}:
+\bctitle{Signature verification using a "{Siamese}" time delay neural network}.
+In: \bbtitle{Advances in Neural Information Processing Systems 6 (NIPS 1993)},
+pp. \bfpage{737}--\blpage{744}.
+\bpublisher{Morgan Kaufmann}, \blocation{???}
+(\byear{1994}).
+\bcomment{Presentato al NIPS 1993 (Denver, CO); atti pubblicati nel 1994. Vol.
+  6 della serie Advances in NIPS.}
+\end{bchapter}
+\endbibitem
+
+%%% 20
+\bibitem[\protect\citeauthoryear{Keglevic et~al.}{2018}]{keglevic2018}
+\begin{bchapter}
+\bauthor{\bsnm{Keglevic}, \binits{M.}},
+\bauthor{\bsnm{Fiel}, \binits{S.}},
+\bauthor{\bsnm{Sablatnig}, \binits{R.}}:
+\bctitle{Learning features for writer retrieval and identification using
+  triplet {CNNs}}.
+In: \bbtitle{16th International Conference on Frontiers in Handwriting
+  Recognition (ICFHR)},
+pp. \bfpage{211}--\blpage{216}.
+\bpublisher{IEEE}, \blocation{???}
+(\byear{2018}).
+\doiurl{10.1109/ICFHR-2018.2018.00045}
+\end{bchapter}
+\endbibitem
+
+%%% 21
+\bibitem[\protect\citeauthoryear{Mansfield and Wayman}{2002}]{mansfield2002}
+\begin{botherref}
+\oauthor{\bsnm{Mansfield}, \binits{A.J.}},
+\oauthor{\bsnm{Wayman}, \binits{J.L.}}:
+Best practices in testing and reporting performance of biometric devices.
+Technical Report CMSC 14/02,
+National Physical Laboratory
+(2002)
+\end{botherref}
+\endbibitem
+
+%%% 22
 \bibitem[\protect\citeauthoryear{Ioffe and Szegedy}{2015}]{ioffe2015batchnorm}
 \begin{bchapter}
 \bauthor{\bsnm{Ioffe}, \binits{S.}},
@@ -206,7 +389,7 @@ pp. \bfpage{448}--\blpage{456}.
 \end{bchapter}
 \endbibitem
 
-%%% 11
+%%% 23
 \bibitem[\protect\citeauthoryear{He and Garcia}{2009}]{he2009imbalanced}
 \begin{barticle}
 \bauthor{\bsnm{He}, \binits{H.}},
@@ -220,7 +403,7 @@ pp. \bfpage{448}--\blpage{456}.
 \end{barticle}
 \endbibitem
 
-%%% 12
+%%% 24
 \bibitem[\protect\citeauthoryear{Loshchilov and
   Hutter}{2019}]{loshchilov2019adamw}
 \begin{bchapter}
@@ -233,7 +416,7 @@ In: \bbtitle{International Conference on Learning Representations (ICLR)}
 \end{bchapter}
 \endbibitem
 
-%%% 13
+%%% 25
 \bibitem[\protect\citeauthoryear{Rosenblum
   et~al.}{2024}]{rosenblum2024incorrect}
 \begin{barticle}
@@ -248,7 +431,7 @@ In: \bbtitle{International Conference on Learning Representations (ICLR)}
 \end{barticle}
 \endbibitem
 
-%%% 14
+%%% 26
 \bibitem[\protect\citeauthoryear{Moszczynski}{2019}]{MOSZCZYNSKI2019e4}
 \begin{barticle}
 \bauthor{\bsnm{Moszczynski}, \binits{J.}}:
@@ -258,6 +441,36 @@ In: \bbtitle{International Conference on Learning Representations (ICLR)}
 \bfpage{4}--\blpage{10}
 (\byear{2019})
 \doiurl{10.1016/j.forsciint.2018.10.030}
+\end{barticle}
+\endbibitem
+
+%%% 27
+\bibitem[\protect\citeauthoryear{Afzali et~al.}{2024}]{afzali2024}
+\begin{barticle}
+\bauthor{\bsnm{Afzali}, \binits{P.}},
+\bauthor{\bsnm{Rezapour}, \binits{A.}},
+\bauthor{\bsnm{Rezaee~Jordehi}, \binits{A.}}:
+\batitle{Leveraging deep feature learning for handwriting biometric
+  authentication}.
+\bjtitle{International Journal of Research in Industrial Engineering}
+\bvolume{13}(\bissue{1}),
+\bfpage{88}--\blpage{103}
+(\byear{2024})
+\end{barticle}
+\endbibitem
+
+%%% 28
+\bibitem[\protect\citeauthoryear{Wang et~al.}{2026}]{scribeverif2026}
+\begin{barticle}
+\bauthor{\bsnm{Wang}, \binits{H.}},
+\bauthor{\bsnm{Li}, \binits{M.}},
+\bauthor{\bsnm{Liu}, \binits{B.}}, \betal:
+\batitle{Tsinghua bamboo slip scribe verification using siamese networks}.
+\bjtitle{npj Heritage Science}
+\bvolume{14},
+\bfpage{147}
+(\byear{2026})
+\doiurl{10.1038/s40494-026-02416-8}
 \end{barticle}
 \endbibitem
 

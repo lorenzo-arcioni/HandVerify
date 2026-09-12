@@ -151,11 +151,11 @@ Maximum epochs & 50 \\
 Early stopping & Patience = 5 \\
 Image size & $448 \times 448$ pixels \\
 Embedding dimension & 32 \\
-Margin & 0.5 (Contrastive), 0.3 (Triplet) \\
+Margin & 1.0 (Contrastive), 0.5 (Triplet) \\
 Positive ratio & 0.5 \\
 Dropout & 0.2 \\
-Frozen encoder layers & 3 (Contrastive/Triplet), 0 (BCE) \\
-Negative resampling & Every epoch (Triplet only) \\
+Frozen encoder layers & 3 \\
+Negative resampling & Every epoch (all losses) \\
 Data-loading workers & 4 \\
 \hline
 \end{tabular}

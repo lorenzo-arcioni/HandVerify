@@ -15,13 +15,33 @@
 \newlabel{sec:introduction}{{1}{1}{Introduction}{section.1}{}}
 \citation{iam}
 \citation{rimes}
+\citation{bensefia2005}
+\citation{said2000}
+\citation{schomaker2004}
+\citation{bulacu2007}
+\citation{plamondon2000}
+\citation{fiel2015}
+\citation{christlein2015}
+\citation{christlein2017}
+\citation{he2020fragnet}
+\citation{bromley1994siamese}
+\citation{koch2015siamese}
+\citation{hadsell2006contrastive}
+\citation{schroff2015facenet}
+\citation{keglevic2018}
+\citation{koch2015siamese}
 \@writefile{toc}{\contentsline {section}{\numberline {2}Related Work}{2}{section.2}\protected@file@percent }
 \newlabel{sec:related}{{2}{2}{Related Work}{section.2}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {2.1}Traditional Handwriting Verification}{2}{subsection.2.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}Deep Learning for Writer Verification}{2}{subsection.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}Deep Learning for Writer Analysis}{2}{subsection.2.2}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {2.3}Siamese Networks and Metric Learning}{2}{subsection.2.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.4}Modern CNN Architectures}{3}{subsection.2.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.5}Evaluation Metrics for Biometric Systems}{3}{subsection.2.5}\protected@file@percent }
+\citation{he2016resnet}
+\citation{tan2019efficientnet}
+\citation{howard2019mobilenetv3}
+\citation{deng2009imagenet}
+\citation{mansfield2002}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.4}Backbone Architectures and Transfer Learning}{3}{subsection.2.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.5}Evaluation of Biometric Verification}{3}{subsection.2.5}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {3}Methodology}{3}{section.3}\protected@file@percent }
 \newlabel{sec:methodology}{{3}{3}{Methodology}{section.3}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Problem Formulation}{3}{subsection.3.1}\protected@file@percent }
@@ -99,73 +119,77 @@
 \newlabel{sec:exhaustive}{{5.7}{14}{High-precision validation with an exhaustive impostor pool}{subsection.5.7}{}}
 \@writefile{lot}{\contentsline {table}{\numberline {8}{\ignorespaces Exhaustive-impostor-pool validation, RIMES$\to $IAM, ResNet-18 + Contrastive, vs.\ the balanced protocol.}}{14}{table.8}\protected@file@percent }
 \newlabel{tab:exhaustive}{{8}{14}{Exhaustive-impostor-pool validation, RIMES$\to $IAM, ResNet-18 + Contrastive, vs.\ the balanced protocol}{table.8}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.8}Best-model summary}{14}{subsection.5.8}\protected@file@percent }
-\newlabel{sec:roc-det}{{5.8}{14}{Best-model summary}{subsection.5.8}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.8}Best-model summary}{15}{subsection.5.8}\protected@file@percent }
+\newlabel{sec:roc-det}{{5.8}{15}{Best-model summary}{subsection.5.8}{}}
 \@writefile{lot}{\contentsline {table}{\numberline {9}{\ignorespaces Best-performing (backbone, loss) configuration per split (Table~4).}}{15}{table.9}\protected@file@percent }
 \newlabel{tab:ours-best}{{9}{15}{Best-performing (backbone, loss) configuration per split (Table~4)}{table.9}{}}
 \@writefile{lot}{\contentsline {table}{\numberline {10}{\ignorespaces Classification metrics at the EER threshold, best (backbone, loss) per split (Table~4).}}{15}{table.10}\protected@file@percent }
 \newlabel{tab:classification-metrics}{{10}{15}{Classification metrics at the EER threshold, best (backbone, loss) per split (Table~4)}{table.10}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces ROC curves, ResNet-18, all losses/splits. Bootstrap 95\% confidence intervals for AUC are reported in each panel legend.}}{15}{figure.7}\protected@file@percent }
-\newlabel{fig:roc}{{7}{15}{ROC curves, ResNet-18, all losses/splits. Bootstrap 95\% confidence intervals for AUC are reported in each panel legend}{figure.7}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces ROC curves, ResNet-18, all losses/splits. Bootstrap 95\% confidence intervals for AUC are reported in each panel legend.}}{16}{figure.7}\protected@file@percent }
+\newlabel{fig:roc}{{7}{16}{ROC curves, ResNet-18, all losses/splits. Bootstrap 95\% confidence intervals for AUC are reported in each panel legend}{figure.7}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces DET curves (log-log), ResNet-18, all losses/splits.}}{16}{figure.8}\protected@file@percent }
 \newlabel{fig:det}{{8}{16}{DET curves (log-log), ResNet-18, all losses/splits}{figure.8}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.9}Score distributions and the Gaussianity assumption}{16}{subsection.5.9}\protected@file@percent }
-\newlabel{sec:distributions}{{5.9}{16}{Score distributions and the Gaussianity assumption}{subsection.5.9}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.9}Score distributions and the Gaussianity assumption}{17}{subsection.5.9}\protected@file@percent }
+\newlabel{sec:distributions}{{5.9}{17}{Score distributions and the Gaussianity assumption}{subsection.5.9}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {9}{\ignorespaces Genuine (green)/impostor (red) scores with fitted Gaussian overlays, ResNet-18, all loss$\times $split combinations. Dotted lines: EER threshold. None of the 12 distributions shown pass Shapiro--Wilk at $\alpha =0.05$.}}{17}{figure.9}\protected@file@percent }
 \newlabel{fig:distributions}{{9}{17}{Genuine (green)/impostor (red) scores with fitted Gaussian overlays, ResNet-18, all loss$\times $split combinations. Dotted lines: EER threshold. None of the 12 distributions shown pass Shapiro--Wilk at $\alpha =0.05$}{figure.9}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.10}Failure-case analysis}{17}{subsection.5.10}\protected@file@percent }
-\newlabel{sec:failure-analysis}{{5.10}{17}{Failure-case analysis}{subsection.5.10}{}}
 \citation{MOSZCZYNSKI2019e4}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.10}Failure-case analysis}{18}{subsection.5.10}\protected@file@percent }
+\newlabel{sec:failure-analysis}{{5.10}{18}{Failure-case analysis}{subsection.5.10}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {10}{\ignorespaces Top false accepts, RIMES$\to $IAM, ResNet-18 + Contrastive. Each row shows one impostor pair scored well above the EER threshold ($0.8424$), with the assigned score and the margin $\Delta $ above threshold.}}{18}{figure.10}\protected@file@percent }
 \newlabel{fig:false-accepts}{{10}{18}{Top false accepts, RIMES$\to $IAM, ResNet-18 + Contrastive. Each row shows one impostor pair scored well above the EER threshold ($0.8424$), with the assigned score and the margin $\Delta $ above threshold}{figure.10}{}}
-\citation{fiel2015}
-\citation{christlein2017}
-\citation{afzali2024}
-\citation{caewriter2019}
-\citation{scribeverif2026}
+\citation{fiel2015,christlein2015}
+\citation{keglevic2018}
 \@writefile{lof}{\contentsline {figure}{\numberline {11}{\ignorespaces Top false rejects, RIMES$\to $IAM, ResNet-18 + Contrastive. Each row shows one genuine pair scored well below the EER threshold ($0.8424$), with the assigned score and the margin $\Delta $ below threshold.}}{19}{figure.11}\protected@file@percent }
 \newlabel{fig:false-rejects}{{11}{19}{Top false rejects, RIMES$\to $IAM, ResNet-18 + Contrastive. Each row shows one genuine pair scored well below the EER threshold ($0.8424$), with the assigned score and the margin $\Delta $ below threshold}{figure.11}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {5.11}Comparison with prior work}{19}{subsection.5.11}\protected@file@percent }
 \newlabel{sec:sota}{{5.11}{19}{Comparison with prior work}{subsection.5.11}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {6}Conclusion}{19}{section.6}\protected@file@percent }
-\newlabel{sec:conclusion}{{6}{19}{Conclusion}{section.6}{}}
+\citation{fiel2015}
+\citation{christlein2017}
+\citation{keglevic2018}
+\citation{afzali2024}
+\citation{scribeverif2026}
 \@writefile{lot}{\contentsline {table}{\numberline {11}{\ignorespaces Prior work on CNN-based writer identification/verification.}}{20}{table.11}\protected@file@percent }
 \newlabel{tab:sota}{{11}{20}{Prior work on CNN-based writer identification/verification}{table.11}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.1}Future Directions}{20}{subsection.6.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}Limitations and Confounding Factors}{20}{subsection.6.2}\protected@file@percent }
-\newlabel{sec:limitations}{{6.2}{20}{Limitations and Confounding Factors}{subsection.6.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6}Conclusion}{20}{section.6}\protected@file@percent }
+\newlabel{sec:conclusion}{{6}{20}{Conclusion}{section.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.1}Future Directions}{21}{subsection.6.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}Limitations and Confounding Factors}{21}{subsection.6.2}\protected@file@percent }
+\newlabel{sec:limitations}{{6.2}{21}{Limitations and Confounding Factors}{subsection.6.2}{}}
 \@writefile{toc}{\contentsline {subparagraph}{Acknowledgements}{21}{section*.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {subparagraph}{Funding}{21}{section*.6}\protected@file@percent }
-\@writefile{toc}{\contentsline {subparagraph}{Conflict of interest}{21}{section*.7}\protected@file@percent }
-\@writefile{toc}{\contentsline {subparagraph}{Ethics approval}{21}{section*.8}\protected@file@percent }
-\@writefile{toc}{\contentsline {subparagraph}{Data availability}{21}{section*.9}\protected@file@percent }
-\@writefile{toc}{\contentsline {subparagraph}{Code availability}{21}{section*.10}\protected@file@percent }
-\@writefile{toc}{\contentsline {subparagraph}{Author contributions}{21}{section*.11}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {A}Implementation Details}{21}{appendix.a.A}\protected@file@percent }
-\newlabel{app:implementation}{{A}{21}{Implementation Details}{appendix.a.A}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {A.1}Preprocessing Pipeline Details}{21}{subsection.a.A.1}\protected@file@percent }
-\newlabel{app:preprocessing}{{A.1}{21}{Preprocessing Pipeline Details}{subsection.a.A.1}{}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {A.1.1}Binarization as an Auxiliary Mask}{21}{subsubsection.a.A.1.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subparagraph}{Funding}{22}{section*.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subparagraph}{Conflict of interest}{22}{section*.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {subparagraph}{Ethics approval}{22}{section*.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {subparagraph}{Data availability}{22}{section*.9}\protected@file@percent }
+\@writefile{toc}{\contentsline {subparagraph}{Code availability}{22}{section*.10}\protected@file@percent }
+\@writefile{toc}{\contentsline {subparagraph}{Author contributions}{22}{section*.11}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {A}Implementation Details}{22}{appendix.a.A}\protected@file@percent }
+\newlabel{app:implementation}{{A}{22}{Implementation Details}{appendix.a.A}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.1}Preprocessing Pipeline Details}{22}{subsection.a.A.1}\protected@file@percent }
+\newlabel{app:preprocessing}{{A.1}{22}{Preprocessing Pipeline Details}{subsection.a.A.1}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {A.1.1}Binarization as an Auxiliary Mask}{22}{subsubsection.a.A.1.1}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {A.1.2}Tight Cropping}{22}{subsubsection.a.A.1.2}\protected@file@percent }
 \newlabel{app:tight-cropping}{{A.1.2}{22}{Tight Cropping}{subsubsection.a.A.1.2}{}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {A.1.3}Aspect-Preserving Resize}{22}{subsubsection.a.A.1.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {A.1.4}IAM Dataset Preprocessing}{22}{subsubsection.a.A.1.4}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {A1}{\ignorespaces Preprocessing of an IAM form: the grayscale image (left) is binarized (center) to detect guide lines (red/green, detected by erosion/dilation) and the handwritten text region (blue box); this region is then extracted from the original grayscale image, cropped, and resized to 448×448 pixels (right).}}{23}{figure.1}\protected@file@percent }
-\newlabel{fig:iam-preprocessing}{{A1}{23}{Preprocessing of an IAM form: the grayscale image (left) is binarized (center) to detect guide lines (red/green, detected by erosion/dilation) and the handwritten text region (blue box); this region is then extracted from the original grayscale image, cropped, and resized to 448×448 pixels (right)}{figure.1}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {A.1.3}Aspect-Preserving Resize}{23}{subsubsection.a.A.1.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {A.1.4}IAM Dataset Preprocessing}{23}{subsubsection.a.A.1.4}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {A.1.5}RIMES Dataset Preprocessing}{23}{subsubsection.a.A.1.5}\protected@file@percent }
 \newlabel{app:rimes-preprocessing}{{A.1.5}{23}{RIMES Dataset Preprocessing}{subsubsection.a.A.1.5}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {A1}{\ignorespaces Preprocessing of an IAM form: the grayscale image (left) is binarized (center) to detect guide lines (red/green, detected by erosion/dilation) and the handwritten text region (blue box); this region is then extracted from the original grayscale image, cropped, and resized to 448×448 pixels (right).}}{24}{figure.1}\protected@file@percent }
+\newlabel{fig:iam-preprocessing}{{A1}{24}{Preprocessing of an IAM form: the grayscale image (left) is binarized (center) to detect guide lines (red/green, detected by erosion/dilation) and the handwritten text region (blue box); this region is then extracted from the original grayscale image, cropped, and resized to 448×448 pixels (right)}{figure.1}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {A2}{\ignorespaces Preprocessing of RIMES text lines (for a given author). Each original line (left, e.g. \texttt  {eval2011-0\_000001.jpg}) is binarized via Otsu thresholding and tight-cropped (blue bounding boxes, center) using the projection-based algorithm; the corresponding grayscale crop is then extracted (right of center). Cropped lines belonging to the same writer are grouped (colored arrows) and vertically stacked into fixed-size $448\times 448$ canvases (right), with unused space padded in white.}}{24}{figure.2}\protected@file@percent }
 \newlabel{fig:rimes-preprocessing}{{A2}{24}{Preprocessing of RIMES text lines (for a given author). Each original line (left, e.g. \texttt {eval2011-0\_000001.jpg}) is binarized via Otsu thresholding and tight-cropped (blue bounding boxes, center) using the projection-based algorithm; the corresponding grayscale crop is then extracted (right of center). Cropped lines belonging to the same writer are grouped (colored arrows) and vertically stacked into fixed-size $448\times 448$ canvases (right), with unused space padded in white}{figure.2}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {A.2}Dataset Statistics: Distribution Figures}{24}{subsection.a.A.2}\protected@file@percent }
-\newlabel{app:dataset-stats-figures}{{A.2}{24}{Dataset Statistics: Distribution Figures}{subsection.a.A.2}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {A.3}Hyperparameter Configuration}{24}{subsection.a.A.3}\protected@file@percent }
-\newlabel{app:hyperparams}{{A.3}{24}{Hyperparameter Configuration}{subsection.a.A.3}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {A1}{\ignorespaces Hyperparameter configuration shared across the 72 model configurations. Loss-specific settings are indicated where applicable.}}{24}{table.1}\protected@file@percent }
-\newlabel{tab:hyperparams-appendix}{{A1}{24}{Hyperparameter configuration shared across the 72 model configurations. Loss-specific settings are indicated where applicable}{table.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.2}Dataset Statistics: Distribution Figures}{25}{subsection.a.A.2}\protected@file@percent }
+\newlabel{app:dataset-stats-figures}{{A.2}{25}{Dataset Statistics: Distribution Figures}{subsection.a.A.2}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {A3}{\ignorespaces Distribution of images per author for the preprocessed IAM and RIMES datasets. \textbf  {Top:} per-dataset histograms with mean (yellow) and median (orange) overlaid, showing the strong right skew of IAM compared to the broader, more centrally distributed RIMES spread. \textbf  {Bottom:} side-by-side boxplot comparison, highlighting the extreme outlier author in IAM (59 images) against the wider but shorter-tailed RIMES distribution (max 10 images).}}{25}{figure.3}\protected@file@percent }
 \newlabel{fig:dataset-distribution}{{A3}{25}{Distribution of images per author for the preprocessed IAM and RIMES datasets. \textbf {Top:} per-dataset histograms with mean (yellow) and median (orange) overlaid, showing the strong right skew of IAM compared to the broader, more centrally distributed RIMES spread. \textbf {Bottom:} side-by-side boxplot comparison, highlighting the extreme outlier author in IAM (59 images) against the wider but shorter-tailed RIMES distribution (max 10 images)}{figure.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.3}Hyperparameter Configuration}{25}{subsection.a.A.3}\protected@file@percent }
+\newlabel{app:hyperparams}{{A.3}{25}{Hyperparameter Configuration}{subsection.a.A.3}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {A.4}Training Dynamics}{25}{subsection.a.A.4}\protected@file@percent }
 \newlabel{app:training-curves}{{A.4}{25}{Training Dynamics}{subsection.a.A.4}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {A1}{\ignorespaces Hyperparameter configuration shared across the 72 model configurations. Loss-specific settings are indicated where applicable.}}{26}{table.1}\protected@file@percent }
+\newlabel{tab:hyperparams-appendix}{{A1}{26}{Hyperparameter configuration shared across the 72 model configurations. Loss-specific settings are indicated where applicable}{table.1}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {A4}{\ignorespaces Training and validation loss curves, ResNet-18, all 12 loss$\times $split combinations.}}{26}{figure.4}\protected@file@percent }
+\newlabel{fig:training_curves}{{A4}{26}{Training and validation loss curves, ResNet-18, all 12 loss$\times $split combinations}{figure.4}{}}
 \bibdata{sn-bibliography}
 \bibcite{koch2015siamese}{{1}{2015}{{Koch et~al.}}{{}}}
 \bibcite{he2016resnet}{{2}{2016}{{He et~al.}}{{}}}
@@ -176,11 +200,23 @@
 \bibcite{schroff2015facenet}{{7}{2015}{{Schroff et~al.}}{{}}}
 \bibcite{iam}{{8}{}{{}}{{}}}
 \bibcite{rimes}{{9}{}{{}}{{}}}
-\@writefile{lof}{\contentsline {figure}{\numberline {A4}{\ignorespaces Training and validation loss curves, ResNet-18, all 12 loss$\times $split combinations.}}{26}{figure.4}\protected@file@percent }
-\newlabel{fig:training_curves}{{A4}{26}{Training and validation loss curves, ResNet-18, all 12 loss$\times $split combinations}{figure.4}{}}
-\bibcite{ioffe2015batchnorm}{{10}{2015}{{Ioffe and Szegedy}}{{}}}
-\bibcite{he2009imbalanced}{{11}{2009}{{He and Garcia}}{{}}}
-\bibcite{loshchilov2019adamw}{{12}{2019}{{Loshchilov and Hutter}}{{}}}
-\bibcite{rosenblum2024incorrect}{{13}{2024}{{Rosenblum et~al.}}{{}}}
-\bibcite{MOSZCZYNSKI2019e4}{{14}{2019}{{Moszczynski}}{{}}}
-\gdef \@abspage@last{27}
+\bibcite{bensefia2005}{{10}{2005}{{Bensefia et~al.}}{{}}}
+\bibcite{said2000}{{11}{2000}{{Said et~al.}}{{}}}
+\bibcite{schomaker2004}{{12}{2004}{{Schomaker and Bulacu}}{{}}}
+\bibcite{bulacu2007}{{13}{2007}{{Bulacu and Schomaker}}{{}}}
+\bibcite{plamondon2000}{{14}{2000}{{Plamondon and Srihari}}{{}}}
+\bibcite{fiel2015}{{15}{2015}{{Fiel and Sablatnig}}{{}}}
+\bibcite{christlein2015}{{16}{2015}{{Christlein et~al.}}{{}}}
+\bibcite{christlein2017}{{17}{2017}{{Christlein et~al.}}{{}}}
+\bibcite{he2020fragnet}{{18}{2020}{{He and Schomaker}}{{}}}
+\bibcite{bromley1994siamese}{{19}{1994}{{Bromley et~al.}}{{}}}
+\bibcite{keglevic2018}{{20}{2018}{{Keglevic et~al.}}{{}}}
+\bibcite{mansfield2002}{{21}{2002}{{Mansfield and Wayman}}{{}}}
+\bibcite{ioffe2015batchnorm}{{22}{2015}{{Ioffe and Szegedy}}{{}}}
+\bibcite{he2009imbalanced}{{23}{2009}{{He and Garcia}}{{}}}
+\bibcite{loshchilov2019adamw}{{24}{2019}{{Loshchilov and Hutter}}{{}}}
+\bibcite{rosenblum2024incorrect}{{25}{2024}{{Rosenblum et~al.}}{{}}}
+\bibcite{MOSZCZYNSKI2019e4}{{26}{2019}{{Moszczynski}}{{}}}
+\bibcite{afzali2024}{{27}{2024}{{Afzali et~al.}}{{}}}
+\bibcite{scribeverif2026}{{28}{2026}{{Wang et~al.}}{{}}}
+\gdef \@abspage@last{28}
