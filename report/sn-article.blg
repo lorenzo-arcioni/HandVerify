@@ -29,45 +29,45 @@ Reallocated singl_function (elt_size=4) to 100 items from 50.
 Warning--empty title in iam
 Reallocated singl_function (elt_size=4) to 100 items from 50.
 Reallocated singl_function (elt_size=4) to 100 items from 50.
-You've used 28 entries,
+You've used 29 entries,
             7485 wiz_defined-function locations,
-            1371 strings with 15727 characters,
-and the built_in function-call counts, 817451 in all, are:
-= -- 158238
-> -- 1021
-< -- 513
-+ -- 103165
-- -- 377
-* -- 14520
-:= -- 138735
-add.period$ -- 56
-call.type$ -- 28
-change.case$ -- 267
-chr.to.int$ -- 1381
-cite$ -- 33
-duplicate$ -- 1350
-empty$ -- 5703
-format.name$ -- 678
-if$ -- 214484
+            1380 strings with 15927 characters,
+and the built_in function-call counts, 820630 in all, are:
+= -- 158640
+> -- 1061
+< -- 539
++ -- 103276
+- -- 386
+* -- 14687
+:= -- 139351
+add.period$ -- 57
+call.type$ -- 29
+change.case$ -- 273
+chr.to.int$ -- 1451
+cite$ -- 34
+duplicate$ -- 1403
+empty$ -- 5861
+format.name$ -- 699
+if$ -- 215277
 int.to.chr$ -- 1
-int.to.str$ -- 53
+int.to.str$ -- 55
 missing$ -- 0
-newline$ -- 454
-num.names$ -- 130
-pop$ -- 669
+newline$ -- 468
+num.names$ -- 135
+pop$ -- 693
 preamble$ -- 1
-purify$ -- 134
+purify$ -- 139
 quote$ -- 0
-skip$ -- 98115
+skip$ -- 98357
 stack$ -- 0
-substring$ -- 73268
-swap$ -- 804
-text.length$ -- 485
+substring$ -- 73535
+swap$ -- 839
+text.length$ -- 499
 text.prefix$ -- 0
 top$ -- 1
-type$ -- 1205
+type$ -- 1251
 warning$ -- 3
-while$ -- 957
+while$ -- 987
 width$ -- 0
-write$ -- 622
+write$ -- 642
 (There were 3 warnings)

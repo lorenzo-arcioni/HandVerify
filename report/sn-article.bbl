@@ -1,6 +1,6 @@
 %% BioMed_Central_Bib_Style_v1.01
 
-\begin{thebibliography}{28}
+\begin{thebibliography}{29}
 % BibTex style file: bmc-mathphys.bst (version 2.1), 2014-07-24
 \ifx \bisbn   \undefined \def \bisbn  #1{ISBN #1}\fi
 \ifx \binits  \undefined \def \binits#1{#1}\fi
@@ -471,6 +471,20 @@ In: \bbtitle{International Conference on Learning Representations (ICLR)}
 \bfpage{147}
 (\byear{2026})
 \doiurl{10.1038/s40494-026-02416-8}
+\end{barticle}
+\endbibitem
+
+%%% 29
+\bibitem[\protect\citeauthoryear{Yager and Dunstone}{2010}]{yager2010biometric}
+\begin{barticle}
+\bauthor{\bsnm{Yager}, \binits{N.}},
+\bauthor{\bsnm{Dunstone}, \binits{T.}}:
+\batitle{The biometric menagerie}.
+\bjtitle{IEEE Transactions on Pattern Analysis and Machine Intelligence}
+\bvolume{32}(\bissue{2}),
+\bfpage{220}--\blpage{230}
+(\byear{2010})
+\doiurl{10.1109/tpami.2008.291}
 \end{barticle}
 \endbibitem
 

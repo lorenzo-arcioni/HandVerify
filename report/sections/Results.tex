@@ -84,7 +84,7 @@ the three losses. BCE shows by far the largest across-backbone spread
 on RIMES$\to$RIMES ($\sigma_{\text{AUC}}=0.180$ vs.\ $0.007$ for
 Contrastive), directly attributable to the collapsed-model instability
 documented in Section~\ref{sec:per-backbone}. The single best
-configuration per split (Table~4) is MobileNetV3-Large + Contrastive
+configuration per split (Table \ref{tab:ours-best}) is MobileNetV3-Large + Contrastive
 on IAM$\to$IAM (AUC $=0.995$, EER $=3.1\%$), and ResNet-18 +
 Contrastive on RIMES$\to$RIMES (AUC $=0.934$, EER $=11.5\%$):
 Contrastive wins both at the aggregate and the best-single-model
@@ -119,7 +119,7 @@ Contrastive again dominates both cross-dataset splits. RIMES$\to$IAM
 IAM$\to$RIMES under every loss -- for Contrastive, AUC $0.950$ vs.\
 $0.738$ -- consistent with source writer-pool size
 (Table~\ref{tab:protocol}) as a contributing factor. Best individual
-configurations (Table~4): EfficientNet-B1 + Contrastive on
+configurations (Table \ref{tab:ours-best}): EfficientNet-B1 + Contrastive on
 IAM$\to$RIMES (AUC $=0.772$, EER $=29.6\%$), EfficientNet-B0 +
 Contrastive on RIMES$\to$IAM (AUC $=0.967$, EER $=8.2\%$).
 
@@ -241,8 +241,8 @@ affecting AUC/EER, consistent with the boundary-saturated impostor
 tail reported for ResNet-18 under Contrastive on cross-dataset splits
 (Section~\ref{sec:failure-analysis}).
 
-EfficientNet-B1 shows the inverse profile: fourth on AUC, third on
-EER/$d'$, but highest GAR@FAR1\% (31.0\%, $+7.7$ points over
+EfficientNet-B1 shows the inverse profile: third on AUC, second on $d'$ and third on
+EER, but highest GAR@FAR1\% (31.0\%, $+7.7$ points over
 ResNet-18).
 
 MobileNetV3-Small has the worst AUC, EER and $d'$ of all six backbones,
@@ -339,8 +339,7 @@ per-backbone (Section~\ref{sec:per-backbone}) or Wilcoxon
 
 \begin{table}[htbp]
   \centering
-  \caption{Best-performing (backbone, loss) configuration per split
-  (Table~4).}
+  \caption{Best-performing (backbone, loss) configuration per split.}
   \label{tab:ours-best}
   \small
   \begin{tabular}{llcc}
@@ -358,7 +357,7 @@ per-backbone (Section~\ref{sec:per-backbone}) or Wilcoxon
 \begin{table}[htbp]
   \centering
   \caption{Classification metrics at the EER threshold, best
-  (backbone, loss) per split (Table~4).}
+  (backbone, loss) per split.}
   \label{tab:classification-metrics}
   \small
   \begin{tabular}{lcccccc}
@@ -466,7 +465,7 @@ parametric inferential statistics.
   \includegraphics[width=\textwidth]{images/score_distributions_resnet18.png}
   \caption{Genuine (green)/impostor (red) scores with fitted Gaussian
   overlays, ResNet-18, all loss$\times$split combinations. Dotted
-  lines: EER threshold. None of the 12 distributions shown pass
+  lines: EER threshold. None of the 24 distributions shown pass
   Shapiro--Wilk at $\alpha=0.05$.}
   \label{fig:distributions}
 \end{figure}
@@ -493,7 +492,7 @@ $\approx 0.44$), rather than a smooth unimodal shape -- a possible
 signature of a degenerate embedding direction rather than genuine
 score variability. Under Contrastive and Triplet, by contrast,
 impostor distributions are broad and (generally) left-skewed while genuine
-distributions are (gnerally) right-skewed and compressed near the similarity
+distributions are (generally) right-skewed and compressed near the similarity
 ceiling ($\approx 1.0$), producing the asymmetric overlap responsible
 for the boundary-saturation effect noted above; this asymmetry is most
 pronounced for cross-dataset splits, and least pronounced for same-dataset splits,

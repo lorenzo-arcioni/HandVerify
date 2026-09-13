@@ -24,6 +24,18 @@ Several avenues merit further investigation:
 
 \textbf{Multi-modal integration.} Combining offline handwriting with complementary biometric modalities (e.g., signatures, online writing dynamics) may improve overall system robustness.
 
+\textbf{Doddington zoo analysis.} A per-writer categorization into biometric menagerie classes 
+(goats, lambs, wolves, and extended classes such as doves, chameleons, 
+phantoms and worms~\cite{yager2010biometric}) could reveal 
+whether verification errors are broadly distributed across the writer 
+population or concentrated in a small subset of problematic identities. 
+Such an analysis requires aggregating genuine and impostor scores at the 
+individual-writer level rather than pooling them across the test set, which 
+was not retained in the current evaluation pipeline; combined with the failure-case 
+inspection above, it could clarify whether the false accepts and false rejects observed in Section~5.10 
+are symptomatic of a few chronically difficult writers (consistent with the multi-individuality argument 
+in Section~5.10) or are spread evenly across the population.
+
 \subsection{Limitations and Confounding Factors}
 \label{sec:limitations}
 
