@@ -88,7 +88,8 @@ In: \bbtitle{Proceedings of the 36th International Conference on Machine
 \bsertitle{Proceedings of Machine Learning Research},
 vol. \bseriesno{97},
 pp. \bfpage{6105}--\blpage{6114}.
-\bpublisher{PMLR}, \blocation{???}
+\bpublisher{PMLR},
+\blocation{Long Beach, CA, USA}
 (\byear{2019}).
 \doiurl{10.48550/arXiv.1905.11946}
 \end{bchapter}
@@ -131,7 +132,8 @@ pp. \bfpage{1314}--\blpage{1324}
 In: \bbtitle{Proceedings of the IEEE Conference on Computer Vision and Pattern
   Recognition (CVPR)},
 pp. \bfpage{248}--\blpage{255}.
-\bpublisher{IEEE}, \blocation{???}
+\bpublisher{IEEE},
+\blocation{Miami, FL, USA}
 (\byear{2009}).
 \doiurl{10.1109/CVPR.2009.5206848}
 \end{bchapter}
@@ -148,7 +150,8 @@ In: \bbtitle{Proceedings of the IEEE Computer Society Conference on Computer
   Vision and Pattern Recognition (CVPR)},
 vol. \bseriesno{2},
 pp. \bfpage{1735}--\blpage{1742}.
-\bpublisher{IEEE Computer Society}, \blocation{???}
+\bpublisher{IEEE Computer Society},
+\blocation{New York, NY, USA}
 (\byear{2006}).
 \doiurl{10.1109/CVPR.2006.100}
 \end{bchapter}
@@ -198,6 +201,7 @@ pp. \bfpage{815}--\blpage{823}
 \bvolume{26}(\bissue{13}),
 \bfpage{2080}--\blpage{2092}
 (\byear{2005})
+\doiurl{10.1016/j.patrec.2005.03.024}
 \end{barticle}
 \endbibitem
 
@@ -212,6 +216,7 @@ pp. \bfpage{815}--\blpage{823}
 \bvolume{33}(\bissue{1}),
 \bfpage{149}--\blpage{160}
 (\byear{2000})
+\doiurl{10.1016/S0031-3203(99)00006-0}
 \end{barticle}
 \endbibitem
 
@@ -226,6 +231,7 @@ pp. \bfpage{815}--\blpage{823}
 \bvolume{26}(\bissue{6}),
 \bfpage{787}--\blpage{798}
 (\byear{2004})
+\doiurl{10.1109/TPAMI.2004.18}
 \end{barticle}
 \endbibitem
 
@@ -269,7 +275,8 @@ In: \bbtitle{Computer Analysis of Images and Patterns (CAIP)}.
 \bsertitle{LNCS},
 vol. \bseriesno{9257},
 pp. \bfpage{26}--\blpage{37}.
-\bpublisher{Springer}, \blocation{???}
+\bpublisher{Springer},
+\blocation{Valletta, Malta}
 (\byear{2015}).
 \doiurl{10.1007/978-3-319-23117-4_3}
 \end{bchapter}
@@ -288,7 +295,8 @@ In: \bbtitle{Pattern Recognition (GCPR)}.
 \bsertitle{LNCS},
 vol. \bseriesno{9358},
 pp. \bfpage{540}--\blpage{552}.
-\bpublisher{Springer}, \blocation{???}
+\bpublisher{Springer},
+\blocation{Aachen, Germany}
 (\byear{2015}).
 \doiurl{10.1007/978-3-319-24947-6_45}
 \end{bchapter}
@@ -306,7 +314,8 @@ pp. \bfpage{540}--\blpage{552}.
 In: \bbtitle{14th IAPR International Conference on Document Analysis and
   Recognition (ICDAR)},
 pp. \bfpage{991}--\blpage{997}
-(\byear{2017})
+(\byear{2017}).
+\doiurl{10.1109/ICDAR.2017.165}
 \end{bchapter}
 \endbibitem
 
@@ -320,6 +329,7 @@ pp. \bfpage{991}--\blpage{997}
 \bvolume{15},
 \bfpage{3013}--\blpage{3022}
 (\byear{2020})
+\doiurl{10.1109/TIFS.2020.2981236}
 \end{barticle}
 \endbibitem
 
@@ -334,8 +344,10 @@ pp. \bfpage{991}--\blpage{997}
 \bctitle{Signature verification using a "{Siamese}" time delay neural network}.
 In: \bbtitle{Advances in Neural Information Processing Systems 6 (NIPS 1993)},
 pp. \bfpage{737}--\blpage{744}.
-\bpublisher{Morgan Kaufmann}, \blocation{???}
+\bpublisher{Morgan Kaufmann},
+\blocation{San Francisco, CA, United States}
 (\byear{1994}).
+\doiurl{10.1142/S0218001493000339} .
 \bcomment{Presentato al NIPS 1993 (Denver, CO); atti pubblicati nel 1994. Vol.
   6 della serie Advances in NIPS.}
 \end{bchapter}
@@ -352,7 +364,8 @@ pp. \bfpage{737}--\blpage{744}.
 In: \bbtitle{16th International Conference on Frontiers in Handwriting
   Recognition (ICFHR)},
 pp. \bfpage{211}--\blpage{216}.
-\bpublisher{IEEE}, \blocation{???}
+\bpublisher{IEEE},
+\blocation{Niagara Falls, NY, USA}
 (\byear{2018}).
 \doiurl{10.1109/ICFHR-2018.2018.00045}
 \end{bchapter}
@@ -366,7 +379,8 @@ pp. \bfpage{211}--\blpage{216}.
 Best practices in testing and reporting performance of biometric devices.
 Technical Report CMSC 14/02,
 National Physical Laboratory
-(2002)
+(2002).
+\url{https://eprintspublications.npl.co.uk/2460/}
 \end{botherref}
 \endbibitem
 
@@ -456,6 +470,7 @@ In: \bbtitle{International Conference on Learning Representations (ICLR)}
 \bvolume{13}(\bissue{1}),
 \bfpage{88}--\blpage{103}
 (\byear{2024})
+\doiurl{10.22105/riej.2024.432510.1412}
 \end{barticle}
 \endbibitem
 
