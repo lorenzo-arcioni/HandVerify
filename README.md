@@ -30,7 +30,7 @@ The project covers the full pipeline: preprocessing of the IAM/RIMES datasets, t
 
 ## How it works
 
-The system learns an **embedding space** in which handwriting images from the same author are close together and those from different authors are far apart, regardless of the written text. Images (grayscale, 448×448 by default) are passed through a CNN backbone (ResNet, EfficientNet, MobileNetV3, DenseNet, RegNet...), and verification is performed by comparing the two embeddings via **cosine similarity** against a calibrated threshold (e.g. EER — Equal Error Rate).
+The system learns an **embedding space** in which handwriting images from the same author are close together and those from different authors are far apart, regardless of the written text. Images (grayscale, 448×448 by default) are passed through a CNN backbone (ResNet, EfficientNet, MobileNetV3, ...), and verification is performed by comparing the two embeddings via **cosine similarity** against a calibrated threshold (e.g. EER — Equal Error Rate).
 
 Three training paradigms are supported, all built on the same data/model/trainer infrastructure in `src/`:
 
@@ -55,7 +55,7 @@ HandVerify/
 ├── notebooks/                   # Dataset preprocessing, training, results analysis, EDA
 ├── webcam-demo/demo/            # Live webcam demo (PySide/OpenCV)
 ├── results/                     # Trained checkpoints, final metrics, logs
-├── report/                      # LaTeX report/thesis (compiled PDF included) + user manual
+├── report/                      # LaTeX report (compiled PDF included) + user manual
 ├── docs/                        # MkDocs documentation (getting started, API reference, etc.)
 ├── dataset-links.txt            # Links to the public datasets used (IAM, RIMES, CEDAR)
 ├── main.py                      # Placeholder entry point
@@ -67,7 +67,7 @@ HandVerify/
 
 - **`src/data`** — `BaseWriterDataset` is the common abstract class: it organizes images by writer, generates **all** possible genuine pairs (same author) and a pool of impostor pairs (different authors), and resamples negatives every N epochs while maintaining a configurable `positive_ratio`. `SiameseDataset`, `ContrastiveDataset` and `TripletDataset` extend it for the three paradigms. `dataloader_factory.py` provides functions for train/val/test splits over *writers* (never over images, to avoid leakage), cross-dataset splits (train on one domain, val/test on another) and K-Fold.
 - **`src/models`** — `BaseSiameseNetwork`, `BaseContrastiveNetwork`, `BaseTripletNetwork` define the common architecture (encoder + MLP head with progressive BatchNorm/Dropout, optional freezing of the backbone's first layers). `get_model(name, model_type, ...)` instantiates any backbone × paradigm combination from the registry.
-- **`src/training`** — `BaseTrainer` handles the training/validation loop, early stopping, checkpoint saving (`_best.pth` / `_final.pth`) and comprehensive biometric evaluation at the end of training. `BCETrainer`, `ContrastiveTrainer`, `TripletTrainer` implement the paradigm-specific logic. Losses available in `losses.py`: `BCELoss`, `ContrastiveLoss` (cosine-similarity based), `TripletLoss` (cosine-distance based), `CombinedLoss`.
+- **`src/training`** — `BaseTrainer` handles the training/validation loop, early stopping, checkpoint saving (`_best.pth` / `_final.pth`) and comprehensive biometric evaluation at the end of training. `BCETrainer`, `ContrastiveTrainer`, `TripletTrainer` implement the paradigm-specific logic. Losses available in `losses.py`: `BCELoss`, `ContrastiveLoss`, `TripletLoss`, `CombinedLoss`.
 - **`src/evaluation`** — `compute_metrics()` computes ROC/AUC, **EER**, classification metrics at the EER threshold, operating points at fixed FAR (1% and 0.1%), **d-prime**/decidability, and statistics of the genuine/impostor score distributions.
 
 ## Installation
@@ -107,7 +107,7 @@ Preprocessing (Otsu binarization, removal of borders/guide lines, tight-crop via
 
 ## Webcam demo
 
-`webcam-demo/demo/` contains a live demo based on the **EfficientNet-B1 Triplet** model trained on IAM: you frame two handwriting samples with the webcam and the system tells you whether they belong to the same person (score = cosine similarity between embeddings).
+`webcam-demo/demo/` contains a live demo based on the **ResNet18 + Contrastive** model trained on IAM: you frame two handwriting samples with the webcam and the system tells you whether they belong to the same person (score = cosine similarity between embeddings).
 
 ### Hardware rig
 
@@ -145,7 +145,7 @@ Main features:
 - thresholds automatically read from the metrics CSV associated with the checkpoint (`eer`, `far1`, `far01`), or set manually with `--threshold-value`;
 - saving of captures and logs (`captures/`, `log.csv`) and dump of preprocessing stages for debugging (`X`).
 
-⚠️ **Known limitation**: the model is trained on IAM scans (white paper, dark pen, no shadows). Webcam photos are a different domain: preprocessing reduces but does not eliminate the gap, so the demo is a qualitative demonstration, not a quantitative evaluation — see the cross-dataset results below. Full guide, keyboard shortcuts and troubleshooting in [`webcam-demo/demo/README.md`](webcam-demo/demo/README.md).
+⚠️ **Known limitation**: the model is trained on IAM scans (white paper, dark pen, no shadows) mixed with RIMES (white paper, semi-binary ink). Webcam photos are a different domain: preprocessing reduces but does not eliminate the gap, so the demo is a qualitative demonstration, not a quantitative evaluation — see the cross-dataset results below. Full guide, keyboard shortcuts and troubleshooting in [`webcam-demo/demo/README.md`](webcam-demo/demo/README.md).
 
 ## Training
 
