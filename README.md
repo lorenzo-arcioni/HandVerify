@@ -179,7 +179,7 @@ history, metrics = trainer.train(train_loader, val_loader, val_dataset=val_ds,
 
 For **cross-dataset** training (train on one domain, val/test on another) use `create_cross_dataset_dataloaders` / `create_*_cross_dataset_dataloaders`; for K-Fold cross-validation, `create_kfold_dataloaders` / `create_*_kfold_dataloaders`.
 
-The notebook `notebooks/train_configurable_loss.py` (jupytext script, counterpart of the `train_configurable_loss.ipynb` notebook) documents the training of the final model used in the demo — **ResNet18** on **combined IAM + RIMES** — with a selectable loss via `CONFIG['loss_type']` — and includes two important safeguards:
+The notebook `notebooks/train_configurable_loss.ipynb` documents the training of the final model used in the demo — **ResNet18** on **combined IAM + RIMES** — with a selectable loss via `CONFIG['loss_type']` — and includes two important safeguards:
 
 - `writer_id`s are prefixed with the source dataset (`iam__042`, `rimes__042`) so a genuine pair can never accidentally mix two different datasets;
 - the impostor pair pool is explicitly **stratified** (IAM-IAM / RIMES-RIMES / cross-dataset) to avoid bias towards one domain.
@@ -203,7 +203,7 @@ Each run saves to `results/<experiment>/`:
 - **d-prime** and decidability index (separation between the two distributions);
 - statistics (mean/standard deviation) of the genuine/impostor distributions, for plotting.
 
-The full statistical analysis — bootstrap CIs, normality checks, ROC/DET curves, AUC/EER heatmaps per backbone × loss, pairwise Wilcoxon tests between losses, identification of known confounding factors — is in `notebooks/biometric_results_analysis_v3.ipynb` (and its `.py` script). `notebooks/failure_cases_extraction.ipynb` extracts and analyzes the worst false-accept/false-reject cases (`top_false_accepts_*.csv`, `top_false_rejects_*.csv`).
+The full statistical analysis — bootstrap CIs, normality checks, ROC/DET curves, AUC/EER heatmaps per backbone × loss, pairwise Wilcoxon tests between losses, identification of known confounding factors — is in `notebooks/biometric_results_analysis_v3.ipynb`. `notebooks/failure_cases_extraction.ipynb` extracts and analyzes the worst false-accept/false-reject cases (`top_false_accepts_*.csv`, `top_false_rejects_*.csv`).
 
 ## Main results
 
