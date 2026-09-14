@@ -181,12 +181,16 @@
 \newlabel{app:dataset-stats-figures}{{A.2}{24}{Dataset Statistics: Distribution Figures}{subsection.a.A.2}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {A2}{\ignorespaces Preprocessing of RIMES text lines (for a given author). Each original line (left, e.g. \texttt  {eval2011-0\_000001.jpg}) is binarized via Otsu thresholding and tight-cropped (blue bounding boxes, center) using the projection-based algorithm; the corresponding grayscale crop is then extracted (right of center). Cropped lines belonging to the same writer are grouped (colored arrows) and vertically stacked into fixed-size $448\times 448$ canvases (right), with unused space padded in white.}}{25}{figure.2}\protected@file@percent }
 \newlabel{fig:rimes-preprocessing}{{A2}{25}{Preprocessing of RIMES text lines (for a given author). Each original line (left, e.g. \texttt {eval2011-0\_000001.jpg}) is binarized via Otsu thresholding and tight-cropped (blue bounding boxes, center) using the projection-based algorithm; the corresponding grayscale crop is then extracted (right of center). Cropped lines belonging to the same writer are grouped (colored arrows) and vertically stacked into fixed-size $448\times 448$ canvases (right), with unused space padded in white}{figure.2}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {A3}{\ignorespaces Distribution of images per author for the preprocessed IAM and RIMES datasets. \textbf  {Top:} per-dataset histograms with mean (yellow) and median (orange) overlaid, showing the strong right skew of IAM compared to the broader, more centrally distributed RIMES spread. \textbf  {Bottom:} side-by-side boxplot comparison, highlighting the extreme outlier author in IAM (59 images) against the wider but shorter-tailed RIMES distribution (max 10 images).}}{25}{figure.3}\protected@file@percent }
+\newlabel{fig:dataset-distribution}{{A3}{25}{Distribution of images per author for the preprocessed IAM and RIMES datasets. \textbf {Top:} per-dataset histograms with mean (yellow) and median (orange) overlaid, showing the strong right skew of IAM compared to the broader, more centrally distributed RIMES spread. \textbf {Bottom:} side-by-side boxplot comparison, highlighting the extreme outlier author in IAM (59 images) against the wider but shorter-tailed RIMES distribution (max 10 images)}{figure.3}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {A.3}Hyperparameter Configuration}{25}{subsection.a.A.3}\protected@file@percent }
 \newlabel{app:hyperparams}{{A.3}{25}{Hyperparameter Configuration}{subsection.a.A.3}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {A1}{\ignorespaces Hyperparameter configuration shared across the 72 model configurations. Loss-specific settings are indicated where applicable.}}{25}{table.1}\protected@file@percent }
-\newlabel{tab:hyperparams-appendix}{{A1}{25}{Hyperparameter configuration shared across the 72 model configurations. Loss-specific settings are indicated where applicable}{table.1}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {A.4}Training Dynamics}{25}{subsection.a.A.4}\protected@file@percent }
-\newlabel{app:training-curves}{{A.4}{25}{Training Dynamics}{subsection.a.A.4}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {A1}{\ignorespaces Hyperparameter configuration shared across the 72 model configurations. Loss-specific settings are indicated where applicable.}}{26}{table.1}\protected@file@percent }
+\newlabel{tab:hyperparams-appendix}{{A1}{26}{Hyperparameter configuration shared across the 72 model configurations. Loss-specific settings are indicated where applicable}{table.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.4}Training Dynamics}{26}{subsection.a.A.4}\protected@file@percent }
+\newlabel{app:training-curves}{{A.4}{26}{Training Dynamics}{subsection.a.A.4}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {A4}{\ignorespaces Training and validation loss curves, ResNet-18, all 12 loss$\times $split combinations.}}{26}{figure.4}\protected@file@percent }
+\newlabel{fig:training_curves}{{A4}{26}{Training and validation loss curves, ResNet-18, all 12 loss$\times $split combinations}{figure.4}{}}
 \bibdata{sn-bibliography}
 \bibcite{koch2015siamese}{{1}{2015}{{Koch et~al.}}{{}}}
 \bibcite{he2016resnet}{{2}{2016}{{He et~al.}}{{}}}
@@ -194,8 +198,6 @@
 \bibcite{howard2019mobilenetv3}{{4}{2019}{{Howard et~al.}}{{}}}
 \bibcite{deng2009imagenet}{{5}{2009}{{Deng et~al.}}{{}}}
 \bibcite{hadsell2006contrastive}{{6}{2006}{{Hadsell et~al.}}{{}}}
-\@writefile{lof}{\contentsline {figure}{\numberline {A3}{\ignorespaces Distribution of images per author for the preprocessed IAM and RIMES datasets. \textbf  {Top:} per-dataset histograms with mean (yellow) and median (orange) overlaid, showing the strong right skew of IAM compared to the broader, more centrally distributed RIMES spread. \textbf  {Bottom:} side-by-side boxplot comparison, highlighting the extreme outlier author in IAM (59 images) against the wider but shorter-tailed RIMES distribution (max 10 images).}}{26}{figure.3}\protected@file@percent }
-\newlabel{fig:dataset-distribution}{{A3}{26}{Distribution of images per author for the preprocessed IAM and RIMES datasets. \textbf {Top:} per-dataset histograms with mean (yellow) and median (orange) overlaid, showing the strong right skew of IAM compared to the broader, more centrally distributed RIMES spread. \textbf {Bottom:} side-by-side boxplot comparison, highlighting the extreme outlier author in IAM (59 images) against the wider but shorter-tailed RIMES distribution (max 10 images)}{figure.3}{}}
 \bibcite{schroff2015facenet}{{7}{2015}{{Schroff et~al.}}{{}}}
 \bibcite{iam}{{8}{}{{}}{{}}}
 \bibcite{rimes}{{9}{}{{}}{{}}}
@@ -206,8 +208,6 @@
 \bibcite{plamondon2000}{{14}{2000}{{Plamondon and Srihari}}{{}}}
 \bibcite{fiel2015}{{15}{2015}{{Fiel and Sablatnig}}{{}}}
 \bibcite{christlein2015}{{16}{2015}{{Christlein et~al.}}{{}}}
-\@writefile{lof}{\contentsline {figure}{\numberline {A4}{\ignorespaces Training and validation loss curves, ResNet-18, all 12 loss$\times $split combinations.}}{27}{figure.4}\protected@file@percent }
-\newlabel{fig:training_curves}{{A4}{27}{Training and validation loss curves, ResNet-18, all 12 loss$\times $split combinations}{figure.4}{}}
 \bibcite{christlein2017}{{17}{2017}{{Christlein et~al.}}{{}}}
 \bibcite{he2020fragnet}{{18}{2020}{{He and Schomaker}}{{}}}
 \bibcite{bromley1994siamese}{{19}{1994}{{Bromley et~al.}}{{}}}

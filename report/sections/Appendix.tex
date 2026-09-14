@@ -123,7 +123,7 @@ Figure~\ref{fig:dataset-distribution} shows the per-author image count distribut
 
 \begin{figure}[h]
 \centering
-\includegraphics[width=0.85\linewidth]{images/distribution_images.png}
+\includegraphics[width=0.65\linewidth]{images/distribution_images.png}
 \\[0.5em]
 \includegraphics[width=0.7\linewidth]{images/boxplot_comparison.png}
 \caption{Distribution of images per author for the preprocessed IAM and RIMES datasets. \textbf{Top:} per-dataset histograms with mean (yellow) and median (orange) overlaid, showing the strong right skew of IAM compared to the broader, more centrally distributed RIMES spread. \textbf{Bottom:} side-by-side boxplot comparison, highlighting the extreme outlier author in IAM (59 images) against the wider but shorter-tailed RIMES distribution (max 10 images).}
@@ -163,13 +163,6 @@ Data-loading workers & 4 \\
 
 \subsection{Training Dynamics}\label{app:training-curves}
 
-\begin{figure}[htbp]
-  \centering
-  \includegraphics[width=\textwidth]{images/training_history_resnet18.png}
-  \caption{Training and validation loss curves, ResNet-18, all 12 loss$\times$split combinations.}
-  \label{fig:training_curves}
-\end{figure}
-
 Figure~\ref{fig:training_curves} reports training and validation loss curves for the ResNet-18 
 backbone across all 12 loss$\times$split combinations. Across nearly all configurations, 
 training loss decreases monotonically, consistent with stable optimization; however, 
@@ -185,4 +178,12 @@ train--validation gap rather than smooth joint convergence. Training run lengths
 considerably across configurations, from as few as 6 epochs (Triplet, RIMES$\to$RIMES) to 
 over 40 (BCE, IAM$\to$IAM), reflecting the early-stopping criterion (patience 5, Appendix~\ref{app:hyperparams}) 
 being triggered at different points depending on the stability of the validation signal for each configuration.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{images/training_history_resnet18.png}
+  \caption{Training and validation loss curves, ResNet-18, all 12 loss$\times$split combinations.}
+  \label{fig:training_curves}
+\end{figure}
+
 \end{appendices}
