@@ -24,6 +24,7 @@ The project covers the full pipeline: preprocessing of the IAM/RIMES datasets, t
   - [Main results](#main-results)
   - [Notebooks](#notebooks)
   - [Training notebooks on Kaggle](#training-notebooks-on-kaggle)
+  - [Authors](#authors)
   - [License](#license)
 
 ---
@@ -247,6 +248,11 @@ The actual (GPU) training experiments were run on Kaggle, in several versions by
 | [Handwriting Verification with Triplet Loss](https://www.kaggle.com/code/lorenzoarcioni/handwriting-verification-with-triplet-loss) | Training and evaluation of the backbones with **Triplet Loss** |
 | [Final Train for Demo — HandVerify](https://www.kaggle.com/code/lorenzoarcioni/final-train-for-demo-handverify) | Training of the final model used in the webcam demo (ResNet18 Contrastive, mixed and stratified IAM+RIMES) |
 | [Handwriting: Best Model Final Validation](https://www.kaggle.com/code/lorenzoarcioni/handwriting-best-model-final-validation) | Exhaustive validation of the best model on a complete held-out dataset (all genuine + impostor pairs) |
+
+## Authors
+
+- [Lorenzo Arcioni](https://github.com/lorenzoarcioni)
+- **Enrico Giordani**
 
 ## License
 
