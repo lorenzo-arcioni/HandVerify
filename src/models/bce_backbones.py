@@ -21,12 +21,10 @@ class SiameseResNet18(BaseSiameseNetwork):
         if in_channels != 3:
             resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
 
+        stem = nn.Sequential(resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool)
         encoder = nn.Sequential(
             nn.Sequential(
-                resnet.conv1,
-                resnet.bn1,
-                resnet.relu,
-                resnet.maxpool,
+                stem,
                 resnet.layer1,
                 resnet.layer2,
                 resnet.layer3,
@@ -56,12 +54,10 @@ class SiameseResNet34(BaseSiameseNetwork):
         if in_channels != 3:
             resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
 
+        stem = nn.Sequential(resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool)
         encoder = nn.Sequential(
             nn.Sequential(
-                resnet.conv1,
-                resnet.bn1,
-                resnet.relu,
-                resnet.maxpool,
+                stem,
                 resnet.layer1,
                 resnet.layer2,
                 resnet.layer3,
@@ -91,12 +87,10 @@ class SiameseResNet50(BaseSiameseNetwork):
         if in_channels != 3:
             resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
 
+        estem = nn.Sequential(resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool)
         encoder = nn.Sequential(
             nn.Sequential(
-                resnet.conv1,
-                resnet.bn1,
-                resnet.relu,
-                resnet.maxpool,
+                stem,
                 resnet.layer1,
                 resnet.layer2,
                 resnet.layer3,

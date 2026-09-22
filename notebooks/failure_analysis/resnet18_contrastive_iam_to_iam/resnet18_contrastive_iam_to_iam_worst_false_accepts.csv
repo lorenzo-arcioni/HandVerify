@@ -1,0 +1,3 @@
+img1_path,img2_path,label,score,threshold,margin_from_threshold,error_type
+/home/lorenzo/Documenti/GitHub/HandVerify/datasets/processed-handwritten/iam_processed/431/k03-117.png,/home/lorenzo/Documenti/GitHub/HandVerify/datasets/processed-handwritten/iam_processed/644/r02-065.png,impostor,0.90320885181427,0.6469272971153259,0.2562815546989441,false_accept
+/home/lorenzo/Documenti/GitHub/HandVerify/datasets/processed-handwritten/iam_processed/461/l01-065.png,/home/lorenzo/Documenti/GitHub/HandVerify/datasets/processed-handwritten/iam_processed/644/r02-065.png,impostor,0.8739895224571228,0.6469272971153259,0.2270622253417968,false_accept

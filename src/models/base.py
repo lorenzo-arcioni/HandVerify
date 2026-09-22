@@ -42,6 +42,27 @@ class BaseSiameseNetwork(nn.Module):
         
         # Classifier for similarity prediction (deeper with more dropout)
         self.fc = self._build_fc_block(feature_dim * 2, projection_dim, dropout)
+
+    def train(self, mode: bool = True):
+        """
+        Override necessario perché nn.Module.train() di default rimette
+        in modalità training TUTTI i sotto-moduli, incluso il BatchNorm
+        dentro i layer che abbiamo "congelato" con requires_grad=False.
+        requires_grad blocca solo weight/bias; le running stats di BN
+        (running_mean, running_var) si aggiornano comunque finché il
+        modulo è in .train(), quindi vanno ri-forzate in .eval() ogni
+        volta che il trainer chiama model.train() a inizio epoca.
+        """
+        super().train(mode)
+        if mode and self.freeze_backbone_layers > 0:
+            frozen_count = 0
+            for child in self.encoder[0].children():
+                if frozen_count < self.freeze_backbone_layers:
+                    child.eval()
+                    frozen_count += 1
+                else:
+                    break
+        return self
     
     def _freeze_encoder_layers(self, num_layers: int):
         """
@@ -201,6 +222,27 @@ class BaseContrastiveNetwork(nn.Module):
         
         # Projection head (deeper MLP with more regularization)
         self.projection = self._build_projection_head(feature_dim, embedding_dim, dropout)
+
+    def train(self, mode: bool = True):
+        """
+        Override necessario perché nn.Module.train() di default rimette
+        in modalità training TUTTI i sotto-moduli, incluso il BatchNorm
+        dentro i layer che abbiamo "congelato" con requires_grad=False.
+        requires_grad blocca solo weight/bias; le running stats di BN
+        (running_mean, running_var) si aggiornano comunque finché il
+        modulo è in .train(), quindi vanno ri-forzate in .eval() ogni
+        volta che il trainer chiama model.train() a inizio epoca.
+        """
+        super().train(mode)
+        if mode and self.freeze_backbone_layers > 0:
+            frozen_count = 0
+            for child in self.encoder[0].children():
+                if frozen_count < self.freeze_backbone_layers:
+                    child.eval()
+                    frozen_count += 1
+                else:
+                    break
+        return self
     
     def _freeze_encoder_layers(self, num_layers: int):
         """
@@ -325,6 +367,27 @@ class BaseTripletNetwork(nn.Module):
         
         # Projection head (deeper with more regularization)
         self.fc = self._build_projection_head(feature_dim, embedding_dim, dropout)
+
+    def train(self, mode: bool = True):
+        """
+        Override necessario perché nn.Module.train() di default rimette
+        in modalità training TUTTI i sotto-moduli, incluso il BatchNorm
+        dentro i layer che abbiamo "congelato" con requires_grad=False.
+        requires_grad blocca solo weight/bias; le running stats di BN
+        (running_mean, running_var) si aggiornano comunque finché il
+        modulo è in .train(), quindi vanno ri-forzate in .eval() ogni
+        volta che il trainer chiama model.train() a inizio epoca.
+        """
+        super().train(mode)
+        if mode and self.freeze_backbone_layers > 0:
+            frozen_count = 0
+            for child in self.encoder[0].children():
+                if frozen_count < self.freeze_backbone_layers:
+                    child.eval()
+                    frozen_count += 1
+                else:
+                    break
+        return self
     
     def _freeze_encoder_layers(self, num_layers: int):
         """
