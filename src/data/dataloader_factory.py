@@ -66,6 +66,7 @@ def create_dataloaders(
     test_size: float = 0.15,
     target_size: int = 448,
     random_state: int = 42,
+    max_genuine_pairs: int = None,
     **dataset_kwargs
 ):
     """
@@ -80,6 +81,11 @@ def create_dataloaders(
         test_size: Frazione di writer riservata a test (held-out, report finale)
         target_size: Dimensione immagine
         random_state: Seed
+        max_genuine_pairs: Numero massimo di coppie genuine per epoca, applicato
+                          SOLO al train_dataset. val_dataset e test_dataset usano
+                          sempre tutte le genuine disponibili (nessun cap, nessun
+                          resampling), per avere metriche di validazione/test stabili
+                          e confrontabili tra un'epoca e l'altra.
         **dataset_kwargs: Argomenti aggiuntivi per il costruttore del dataset
 
     Returns:
@@ -114,7 +120,8 @@ def create_dataloaders(
             )
 
     train_dataset = dataset_class(
-        train_dirs, train=True, target_size=target_size, **dataset_kwargs
+        train_dirs, train=True, target_size=target_size,
+        max_genuine_pairs=max_genuine_pairs, **dataset_kwargs
     ) if train_dirs else None
 
     val_dataset = dataset_class(
@@ -142,6 +149,7 @@ def create_cross_dataset_dataloaders(
     val_size: float = 0.5,
     target_size: int = 448,
     random_state: int = 42,
+    max_genuine_pairs: int = None,
     **dataset_kwargs
 ):
     """
@@ -160,6 +168,8 @@ def create_cross_dataset_dataloaders(
                   (il resto, 1 - val_size, va a test)
         target_size: Dimensione immagine
         random_state: Seed
+        max_genuine_pairs: Numero massimo di coppie genuine per epoca, applicato
+                          SOLO al train_dataset (vedi create_dataloaders).
         **dataset_kwargs: Argomenti aggiuntivi per il costruttore del dataset
 
     Returns:
@@ -177,7 +187,8 @@ def create_cross_dataset_dataloaders(
     )
 
     train_dataset = dataset_class(
-        train_dirs, train=True, target_size=target_size, **dataset_kwargs
+        train_dirs, train=True, target_size=target_size,
+        max_genuine_pairs=max_genuine_pairs, **dataset_kwargs
     )
     val_dataset = dataset_class(
         val_dirs, train=False, target_size=target_size, **dataset_kwargs
@@ -203,6 +214,7 @@ def create_kfold_dataloaders(
     num_workers: int = 4,
     target_size: int = 448,
     random_state: int = 42,
+    max_genuine_pairs: int = None,
     **dataset_kwargs
 ):
     """
@@ -217,6 +229,10 @@ def create_kfold_dataloaders(
         num_workers: Number of workers
         target_size: Image size
         random_state: Random seed
+        max_genuine_pairs: Numero massimo di coppie genuine per epoca, applicato
+                          SOLO al train_dataset. Il val_dataset (che in K-Fold
+                          funge anche da held-out per quel fold) usa sempre
+                          tutte le genuine disponibili.
         **dataset_kwargs: Additional args for dataset constructor
 
     Returns:
@@ -238,6 +254,7 @@ def create_kfold_dataloaders(
         train_dirs,
         train=True,
         target_size=target_size,
+        max_genuine_pairs=max_genuine_pairs,
         **dataset_kwargs
     )
 

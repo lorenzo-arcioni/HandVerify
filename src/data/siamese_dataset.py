@@ -7,7 +7,7 @@ from .base_dataset import BaseWriterDataset
 
 class SiameseDataset(BaseWriterDataset):
     """Dataset for Siamese network training (positive/negative pairs)."""
-    
+
     def __init__(
         self,
         writer_dirs: List[str],
@@ -15,6 +15,7 @@ class SiameseDataset(BaseWriterDataset):
         positive_ratio: float = 0.5,
         target_size: int = 448,
         resample_negatives_every_n_epochs: int = 1,
+        max_genuine_pairs: int = None,
     ):
         print(f"\n{'='*60}")
         print(f"Initializing {'TRAIN' if train else 'VAL'} Siamese Dataset")
@@ -22,21 +23,23 @@ class SiameseDataset(BaseWriterDataset):
         print(f"  Writers: {len(writer_dirs)}")
         print(f"  Positive ratio: {positive_ratio:.2f}")
         print(f"  Resample negatives every: {resample_negatives_every_n_epochs} epoch(s)")
-        
+        print(f"  Max genuine pairs per epoch: {max_genuine_pairs if max_genuine_pairs is not None else 'unlimited'}")
+
         super().__init__(
             writer_dirs=writer_dirs,
             train=train,
             target_size=target_size,
             positive_ratio=positive_ratio,
-            resample_negatives_every_n_epochs=resample_negatives_every_n_epochs
+            resample_negatives_every_n_epochs=resample_negatives_every_n_epochs,
+            max_genuine_pairs=max_genuine_pairs,
         )
-    
+
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         img1_path, img2_path, label = self.samples[idx]
         img1 = self._load_image(img1_path)
         img2 = self._load_image(img2_path)
         return img1, img2, torch.tensor(label, dtype=torch.float32)
-    
+
     def get_validation_pair(self, idx: int) -> Tuple[str, str, float]:
         """
         Get a validation pair from samples.
