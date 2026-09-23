@@ -15,7 +15,7 @@ def get_train_transforms(target_size: int = 448, aug: bool = False):
     """
     base = [
         transforms.RandomResizedCrop(target_size, scale=(0.9, 1.1)),
-        transforms.RandomRotation(15),
+        transforms.RandomRotation(10),
     ]
 
     if aug:
@@ -32,7 +32,7 @@ def get_train_transforms(target_size: int = 448, aug: bool = False):
                 contrast=0.15,
             ),
             transforms.RandomApply(
-                [transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 1.0))],
+                [transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 0.5))],
                 p=0.3,
             ),
         ]
