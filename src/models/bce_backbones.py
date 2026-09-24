@@ -87,7 +87,7 @@ class SiameseResNet50(BaseSiameseNetwork):
         if in_channels != 3:
             resnet.conv1 = adapt_conv_layer_for_grayscale(resnet.conv1, in_channels)
 
-        estem = nn.Sequential(resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool)
+        stem = nn.Sequential(resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool)
         encoder = nn.Sequential(
             nn.Sequential(
                 stem,

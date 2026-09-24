@@ -1,0 +1,9 @@
+group,img1,img2,label,model,score,threshold,correct
+false_accepts,k03-117_full.png,r02-065_full.png,impostor,vecchi,0.6442959904670715,0.6469,True
+false_accepts,k03-117_full.png,r02-065_full.png,impostor,nuovi,0.9174187183380127,0.535,False
+false_accepts,l01-065_full.png,r02-065_full.png,impostor,vecchi,0.739449679851532,0.6469,False
+false_accepts,l01-065_full.png,r02-065_full.png,impostor,nuovi,0.9633259773254395,0.535,False
+false_rejects,g01-004_full.png,g01-008_full.png,genuine,vecchi,0.9649662971496582,0.6469,True
+false_rejects,g01-004_full.png,g01-008_full.png,genuine,nuovi,0.9797976613044739,0.535,True
+false_rejects,h06-079_full.png,h06-085_full.png,genuine,vecchi,0.9706658124923706,0.6469,True
+false_rejects,h06-079_full.png,h06-085_full.png,genuine,nuovi,0.8156290054321289,0.535,True
