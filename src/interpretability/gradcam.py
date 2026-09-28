@@ -80,7 +80,7 @@ class GradCAM:
         gradients = self._gradients.detach()
 
         weights = gradients.mean(dim=(2, 3), keepdim=True)
-        cam = F.relu((weights * activations).sum(dim=1, keepdim=True))
+        cam = (weights * activations).sum(dim=1, keepdim=True)
         cam = cam.squeeze(0).squeeze(0).cpu().numpy()
 
         cam -= cam.min()

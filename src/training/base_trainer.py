@@ -29,11 +29,15 @@ class BaseTrainer(ABC):
         model_name: str,
         device: torch.device,
         results_dir: str = "results",
+        use_amp: bool = False,                                   # NUOVO
     ):
         self.model = model.to(device)
         self.model_name = model_name
         self.device = device
         self.results_dir = results_dir
+
+        self.use_amp = use_amp and device.type == "cuda"         # NUOVO
+        self.scaler = torch.amp.GradScaler("cuda", enabled=self.use_amp)  # NUOVO
 
         os.makedirs(results_dir, exist_ok=True)
 

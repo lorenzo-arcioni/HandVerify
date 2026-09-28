@@ -18,15 +18,10 @@ from .losses import ContrastiveLoss
 class ContrastiveTrainer(BaseTrainer):
     """Trainer for contrastive learning on binary pair datasets."""
 
-    def __init__(
-        self,
-        model,
-        model_name: str,
-        device: torch.device,
-        margin: float = 1.0,
-        results_dir: str = "results",
-    ):
-        super().__init__(model, model_name, device, results_dir)
+    def __init__(self, model, model_name: str, device: torch.device,
+                margin: float = 1.0, results_dir: str = "results",
+                use_amp: bool = False):
+        super().__init__(model, model_name, device, results_dir, use_amp=use_amp)
         self.margin = margin
         self.criterion = ContrastiveLoss(margin=margin)
         self._setup_optimizer()
@@ -63,13 +58,14 @@ class ContrastiveTrainer(BaseTrainer):
 
             self.optimizer.zero_grad()
 
-            emb1 = self.model(img1)
-            emb2 = self.model(img2)
+            with torch.autocast(device_type=self.device.type, enabled=self.use_amp):
+                emb1 = self.model(img1)
+                emb2 = self.model(img2)
+            loss = self.criterion(emb1.float(), emb2.float(), labels)
 
-            loss = self.criterion(emb1, emb2, labels)
-
-            loss.backward()
-            self.optimizer.step()
+            self.scaler.scale(loss).backward()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
 
             train_loss += loss.item()
 
@@ -84,12 +80,10 @@ class ContrastiveTrainer(BaseTrainer):
         for img1, img2, labels in tqdm(val_loader, desc="Validation"):
             img1, img2, labels = img1.to(self.device), img2.to(self.device), labels.float().to(self.device)
 
-            # Get embeddings
-            emb1 = self.model(img1)
-            emb2 = self.model(img2)
-
-            # Contrastive loss
-            loss = self.criterion(emb1, emb2, labels)
+            with torch.autocast(device_type=self.device.type, enabled=self.use_amp):
+                emb1 = self.model(img1)
+                emb2 = self.model(img2)
+            loss = self.criterion(emb1.float(), emb2.float(), labels)
             val_loss += loss.item()
 
         return val_loss / len(val_loader)

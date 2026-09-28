@@ -18,15 +18,10 @@ from .losses import TripletLoss
 class TripletTrainer(BaseTrainer):
     """Trainer for triplet networks."""
 
-    def __init__(
-        self,
-        model,
-        model_name: str,
-        device: torch.device,
-        margin: float = 0.5,
-        results_dir: str = "results",
-    ):
-        super().__init__(model, model_name, device, results_dir)
+    def __init__(self, model, model_name: str, device: torch.device,
+                margin: float = 0.5, results_dir: str = "results",
+                use_amp: bool = False):
+        super().__init__(model, model_name, device, results_dir, use_amp=use_amp)
         self.margin = margin
         self.criterion = TripletLoss(margin=margin)
         self._setup_optimizer()
@@ -63,14 +58,15 @@ class TripletTrainer(BaseTrainer):
 
             self.optimizer.zero_grad()
 
-            anchor_emb = self.model(anchor)
-            positive_emb = self.model(positive)
-            negative_emb = self.model(negative)
+            with torch.autocast(device_type=self.device.type, enabled=self.use_amp):
+                anchor_emb = self.model(anchor)
+                positive_emb = self.model(positive)
+                negative_emb = self.model(negative)
+            loss = self.criterion(anchor_emb.float(), positive_emb.float(), negative_emb.float())
 
-            loss = self.criterion(anchor_emb, positive_emb, negative_emb)
-
-            loss.backward()
-            self.optimizer.step()
+            self.scaler.scale(loss).backward()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
 
             train_loss += loss.item()
 
@@ -87,13 +83,11 @@ class TripletTrainer(BaseTrainer):
             positive = positive.to(self.device)
             negative = negative.to(self.device)
 
-            # Get embeddings
-            anchor_emb = self.model(anchor)
-            positive_emb = self.model(positive)
-            negative_emb = self.model(negative)
-
-            # Triplet loss
-            loss = self.criterion(anchor_emb, positive_emb, negative_emb)
+            with torch.autocast(device_type=self.device.type, enabled=self.use_amp):
+                anchor_emb = self.model(anchor)
+                positive_emb = self.model(positive)
+                negative_emb = self.model(negative)
+            loss = self.criterion(anchor_emb.float(), positive_emb.float(), negative_emb.float())
             val_loss += loss.item()
 
         return val_loss / len(val_loader)

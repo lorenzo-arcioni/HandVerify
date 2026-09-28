@@ -11,14 +11,9 @@ from .losses import BCELoss
 class BCETrainer(BaseTrainer):
     """Trainer for Siamese networks using BCE loss."""
 
-    def __init__(
-        self,
-        model,
-        model_name: str,
-        device: torch.device,
-        results_dir: str = "results",
-    ):
-        super().__init__(model, model_name, device, results_dir)
+    def __init__(self, model, model_name: str, device: torch.device,
+                results_dir: str = "results", use_amp: bool = False):
+        super().__init__(model, model_name, device, results_dir, use_amp=use_amp)
         self.criterion = BCELoss()
         self._setup_optimizer()
 
@@ -53,11 +48,14 @@ class BCETrainer(BaseTrainer):
             labels = labels.to(self.device)
 
             self.optimizer.zero_grad()
-            outputs = self.model(img1, img2).squeeze(1)
-            loss = self.criterion(outputs, labels)
 
-            loss.backward()
-            self.optimizer.step()
+            with torch.autocast(device_type=self.device.type, enabled=self.use_amp):
+                outputs = self.model(img1, img2).squeeze(1)
+            loss = self.criterion(outputs.float(), labels.float())   # fuori dall'autocast
+
+            self.scaler.scale(loss).backward()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
 
             train_loss += loss.item()
 
@@ -72,11 +70,10 @@ class BCETrainer(BaseTrainer):
         for img1, img2, labels in tqdm(val_loader, desc="Validation"):
             img1, img2, labels = img1.to(self.device), img2.to(self.device), labels.to(self.device)
 
-            # Forward pass
-            outputs = self.model(img1, img2).squeeze(1)
-
             # BCE loss
-            loss = self.criterion(outputs, labels)
+            with torch.autocast(device_type=self.device.type, enabled=self.use_amp):
+                outputs = self.model(img1, img2).squeeze(1)
+            loss = self.criterion(outputs.float(), labels.float())
             val_loss += loss.item()
 
         return val_loss / len(val_loader)

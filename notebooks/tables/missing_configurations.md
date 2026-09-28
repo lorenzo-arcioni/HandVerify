@@ -1,8 +1,6 @@
 ### Missing configurations
 
-
-**CSV presente ma log grezzo non trovato/parsabile (72):**
-(per queste configurazioni le metriche puntuali in Tabelle 2-4 sono comunque disponibili; mancano solo i dati di protocollo/training-dynamics derivati dal log)
+**CSV/esperimento del tutto assente (64):**
 - efficientnet_b0 / bce / iam_to_iam
 - efficientnet_b0 / bce / iam_to_rimes
 - efficientnet_b0 / bce / rimes_to_iam
@@ -39,14 +37,6 @@
 - mobilenet_v3_large / contrastive / iam_to_rimes
 - mobilenet_v3_large / contrastive / rimes_to_iam
 - mobilenet_v3_large / contrastive / rimes_to_rimes
-- mobilenet_v3_small / contrastive / iam_to_iam
-- mobilenet_v3_small / contrastive / iam_to_rimes
-- mobilenet_v3_small / contrastive / rimes_to_iam
-- mobilenet_v3_small / contrastive / rimes_to_rimes
-- resnet18 / contrastive / iam_to_iam
-- resnet18 / contrastive / iam_to_rimes
-- resnet18 / contrastive / rimes_to_iam
-- resnet18 / contrastive / rimes_to_rimes
 - resnet34 / contrastive / iam_to_iam
 - resnet34 / contrastive / iam_to_rimes
 - resnet34 / contrastive / rimes_to_iam
@@ -75,3 +65,14 @@
 - resnet34 / triplet / iam_to_rimes
 - resnet34 / triplet / rimes_to_iam
 - resnet34 / triplet / rimes_to_rimes
+
+**CSV presente ma log grezzo non trovato/parsabile (8):**
+(per queste configurazioni le metriche puntuali in Tabelle 2-4 sono comunque disponibili; mancano solo i dati di protocollo/training-dynamics derivati dal log)
+- mobilenet_v3_small / contrastive / iam_to_iam
+- mobilenet_v3_small / contrastive / iam_to_rimes
+- mobilenet_v3_small / contrastive / rimes_to_iam
+- mobilenet_v3_small / contrastive / rimes_to_rimes
+- resnet18 / contrastive / iam_to_iam
+- resnet18 / contrastive / iam_to_rimes
+- resnet18 / contrastive / rimes_to_iam
+- resnet18 / contrastive / rimes_to_rimes
