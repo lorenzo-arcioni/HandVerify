@@ -80,12 +80,10 @@ class GradCAM:
         gradients = self._gradients.detach()
 
         weights = gradients.mean(dim=(2, 3), keepdim=True)
-        cam = (weights * activations).sum(dim=1, keepdim=True)
-        cam = cam.squeeze(0).squeeze(0).cpu().numpy()
-
-        cam -= cam.min()
-        if cam.max() > 1e-8:
-            cam /= cam.max()
+        cam = (weights * activations).sum(dim=1).squeeze(0).cpu().numpy()   # con segno
+        m = np.abs(cam).max()
+        if m > 1e-8:
+            cam = cam / m          # in [-1, 1], lo zero resta zero
 
         return cam, float(score.item())
 
@@ -170,10 +168,14 @@ def overlay_cam_on_image(gray_img_uint8: np.ndarray, cam: np.ndarray, alpha: flo
     import cv2
 
     h, w = gray_img_uint8.shape[:2]
-    cam_resized = cv2.resize(cam, (w, h), interpolation=cv2.INTER_CUBIC)
-    cam_resized = np.clip(cam_resized, 0, 1)
+    cam = np.clip(cv2.resize(cam, (w, h), interpolation=cv2.INTER_CUBIC), -1, 1)
 
-    heatmap = cv2.applyColorMap((cam_resized * 255).astype(np.uint8), cv2.COLORMAP_JET)
-    base_bgr = cv2.cvtColor(gray_img_uint8, cv2.COLOR_GRAY2BGR)
+    heat = np.zeros((h, w, 3), dtype=np.float32)          # BGR
+    heat[..., 2] = np.clip(cam, 0, None)                   # rosso = positivo
+    heat[..., 0] = np.clip(-cam, 0, None)                  # blu   = negativo
+    heat = (heat * 255).astype(np.uint8)
 
-    return cv2.addWeighted(heatmap, alpha, base_bgr, 1 - alpha, 0)
+    base = cv2.cvtColor(gray_img_uint8, cv2.COLOR_GRAY2BGR).astype(np.float32)
+    weight = (np.abs(cam) * alpha)[..., None]              # più intenso dove |cam| è alto
+    out = base * (1 - weight) + heat.astype(np.float32) * weight
+    return out.astype(np.uint8)

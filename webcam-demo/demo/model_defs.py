@@ -61,9 +61,10 @@ def _build_encoder(arch: str, in_channels: int) -> nn.Sequential:
 
     if arch.startswith(_RESNET_PREFIX):
         net.conv1 = _to_grayscale(net.conv1, in_channels)
+        stem = nn.Sequential(net.conv1, net.bn1, net.relu, net.maxpool)
         return nn.Sequential(
             nn.Sequential(
-                net.conv1, net.bn1, net.relu, net.maxpool,
+                stem,
                 net.layer1, net.layer2, net.layer3, net.layer4,
                 net.avgpool
             ),

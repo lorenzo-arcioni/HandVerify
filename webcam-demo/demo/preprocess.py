@@ -30,15 +30,14 @@ def preprocess_manual_roi(roi_bgr, gray_threshold=None):
     if roi_bgr is None or roi_bgr.size == 0:
         return None
 
+    if gray_threshold is None:
+        gray_threshold = DEFAULT_GRAY_THRESHOLD
+
     gray = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2GRAY)
-    background = gray > 180
-    gray = gray.copy()
-    gray[background] = 255
 
-    # 1) binarizza QUI, sulla risoluzione originale della ROI
-    _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    # pixel > soglia -> bianco (sfondo), <= soglia -> nero (inchiostro)
+    _, binary = cv2.threshold(gray, gray_threshold, 255, cv2.THRESH_BINARY)
 
-    # 2) resize per ultimo, sull'immagine già binaria
     return make_square_resize(binary, TARGET_SIZE)
 
 
