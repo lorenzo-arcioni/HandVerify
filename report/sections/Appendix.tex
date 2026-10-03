@@ -9,111 +9,193 @@
 
 \subsection{Preprocessing Pipeline Details}\label{app:preprocessing}
 
-This appendix provides the full mathematical formulation of the preprocessing pipeline summarized in Section~\ref{sec:experiments}.
+This appendix provides the full mathematical formulation of the preprocessing pipeline
+summarized in Section~\ref{sec:experiments}.
 
 \subsubsection{Binarization as an Auxiliary Mask}
 
-Binarization is used exclusively to \emph{compute} crop coordinates and content masks. 
-Concretely, each image is first converted to grayscale and, from it, an Otsu-thresholded binary version is derived and 
-used only as a guide for locating text regions. Otsu's method determines the optimal threshold $t^*$ by maximizing inter-class variance:
+Each image is first converted to grayscale and an Otsu-thresholded binary version is derived
+from it. Otsu's method determines the optimal threshold $t^*$ by maximizing inter-class variance:
 \begin{equation}
 t^* = \arg\max_t \sigma_B^2(t) = \arg\max_t \omega_0(t) \omega_1(t) [\mu_0(t) - \mu_1(t)]^2
 \end{equation}
-where $\omega_0(t)$ and $\omega_1(t)$ represent background and foreground class probabilities, and $\mu_0(t)$, $\mu_1(t)$ are their respective means. The resulting binary mask has text pixels set to 0 (black) and background to 255 (white), and is used downstream for: (i) detecting IAM guide lines, (ii) locating left-margin black columns and top/bottom black rows, and (iii) computing tight-crop bounding boxes. All crop coordinates derived from the binary mask are then applied to the corresponding grayscale image, which is what is actually cropped, resized, and written to the output dataset.
+where $\omega_0(t)$ and $\omega_1(t)$ are the background and foreground class probabilities,
+and $\mu_0(t)$, $\mu_1(t)$ their respective means. In the resulting mask, text pixels are 0
+(black) and background pixels are 255 (white). The mask is used to: (i) detect IAM guide lines,
+(ii) locate left-margin black columns and top/bottom black rows, and (iii) compute tight-crop
+bounding boxes. For RIMES, the coordinates derived from the mask are applied to the grayscale
+image, which is what is cropped, resized, and saved. For IAM, the coordinates are applied to
+the binary image, which is what is cropped, resized, and saved.
 
 \subsubsection{Tight Cropping}
 \label{app:tight-cropping}
 
-To eliminate excessive whitespace while preserving text content, we compute tight crop coordinates using axial projections on the binary mask, and apply the resulting bounding box to the grayscale image. For a binary image $I$ of size $h \times w$, we invert it ($I_{\text{inv}} = 255 - I$) and compute row and column projections:
+To eliminate excessive whitespace while preserving text content, we compute tight crop
+coordinates using axial projections on the binary mask. For a binary image $I$ of size
+$h \times w$, we invert it ($I_{\text{inv}} = 255 - I$) and compute row and column projections:
 \begin{equation}
-S_{\text{row}}(i) = \sum_{j=1}^{w} \mathbb{I}[I_{\text{inv}}(i,j) > 0], \quad S_{\text{col}}(j) = \sum_{i=1}^{h} \mathbb{I}[I_{\text{inv}}(i,j) > 0]
+S_{\text{row}}(i) = \sum_{j=1}^{w} \mathbb{I}[I_{\text{inv}}(i,j) > 0], \quad
+S_{\text{col}}(j) = \sum_{i=1}^{h} \mathbb{I}[I_{\text{inv}}(i,j) > 0]
 \end{equation}
-
-Adaptive thresholds determine content-bearing rows and columns, based on a minimum ink-density ratio $\rho$:
+Adaptive thresholds determine content-bearing rows and columns, based on a minimum ink-density
+ratio $\rho$:
 \begin{equation}
-\tau_{\text{row}} = \max(10, \lfloor \rho \cdot w \rfloor), \quad \tau_{\text{col}} = \max(10, \lfloor \rho \cdot h \rfloor)
+\tau_{\text{row}} = \max(10, \lfloor \rho \cdot w \rfloor), \quad
+\tau_{\text{col}} = \max(10, \lfloor \rho \cdot h \rfloor)
 \end{equation}
-By default $\rho = 0.018$ (used for RIMES line processing); for IAM full-form images we use a slightly stricter $\rho = 0.02$ to compensate for residual guide-line artifacts left after region extraction.
-
-The bounding box is defined by:
+We use $\rho = 0.018$ for RIMES lines and a slightly stricter $\rho = 0.02$ for IAM, to
+compensate for residual guide-line artifacts left after region extraction. The bounding box is
 \begin{equation}
 y_1 = \min\{i : S_{\text{row}}(i) > \tau_{\text{row}}\}, \quad y_2 = \max\{i : S_{\text{row}}(i) > \tau_{\text{row}}\}
 \end{equation}
 \begin{equation}
 x_1 = \min\{j : S_{\text{col}}(j) > \tau_{\text{col}}\}, \quad x_2 = \max\{j : S_{\text{col}}(j) > \tau_{\text{col}}\}
 \end{equation}
+If no row or no column exceeds its threshold, the image is discarded. A 3-pixel internal trim,
+applied only along the row axis, removes residual guide lines:
+$y_1 \leftarrow \min(y_1+3,\, y_2-1)$ and $y_2 \leftarrow \max(y_2-3,\, y_1+1)$, while
+$x_1, x_2$ are left untouched. This is followed by 5-pixel padding on \emph{all four} sides,
+clipped to the image bounds, to prevent text from touching borders. The resulting coordinates
+$(y_1, y_2, x_1, x_2)$ are used to crop the image.
 
-A 3-pixel internal trim, applied only along the row axis, removes residual guide lines: $y_1 \leftarrow \min(y_1+3,\, y_2-1)$ and $y_2 \leftarrow \max(y_2-3,\, y_1+1)$, while $x_1, x_2$ are left untouched. This is followed by 5-pixel padding on \emph{all four} sides to prevent text from touching borders. The resulting coordinates $(y_1, y_2, x_1, x_2)$ are then used to crop the grayscale image, not the binary mask.
+\subsubsection{Aspect-Preserving Resize to Square}
 
-\subsubsection{Aspect-Preserving Resize}
-
-Images are normalized to 448×448 pixels by first centering them in a square canvas of side $s = \max(h, w)$ with offsets:
+For IAM, images are normalized to $448\times448$ pixels by first centering them on a white
+(255) square canvas of side $s = \max(h, w)$ with offsets
 \begin{equation}
 \text{offset}_y = \lfloor (s - h) / 2 \rfloor, \quad \text{offset}_x = \lfloor (s - w) / 2 \rfloor
 \end{equation}
-The canvas is then resized to 448×448 using area interpolation, preserving the original aspect ratio without distortion.
+The canvas is then resized to $448\times448$ using area interpolation, preserving the original
+aspect ratio without distortion.
+
+\subsubsection{Ink-Based Quality Filtering}
+\label{app:ink-ratio-filter}
+
+We define the ink ratio of an image as the fraction of pixels with intensity below 250.
+Images whose ink ratio falls below a threshold are discarded (and stored in a separate
+``rejected'' folder for inspection). The thresholds are: $0.010$ for full IAM images,
+$0.010$ for IAM patches, $0.015$ for RIMES $448\times448$ batches (which contain white
+padding), and $0.020$ for RIMES mosaics.
 
 \subsubsection{IAM Dataset Preprocessing}
 
-IAM forms contain pre-printed guide lines that must be removed. We detect horizontal lines using morphological opening (erosion followed by dilation, 2 iterations) with a kernel of width $k_w = \max(30, \lfloor w/15 \rfloor)$:
+IAM forms contain pre-printed guide lines that must be excluded. We detect horizontal lines
+using morphological opening (erosion followed by dilation, 2 iterations) on the inverted binary
+mask, with a kernel of width $k_w = \max(30, \lfloor w/15 \rfloor)$:
 \begin{equation}
 \text{Opening}(I, K) = \text{Dilate}(\text{Erode}(I, K), K)
 \end{equation}
-
-Valid lines satisfy: $w_c > 0.3w$, $h_c < 20$, and area $> 100$ pixels. Detected lines are sorted top-to-bottom and the handwritten region is selected according to how many valid lines are found:
+Valid lines satisfy $w_c > 0.3w$, $h_c < 20$, and area $> 100$ pixels. Detected lines are
+sorted top-to-bottom and the handwritten region is selected as follows:
 
 \begin{itemize}
-\item \textbf{Three or more lines detected:} the region is extracted between the second and third detected lines,
+\item \textbf{Three or more lines detected:} the region is extracted between the second and
+third detected lines,
 \begin{equation}
 y_{\text{start}} = y_{\text{bottom}}^{(2)} + 8, \quad y_{\text{end}} = y_{\text{top}}^{(3)} - 8
 \end{equation}
-
 \item \textbf{Exactly two lines detected:} the region is extracted between them,
 \begin{equation}
 y_{\text{start}} = y_{\text{bottom}}^{(1)} + 8, \quad y_{\text{end}} = y_{\text{top}}^{(2)} - 8
 \end{equation}
-
-\item \textbf{Fewer than two lines detected:} a secondary detection pass estimates guide-line positions from a smoothed row-density profile. The row-wise ink density is smoothed with a uniform filter (window size 5), and rows exceeding the 95th percentile of the smoothed profile are grouped into contiguous line segments (gap tolerance of 5 pixels). If this secondary pass yields three or more segments, or exactly two, the same rules above are re-applied to the segments; otherwise the pipeline falls back to a fixed region.
-
+\item \textbf{Fewer than two lines detected:} a secondary detection pass estimates guide-line
+positions from a smoothed row-density profile. The row-wise ink density is smoothed with a
+uniform filter (window size 5), and rows exceeding the 95th percentile of the smoothed profile
+are grouped into contiguous segments (gap tolerance of 5 pixels). If this pass yields three or
+more segments, or exactly two, the same rules above are re-applied to the segments; otherwise
+the pipeline uses the fixed fallback.
 \item \textbf{Fallback:} if no reliable lines are found by either pass,
 \begin{equation}
 y_{\text{start}} = \lfloor 0.22h \rfloor, \quad y_{\text{end}} = \lfloor 0.85h \rfloor
 \end{equation}
 \end{itemize}
 
-As a final safeguard, if the extracted region is empty or smaller than $30 \times 50$ pixels (height $\times$ width), extraction reverts to the fixed fallback region above. Guide-line detection and region selection are performed on the binary mask, but the corresponding rows are extracted from \emph{both} the grayscale and binary versions of the image, keeping them spatially aligned for the subsequent steps. After region extraction, black column removal (removing columns with $>50\%$ black pixels from the left margin, computed on the binary region) and tight cropping (coordinates computed on the binary region with $\rho = 0.02$, Appendix~\ref{app:tight-cropping}) are applied to the grayscale region before final resizing. The binary region itself is discarded after this point and never saved. Figure~\ref{fig:iam-preprocessing} illustrates this pipeline end to end, from the original grayscale form to the final cropped and resized image.
+Two sanity checks guard against degenerate cases. First, if $y_{\text{start}} \geq y_{\text{end}}$
+after any of the branches above, the pipeline reverts to the fixed fallback
+$[0.22h, 0.85h]$. Second, $y_{\text{start}}$ and $y_{\text{end}}$ are clipped to the valid image
+range, $y_{\text{start}} \leftarrow \max(0, y_{\text{start}})$ and
+$y_{\text{end}} \leftarrow \min(h, y_{\text{end}})$. As a final safeguard, if the extracted region
+is empty or smaller than $30 \times 50$ pixels (height $\times$ width), extraction reverts to
+the fixed fallback region. Region selection is performed on the binary mask, and the same rows
+are extracted from both the grayscale and binary images to keep them spatially aligned.
 
-Two additional sanity checks guard against degenerate cases. First, immediately after $y_{\text{start}}$ and $y_{\text{end}}$ are determined by any of the branches above, if $y_{\text{start}} \geq y_{\text{end}}$ (an invalid, empty, or inverted range) the pipeline discards that estimate and reverts directly to the fixed fallback $[0.22h, 0.85h]$. Second, whichever values of $y_{\text{start}}, y_{\text{end}}$ are ultimately used are clipped to the valid image range, $y_{\text{start}} \leftarrow \max(0, y_{\text{start}})$ and $y_{\text{end}} \leftarrow \min(h, y_{\text{end}})$, before the region is sliced from the image. This clipping is independent of, and precedes, the minimum-size safeguard described above.
+\textbf{Left black column removal.} Let $r_j$ be the fraction of black pixels in column $j$ of
+the binary region. We remove all columns to the left of
+\begin{equation}
+j^* = \min\{ j : r_k \leq 0.02 \;\; \forall k \in [j,\, j+19] \}
+\end{equation}
+i.e., the start of the first run of at least 20 consecutive ``clean'' columns. This handles both
+sharp black bands and gradual decay at scan borders. If no such run exists, no column is removed.
+
+\textbf{Full image and patches.} After column removal, tight cropping ($\rho = 0.02$,
+Appendix~\ref{app:tight-cropping}) is applied and the cropped binary region is resized to a
+square $448\times448$ image (the full sample). If its ink ratio is below the threshold, the
+whole form is discarded. Otherwise, the cropped region is also divided into a $2\times2$ grid
+of patches (the last row/column absorbing any remainder); each patch is independently centered
+on a square canvas, resized to $448\times448$, and kept only if it passes the ink-ratio filter.
+Each form therefore yields up to five images. Figure~\ref{fig:iam-preprocessing} illustrates
+the pipeline.
 
 \begin{figure}[h]
 \centering
 \includegraphics[width=0.9\linewidth]{images/iam-preprocessing.png}
-\caption{Preprocessing of an IAM form: the grayscale image (left) is binarized (center) to detect guide lines (red/green, detected by erosion/dilation) and the handwritten text region (blue box); this region is then extracted from the original grayscale image, cropped, and resized to 448×448 pixels (right).}
+\caption{Preprocessing of an IAM form: the grayscale image (left) is binarized (center) to detect guide lines (red/green, detected by erosion/dilation) and the handwritten text region (blue box); this region is then extracted, cropped, and resized to $448\times448$ pixels (right). The cropped region is also split into a $2\times2$ grid of patches, each independently resized to $448\times448$ pixels, so that each form yields up to five images.}
 \label{fig:iam-preprocessing}
 \end{figure}
 
 \subsubsection{RIMES Dataset Preprocessing}
 \label{app:rimes-preprocessing}
 
-RIMES consists of individual text lines that are processed and stacked vertically to form 448×448 batches. Each line is first converted to grayscale, and an auxiliary Otsu binary mask is derived from it (as described above) purely to guide cropping; only the grayscale line is cropped, resized, and eventually stacked into the output batch. Each line undergoes:
+RIMES consists of individual text lines. Lines are grouped by writer, identified by the split name
+and the writer index in the filename (e.g., \texttt{eval2011-0}). The goal is to turn the lines of
+each writer into $448\times448$ images with a text density comparable to the IAM samples. Two
+constants define the layout: each image contains $N_{\text{batch}} = 5$ rows of text, so every row
+has height $H = \lfloor 448 / N_{\text{batch}} \rfloor = 89$ pixels. The processing has three
+stages: (i) each line is cleaned and resized independently, (ii) the lines of a writer are
+assembled into $448\times448$ batches, and (iii) batches are combined into mosaics.
 
+\paragraph{Stage 1: line-level processing.}
+Each line is converted to grayscale, and an auxiliary Otsu mask is derived from it. The mask is
+used only to compute crop coordinates, which are then applied to the grayscale line; only the
+grayscale line is resized and saved. Each line undergoes the following steps:
 \begin{enumerate}
-\item \textbf{Vertical trim:} Removal of rows with $>50\%$ black pixels from top and bottom, computed on the binary mask and applied identically to both the mask and the grayscale line
-\item \textbf{Tight cropping:} Bounding-box coordinates computed on the binary mask via the projection-based algorithm ($\rho = 0.018$, Appendix~\ref{app:tight-cropping}), applied to crop the grayscale line
-\item \textbf{Height normalization:} For each writer, the minimum observed line height across all their (cropped) lines is computed and clamped to the range $[20, 32]$ pixels, $h_{\min} = \text{clip}(\min_l h_l,\ 20,\ 32)$. All lines from that writer are then resized to height $h_{\min}$, preserving aspect ratio:
-\begin{equation}
-w' = \lfloor w \cdot h_{\min} / h \rfloor
-\end{equation}
-If the resulting width $w'$ exceeds the target canvas width (448 px), the line is instead scaled down so that $w' = 448$ and $h' = \lfloor h \cdot 448/w \rfloor \le h_{\min}$. Each resized line is placed on a fixed-size $h_{\min} \times 448$ white canvas, left-aligned and vertically centered with offset $\lfloor (h_{\min} - h')/2 \rfloor$.
-\item \textbf{Batching:} Height-normalized lines are vertically stacked into groups of $N_{\text{batch}} = \lfloor 448 / 32 \rfloor - 9 = 5$ lines per batch, producing $448\times448$ canvases per writer. The last batch for a writer is padded with white space if fewer than $N_{\text{batch}}$ lines remain. Figure~\ref{fig:rimes-preprocessing} illustrates this pipeline, from original lines to tight-cropped lines and their grouping into stacked $448\times448$ batches.
+\item \textbf{Vertical trim:} dark bands at the top and bottom of the scan are removed. We
+discard the rows in which more than $50\%$ of the pixels are black, keeping the range between the
+first and the last row that are not.
+\item \textbf{Tight cropping:} the whitespace around the text is removed using the
+projection-based algorithm with $\rho = 0.018$ (Appendix~\ref{app:tight-cropping}).
+\item \textbf{Splitting:} lines wider than $896$ pixels are split at the midpoint into two
+segments, to avoid excessively long lines after resizing.
+\item \textbf{Height normalization:} every line is resized to height $H = 89$ pixels, preserving
+the aspect ratio, so that its width becomes $w' = \text{round}(w \cdot H / h)$. No horizontal
+padding is applied.
 \end{enumerate}
+After this stage, every line has the same height and a variable width.
 
-Lines exceeding 896 pixels in width (twice the target size) are split at the midpoint before height normalization, to prevent excessive aspect ratio distortion. This produces uniform-height stacked representations suitable for Siamese network training. Note that with $N_{\text{batch}} = 5$ lines of at most 32 px height each, a batch occupies at most 160 of the 448 available vertical pixels; the remaining space is white padding.
+\paragraph{Stage 2: batch construction (per writer).}
+The lines of a writer are concatenated horizontally into a single long strip, with a $15$-pixel
+white gap between consecutive lines so that they are not read as one. The strip is then cut every
+$448$ pixels into slices of size $89\times448$ (the last one is right-padded with white). Note
+that a slice does not correspond to an original line: it may contain the end of one line and the
+beginning of the next. Finally, $N_{\text{batch}} = 5$ consecutive slices are stacked vertically,
+giving an image of size $445\times448$, and $3$ white rows are appended at the bottom to obtain a
+$448\times448$ batch. Batches with too little ink (typically the last one, which is often almost
+empty) are discarded according to the ink-ratio filter (See Appendix~\ref{app:ink-ratio-filter}).
+
+\paragraph{Stage 3: mosaics.}
+To obtain more samples per writer, the surviving batches are combined into $2\times2$ mosaics:
+each batch is downscaled to $224\times224$ and four batches, taken in generation order, are tiled
+into a $448\times448$ image. For example, a writer with $9$ batches yields three mosaics: batches
+$1$--$4$, batches $5$--$8$, and a final one made of batch $9$ plus three batches already used, with
+the tile positions randomly shuffled. If a writer has fewer than four batches, the missing tiles
+are left white. Mosaics with too little ink are discarded according to the ink-ratio filter 
+(See Appendix~\ref{app:ink-ratio-filter}). Both batches and mosaics are saved as
+outputs. Figure~\ref{fig:rimes-preprocessing} illustrates stages 1 and 2.
 
 \begin{figure}[h]
 \centering
 \includegraphics[width=1.0\linewidth]{images/rimes-preprocessing.png}
-\caption{Preprocessing of RIMES text lines (for a given author). Each original line (left, e.g. \texttt{eval2011-0\_000001.jpg}) is binarized via Otsu thresholding and tight-cropped (blue bounding boxes, center) using the projection-based algorithm; the corresponding grayscale crop is then extracted (right of center). Cropped lines belonging to the same writer are grouped (colored arrows) and vertically stacked into fixed-size $448\times448$ canvases (right), with unused space padded in white.}
+\caption{Preprocessing of RIMES text lines for a given writer. Each original line (left, e.g. \texttt{eval2011-0\_000001.jpg}) is binarized via Otsu thresholding and tight-cropped (blue bounding boxes, center) using the projection-based algorithm; the corresponding grayscale crop is then extracted and resized to a common height (right of center). The lines of the writer are concatenated into a single strip, cut into slices of width $448$ pixels, and $5$ slices are stacked vertically into a $448\times448$ batch (right), with unused space padded in white. Slices do not necessarily align with the original lines. Batches are subsequently combined into $2\times2$ mosaics (not shown).}
 \label{fig:rimes-preprocessing}
 \end{figure}
 

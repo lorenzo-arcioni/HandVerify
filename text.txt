@@ -208,44 +208,26 @@ def create_cross_dataset_dataloaders(
     target_root: str,
     batch_size: int = 16,
     num_workers: int = 4,
-    val_size: float = 0.5,
+    val_size: float = 0.15,          # ora è la frazione di writer SOURCE usata come val
     target_size: int = 448,
     random_state: int = 42,
     max_genuine_pairs: int = None,
     **dataset_kwargs
 ):
     """
-    Split per esperimenti cross-dataset: tutti i writer di train_root vanno
-    in training; i writer di target_root vengono divisi in val (early
-    stopping) e test (held-out, report finale), così il test set del
-    dominio target resta comunque mai visto prima della valutazione finale.
-
-    Args:
-        dataset_class: Dataset class da istanziare
-        train_root: Directory radice del dominio di training (usato per intero)
-        target_root: Directory radice del dominio target, diviso in val/test
-        batch_size: Batch size
-        num_workers: Numero di worker
-        val_size: Frazione dei writer di target_root riservata a val
-                  (il resto, 1 - val_size, va a test)
-        target_size: Dimensione immagine
-        random_state: Seed
-        max_genuine_pairs: Numero massimo di coppie genuine per epoca, applicato
-                          SOLO al train_dataset (vedi create_dataloaders).
-        **dataset_kwargs: Argomenti aggiuntivi per il costruttore del dataset
-
-    Returns:
-        (train_loader, val_loader, test_loader,
-         train_dataset, val_dataset, test_dataset)
+    Cross-dataset stretto: i writer di train_root vengono divisi in
+    train / val (val = writer source held-out, usato per early stopping
+    e model selection). TUTTO target_root va a test, mai visto in
+    training né in model selection.
     """
     if not (0.0 < val_size < 1.0):
         raise ValueError(f"val_size deve essere strettamente tra 0 e 1, ricevuto {val_size}")
 
-    train_dirs = _list_writer_dirs(train_root)
-    target_dirs = _list_writer_dirs(target_root)
+    source_dirs = _list_writer_dirs(train_root)
+    test_dirs = _list_writer_dirs(target_root)      # tutto il target
 
-    val_dirs, test_dirs = train_test_split(
-        target_dirs, test_size=(1.0 - val_size), random_state=random_state
+    train_dirs, val_dirs = train_test_split(
+        source_dirs, test_size=val_size, random_state=random_state
     )
 
     train_dataset = dataset_class(
@@ -265,7 +247,6 @@ def create_cross_dataset_dataloaders(
     test_loader = _make_loader(test_dataset, batch_size, False, num_workers, random_state)
 
     return train_loader, val_loader, test_loader, train_dataset, val_dataset, test_dataset
-
 
 def create_kfold_dataloaders(
     dataset_class,
@@ -1089,12 +1070,10 @@ class GradCAM:
         gradients = self._gradients.detach()
 
         weights = gradients.mean(dim=(2, 3), keepdim=True)
-        cam = (weights * activations).sum(dim=1, keepdim=True)
-        cam = cam.squeeze(0).squeeze(0).cpu().numpy()
-
-        cam -= cam.min()
-        if cam.max() > 1e-8:
-            cam /= cam.max()
+        cam = (weights * activations).sum(dim=1).squeeze(0).cpu().numpy()   # con segno
+        m = np.abs(cam).max()
+        if m > 1e-8:
+            cam = cam / m          # in [-1, 1], lo zero resta zero
 
         return cam, float(score.item())
 
@@ -1179,13 +1158,258 @@ def overlay_cam_on_image(gray_img_uint8: np.ndarray, cam: np.ndarray, alpha: flo
     import cv2
 
     h, w = gray_img_uint8.shape[:2]
-    cam_resized = cv2.resize(cam, (w, h), interpolation=cv2.INTER_CUBIC)
-    cam_resized = np.clip(cam_resized, 0, 1)
+    cam = np.clip(cv2.resize(cam, (w, h), interpolation=cv2.INTER_CUBIC), -1, 1)
 
-    heatmap = cv2.applyColorMap((cam_resized * 255).astype(np.uint8), cv2.COLORMAP_JET)
-    base_bgr = cv2.cvtColor(gray_img_uint8, cv2.COLOR_GRAY2BGR)
+    heat = np.zeros((h, w, 3), dtype=np.float32)          # BGR
+    heat[..., 2] = np.clip(cam, 0, None)                   # rosso = positivo
+    heat[..., 0] = np.clip(-cam, 0, None)                  # blu   = negativo
+    heat = (heat * 255).astype(np.uint8)
 
-    return cv2.addWeighted(heatmap, alpha, base_bgr, 1 - alpha, 0)-e 
+    base = cv2.cvtColor(gray_img_uint8, cv2.COLOR_GRAY2BGR).astype(np.float32)
+    weight = (np.abs(cam) * alpha)[..., None]              # più intenso dove |cam| è alto
+    out = base * (1 - weight) + heat.astype(np.float32) * weight
+    return out.astype(np.uint8)-e 
+
+===== ./src/interpretability/occlusion.py =====
+
+"""
+Analisi per occlusione e validazione quantitativa delle mappe di importanza
+(Grad-CAM incluso) per reti di verifica pairwise (bce | contrastive | triplet).
+
+Convenzione di segno (la stessa di gradcam.py):
+    delta = score_originale - score_con_regione_occlusa
+    delta > 0  (rosso): la regione SOSTIENE la somiglianza (togliendola lo score scende)
+    delta < 0  (blu)  : la regione la ABBASSA
+"""
+
+from typing import Dict, List, Tuple
+
+from tqdm.auto import tqdm
+
+import cv2
+import numpy as np
+import torch
+import torch.nn.functional as F
+
+
+# --------------------------------------------------------------------------
+# Score in batch
+# --------------------------------------------------------------------------
+@torch.no_grad()
+def _score_batch(model, model_type: str, x: torch.Tensor, other: torch.Tensor, side: str) -> torch.Tensor:
+    """
+    Score di N varianti `x` [N,1,H,W] dell'immagine di `side` ('a' o 'b')
+    contro l'altra immagine fissa `other` [1,1,H,W].
+    bce: probabilita' del classificatore (rispetta l'ordine a,b);
+    contrastive/triplet: cosine similarity.
+    """
+    n = x.shape[0]
+    if model_type == "bce":
+        o = other.expand(n, -1, -1, -1)
+        a, b = (x, o) if side == "a" else (o, x)
+        return model(a, b).reshape(-1)
+    emb_x = model(x)
+    emb_o = model(other).expand(n, -1)
+    return F.cosine_similarity(emb_x, emb_o, dim=1)
+
+
+def _scores_chunked(model, model_type, xs, other, side, batch_size) -> np.ndarray:
+    out = []
+    for i in range(0, len(xs), batch_size):
+        out.append(_score_batch(model, model_type, xs[i:i + batch_size], other, side).float().cpu())
+    return torch.cat(out).numpy()
+
+
+def _split(img_a, img_b, side, device):
+    img_a, img_b = img_a.detach().to(device), img_b.detach().to(device)
+    return (img_a, img_b) if side == "a" else (img_b, img_a)
+
+
+def _positions(length: int, patch: int, stride: int) -> List[int]:
+    pos = list(range(0, max(length - patch, 0) + 1, stride))
+    if pos[-1] + patch < length:          # copri anche il bordo
+        pos.append(length - patch)
+    return pos
+
+
+# --------------------------------------------------------------------------
+# Occlusion map
+# --------------------------------------------------------------------------
+def occlusion_map(
+    model, model_type: str, img_a: torch.Tensor, img_b: torch.Tensor,
+    side: str = "a", patch: int = 64, stride: int = 32,
+    fill: float = 1.0, batch_size: int = 32,
+    progress: bool = False,
+) -> Tuple[np.ndarray, float]:
+    """
+    Occlude a finestra scorrevole l'immagine `side` tenendo fissa l'altra.
+
+    fill: valore dello "sfondo bianco" NELLO SPAZIO DEL TENSORE (dopo il
+          transform di test). Calcolalo con white_value().
+    progress: se True mostra una barra tqdm sui batch di finestre
+              (leave=False: sparisce a fine mappa).
+    Ritorna (mappa HxW di delta mediato sulle finestre sovrapposte, score base).
+    """
+    model.eval()
+    device = next(model.parameters()).device
+    target, other = _split(img_a, img_b, side, device)
+    H, W = target.shape[-2:]
+
+    base = float(_scores_chunked(model, model_type, target, other, side, 1)[0])
+
+    boxes = [(y, x) for y in _positions(H, patch, stride) for x in _positions(W, patch, stride)]
+    acc = np.zeros((H, W), dtype=np.float64)
+    cnt = np.zeros((H, W), dtype=np.float64)
+
+    starts = range(0, len(boxes), batch_size)
+    if progress:
+        starts = tqdm(starts, desc="  finestre", leave=False)
+
+    for s in starts:
+        chunk = boxes[s:s + batch_size]
+        batch = target.repeat(len(chunk), 1, 1, 1)
+        for k, (y, x) in enumerate(chunk):
+            batch[k, :, y:y + patch, x:x + patch] = fill
+        scores = _score_batch(model, model_type, batch, other, side).float().cpu().numpy()
+        for k, (y, x) in enumerate(chunk):
+            acc[y:y + patch, x:x + patch] += base - scores[k]
+            cnt[y:y + patch, x:x + patch] += 1
+
+    return (acc / np.maximum(cnt, 1)).astype(np.float32), base
+
+
+def normalize_signed(m: np.ndarray) -> np.ndarray:
+    """Porta la mappa in [-1, 1] mantenendo lo zero (per overlay_cam_on_image)."""
+    mx = np.abs(m).max()
+    return m / mx if mx > 1e-12 else m
+
+
+def cam_to_pixel_map(cam: np.ndarray, size: Tuple[int, int]) -> np.ndarray:
+    """Riporta una CAM (bassa risoluzione) a HxW. size = (H, W)."""
+    return cv2.resize(cam, (size[1], size[0]), interpolation=cv2.INTER_CUBIC)
+
+
+# --------------------------------------------------------------------------
+# Deletion / insertion
+# --------------------------------------------------------------------------
+def _cell_ranking(importance: np.ndarray, cell: int) -> List[Tuple[int, int]]:
+    """Celle cell x cell ordinate per importanza media decrescente."""
+    H, W = importance.shape
+    cells = []
+    for y in range(0, H, cell):
+        for x in range(0, W, cell):
+            cells.append((float(importance[y:y + cell, x:x + cell].mean()), y, x))
+    cells.sort(key=lambda c: -c[0])
+    return [(y, x) for _, y, x in cells]
+
+
+def deletion_insertion_curve(
+    model, model_type: str, img_a: torch.Tensor, img_b: torch.Tensor,
+    importance: np.ndarray, side: str = "a", mode: str = "deletion",
+    cell: int = 32, n_steps: int = 25, fill: float = 1.0, batch_size: int = 16,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    deletion : cancella (fill) le celle dalla piu' alla meno importante;
+               una buona mappa fa CROLLARE lo score in fretta.
+    insertion: parte da tutto vuoto e reinserisce le celle piu' importanti;
+               una buona mappa fa RISALIRE lo score in fretta.
+    Ritorna (frazione di celle modificate, score).
+    """
+    assert mode in ("deletion", "insertion")
+    model.eval()
+    device = next(model.parameters()).device
+    target, other = _split(img_a, img_b, side, device)
+
+    order = _cell_ranking(importance, cell)
+    n = len(order)
+    ks = np.unique(np.linspace(0, n, n_steps + 1).round().astype(int))
+
+    imgs = []
+    for k in ks:
+        if mode == "deletion":
+            img = target.clone()
+            for (y, x) in order[:k]:
+                img[..., y:y + cell, x:x + cell] = fill
+        else:
+            img = torch.full_like(target, fill)
+            for (y, x) in order[:k]:
+                img[..., y:y + cell, x:x + cell] = target[..., y:y + cell, x:x + cell]
+        imgs.append(img)
+
+    scores = _scores_chunked(model, model_type, torch.cat(imgs, 0), other, side, batch_size)
+    return ks / n, scores
+
+
+def curve_auc(x: np.ndarray, y: np.ndarray) -> float:
+    return float(np.sum((x[1:] - x[:-1]) * (y[1:] + y[:-1]) / 2))
+
+
+def compare_rankings(
+    model, model_type: str, img_a, img_b, side: str,
+    maps: Dict[str, np.ndarray], mode: str = "deletion",
+    cell: int = 32, n_steps: int = 25, fill: float = 1.0,
+    n_random: int = 5, seed: int = 0,
+) -> Dict[str, dict]:
+    """
+    Curve per ogni mappa in `maps` piu' una baseline casuale (media di n_random).
+    Ritorna {nome: {"x", "y", "auc", ("y_std")}}.
+    """
+    res = {}
+    for name, imp in maps.items():
+        x, y = deletion_insertion_curve(model, model_type, img_a, img_b, imp, side, mode, cell, n_steps, fill)
+        res[name] = {"x": x, "y": y, "auc": curve_auc(x, y)}
+
+    H, W = next(iter(maps.values())).shape
+    rng = np.random.default_rng(seed)
+    ys = []
+    for _ in range(n_random):
+        x, y = deletion_insertion_curve(model, model_type, img_a, img_b, rng.random((H, W)),
+                                        side, mode, cell, n_steps, fill)
+        ys.append(y)
+    ys = np.stack(ys)
+    res["random"] = {"x": x, "y": ys.mean(0), "y_std": ys.std(0), "auc": curve_auc(x, ys.mean(0))}
+    return res
+
+
+def first_crossing(x: np.ndarray, y: np.ndarray, thr: float, started_above: bool) -> float:
+    """Prima frazione a cui lo score attraversa la soglia (la decisione si ribalta). nan se mai."""
+    for xi, yi in zip(x, y):
+        if (yi >= thr) != started_above:
+            return float(xi)
+    return float("nan")
+
+
+# --------------------------------------------------------------------------
+# Statistiche sulle mappe
+# --------------------------------------------------------------------------
+def positive_concentration(m: np.ndarray, top_frac: float = 0.1) -> float:
+    """
+    Quota della massa positiva contenuta nel top `top_frac` dei pixel.
+    Alta (>0.6) = evidenza localizzata; vicina a top_frac = evidenza diffusa.
+    """
+    p = np.clip(m, 0, None).ravel()
+    tot = p.sum()
+    if tot <= 1e-12:
+        return 0.0
+    k = max(1, int(len(p) * top_frac))
+    return float(np.sort(p)[-k:].sum() / tot)
+
+
+def ink_mask(gray_uint8: np.ndarray, thr: int = 128, dilate: int = 15) -> np.ndarray:
+    """Maschera booleana dell'inchiostro, dilatata (le patch coprono anche l'intorno)."""
+    ink = (gray_uint8 < thr).astype(np.uint8)
+    if dilate > 1:
+        ink = cv2.dilate(ink, np.ones((dilate, dilate), np.uint8))
+    return ink.astype(bool)
+
+
+def mass_on_ink(m: np.ndarray, gray_uint8: np.ndarray, thr: int = 128, dilate: int = 15) -> Tuple[float, float]:
+    """(quota della massa positiva su inchiostro, quota di area occupata dall'inchiostro).
+    Se la prima e' ~ la seconda, la mappa non distingue testo da sfondo."""
+    mask = ink_mask(gray_uint8, thr, dilate)
+    p = np.clip(m, 0, None)
+    tot = p.sum()
+    return (float(p[mask].sum() / tot) if tot > 1e-12 else 0.0), float(mask.mean())-e 
 
 ===== ./src/evaluation/metrics.py =====
 
@@ -3268,11 +3492,15 @@ class BaseTrainer(ABC):
         model_name: str,
         device: torch.device,
         results_dir: str = "results",
+        use_amp: bool = False,                                   # NUOVO
     ):
         self.model = model.to(device)
         self.model_name = model_name
         self.device = device
         self.results_dir = results_dir
+
+        self.use_amp = use_amp and device.type == "cuda"         # NUOVO
+        self.scaler = torch.amp.GradScaler("cuda", enabled=self.use_amp)  # NUOVO
 
         os.makedirs(results_dir, exist_ok=True)
 
@@ -3616,15 +3844,10 @@ from .losses import TripletLoss
 class TripletTrainer(BaseTrainer):
     """Trainer for triplet networks."""
 
-    def __init__(
-        self,
-        model,
-        model_name: str,
-        device: torch.device,
-        margin: float = 0.5,
-        results_dir: str = "results",
-    ):
-        super().__init__(model, model_name, device, results_dir)
+    def __init__(self, model, model_name: str, device: torch.device,
+                margin: float = 0.5, results_dir: str = "results",
+                use_amp: bool = False):
+        super().__init__(model, model_name, device, results_dir, use_amp=use_amp)
         self.margin = margin
         self.criterion = TripletLoss(margin=margin)
         self._setup_optimizer()
@@ -3661,14 +3884,15 @@ class TripletTrainer(BaseTrainer):
 
             self.optimizer.zero_grad()
 
-            anchor_emb = self.model(anchor)
-            positive_emb = self.model(positive)
-            negative_emb = self.model(negative)
+            with torch.autocast(device_type=self.device.type, enabled=self.use_amp):
+                anchor_emb = self.model(anchor)
+                positive_emb = self.model(positive)
+                negative_emb = self.model(negative)
+            loss = self.criterion(anchor_emb.float(), positive_emb.float(), negative_emb.float())
 
-            loss = self.criterion(anchor_emb, positive_emb, negative_emb)
-
-            loss.backward()
-            self.optimizer.step()
+            self.scaler.scale(loss).backward()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
 
             train_loss += loss.item()
 
@@ -3685,13 +3909,11 @@ class TripletTrainer(BaseTrainer):
             positive = positive.to(self.device)
             negative = negative.to(self.device)
 
-            # Get embeddings
-            anchor_emb = self.model(anchor)
-            positive_emb = self.model(positive)
-            negative_emb = self.model(negative)
-
-            # Triplet loss
-            loss = self.criterion(anchor_emb, positive_emb, negative_emb)
+            with torch.autocast(device_type=self.device.type, enabled=self.use_amp):
+                anchor_emb = self.model(anchor)
+                positive_emb = self.model(positive)
+                negative_emb = self.model(negative)
+            loss = self.criterion(anchor_emb.float(), positive_emb.float(), negative_emb.float())
             val_loss += loss.item()
 
         return val_loss / len(val_loader)
@@ -3807,14 +4029,9 @@ from .losses import BCELoss
 class BCETrainer(BaseTrainer):
     """Trainer for Siamese networks using BCE loss."""
 
-    def __init__(
-        self,
-        model,
-        model_name: str,
-        device: torch.device,
-        results_dir: str = "results",
-    ):
-        super().__init__(model, model_name, device, results_dir)
+    def __init__(self, model, model_name: str, device: torch.device,
+                results_dir: str = "results", use_amp: bool = False):
+        super().__init__(model, model_name, device, results_dir, use_amp=use_amp)
         self.criterion = BCELoss()
         self._setup_optimizer()
 
@@ -3849,11 +4066,14 @@ class BCETrainer(BaseTrainer):
             labels = labels.to(self.device)
 
             self.optimizer.zero_grad()
-            outputs = self.model(img1, img2).squeeze(1)
-            loss = self.criterion(outputs, labels)
 
-            loss.backward()
-            self.optimizer.step()
+            with torch.autocast(device_type=self.device.type, enabled=self.use_amp):
+                outputs = self.model(img1, img2).squeeze(1)
+            loss = self.criterion(outputs.float(), labels.float())   # fuori dall'autocast
+
+            self.scaler.scale(loss).backward()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
 
             train_loss += loss.item()
 
@@ -3868,11 +4088,10 @@ class BCETrainer(BaseTrainer):
         for img1, img2, labels in tqdm(val_loader, desc="Validation"):
             img1, img2, labels = img1.to(self.device), img2.to(self.device), labels.to(self.device)
 
-            # Forward pass
-            outputs = self.model(img1, img2).squeeze(1)
-
             # BCE loss
-            loss = self.criterion(outputs, labels)
+            with torch.autocast(device_type=self.device.type, enabled=self.use_amp):
+                outputs = self.model(img1, img2).squeeze(1)
+            loss = self.criterion(outputs.float(), labels.float())
             val_loss += loss.item()
 
         return val_loss / len(val_loader)
@@ -3990,15 +4209,10 @@ from .losses import ContrastiveLoss
 class ContrastiveTrainer(BaseTrainer):
     """Trainer for contrastive learning on binary pair datasets."""
 
-    def __init__(
-        self,
-        model,
-        model_name: str,
-        device: torch.device,
-        margin: float = 1.0,
-        results_dir: str = "results",
-    ):
-        super().__init__(model, model_name, device, results_dir)
+    def __init__(self, model, model_name: str, device: torch.device,
+                margin: float = 1.0, results_dir: str = "results",
+                use_amp: bool = False):
+        super().__init__(model, model_name, device, results_dir, use_amp=use_amp)
         self.margin = margin
         self.criterion = ContrastiveLoss(margin=margin)
         self._setup_optimizer()
@@ -4035,13 +4249,14 @@ class ContrastiveTrainer(BaseTrainer):
 
             self.optimizer.zero_grad()
 
-            emb1 = self.model(img1)
-            emb2 = self.model(img2)
+            with torch.autocast(device_type=self.device.type, enabled=self.use_amp):
+                emb1 = self.model(img1)
+                emb2 = self.model(img2)
+            loss = self.criterion(emb1.float(), emb2.float(), labels)
 
-            loss = self.criterion(emb1, emb2, labels)
-
-            loss.backward()
-            self.optimizer.step()
+            self.scaler.scale(loss).backward()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
 
             train_loss += loss.item()
 
@@ -4056,12 +4271,10 @@ class ContrastiveTrainer(BaseTrainer):
         for img1, img2, labels in tqdm(val_loader, desc="Validation"):
             img1, img2, labels = img1.to(self.device), img2.to(self.device), labels.float().to(self.device)
 
-            # Get embeddings
-            emb1 = self.model(img1)
-            emb2 = self.model(img2)
-
-            # Contrastive loss
-            loss = self.criterion(emb1, emb2, labels)
+            with torch.autocast(device_type=self.device.type, enabled=self.use_amp):
+                emb1 = self.model(img1)
+                emb2 = self.model(img2)
+            loss = self.criterion(emb1.float(), emb2.float(), labels)
             val_loss += loss.item()
 
         return val_loss / len(val_loader)
@@ -5878,15 +6091,14 @@ def preprocess_manual_roi(roi_bgr, gray_threshold=None):
     if roi_bgr is None or roi_bgr.size == 0:
         return None
 
+    if gray_threshold is None:
+        gray_threshold = DEFAULT_GRAY_THRESHOLD
+
     gray = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2GRAY)
-    background = gray > 180
-    gray = gray.copy()
-    gray[background] = 255
 
-    # 1) binarizza QUI, sulla risoluzione originale della ROI
-    _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    # pixel > soglia -> bianco (sfondo), <= soglia -> nero (inchiostro)
+    _, binary = cv2.threshold(gray, gray_threshold, 255, cv2.THRESH_BINARY)
 
-    # 2) resize per ultimo, sull'immagine già binaria
     return make_square_resize(binary, TARGET_SIZE)
 
 
@@ -5979,9 +6191,10 @@ def _build_encoder(arch: str, in_channels: int) -> nn.Sequential:
 
     if arch.startswith(_RESNET_PREFIX):
         net.conv1 = _to_grayscale(net.conv1, in_channels)
+        stem = nn.Sequential(net.conv1, net.bn1, net.relu, net.maxpool)
         return nn.Sequential(
             nn.Sequential(
-                net.conv1, net.bn1, net.relu, net.maxpool,
+                stem,
                 net.layer1, net.layer2, net.layer3, net.layer4,
                 net.avgpool
             ),
@@ -6331,4 +6544,350 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main()-e 
+
+===== ./notebooks/gradcam_compare.py =====
+
+# %% [markdown]
+# # Grad-CAM: pesi vecchi vs pesi nuovi sulle STESSE coppie
+#
+# Funziona con: resnet18/34/50, efficientnet_b0/b1, mobilenet_v3_small/large
+# e con i tre tipi di loss (bce | contrastive | triplet).
+#
+# Per ogni rete si ispezionano due livelli (vedi `get_cam_layers`):
+#   - "final"    : ultima feature map prima del global pooling (stride 32, 14x14 a 448 px)
+#   - "stride16" : fine dell'ultimo stage a stride 16 (28x28 a 448 px), piu' fine ma
+#                  meno legato alla decisione: da usare come vista di dettaglio.
+#
+# Come leggere le mappe (versione con segno di gradcam.py):
+#   rosso = regione che AUMENTA la somiglianza tra le due scritture
+#   blu   = regione che la DIMINUISCE
+# Ogni mappa e' normalizzata sul proprio massimo: si confronta DOVE guarda il
+# modello, non quanto intensamente.
+
+# %%
+import sys
+sys.path.append('/home/lorenzo/Documenti/GitHub/HandVerify')
+
+from pathlib import Path
+
+import cv2
+import numpy as np
+import pandas as pd
+import torch
+import torch.nn.functional as F
+import matplotlib.pyplot as plt
+from PIL import Image
+
+from src.models import get_model
+from src.data.transforms import get_test_transforms
+from src.interpretability import compute_pairwise_gradcam, overlay_cam_on_image
+from src.utils import get_device
+
+device = get_device()
+
+# %% [markdown]
+# ## CONFIG
+
+# %%
+# resnet18 | resnet34 | efficientnet_b0 | efficientnet_b1 | mobilenet_v3_small | mobilenet_v3_large
+BACKBONE = "resnet18"
+LOSS_TYPE = "contrastive"      # bce | contrastive | triplet
+TARGET_SIZE = 448
+FREEZE_LAYERS = 3
+DROPOUT = 0.2
+
+IMAGES_ROOT = Path("/home/lorenzo/Documenti/GitHub/HandVerify/datasets/processed-handwritten/iam_processed")
+OUTPUT_DIR = Path("./gradcam_compare") / f"{BACKBONE}_{LOSS_TYPE}"
+
+RESULTS = Path("/home/lorenzo/Documenti/GitHub/HandVerify/results")
+RESULTS2 = Path("/home/lorenzo/Documenti/GitHub/HandVerify/results2")
+EXP = f"{BACKBONE}_{LOSS_TYPE}_iam_to_iam"
+# adatta se la struttura delle cartelle per bce/triplet e' diversa da quella contrastive
+EXP_SUBDIR = Path(LOSS_TYPE) / f"{LOSS_TYPE}_experiments" / EXP
+
+# "threshold": un float, oppure il path di un *_final_metrics.csv da cui leggere
+# eer_threshold. "embedding_dim" (per bce: projection_dim) puo' differire tra i due modelli.
+# ATTENZIONE: soglie ed embedding_dim qui sotto erano quelli del run mobilenet_v3_small:
+# aggiornali per il backbone che stai analizzando.
+MODELS = {
+    "vecchi": {
+        "checkpoint": RESULTS / EXP_SUBDIR / f"{EXP}_best.pth",
+        "threshold": 0.6469,
+        "embedding_dim": 32,
+    },
+    "nuovi": {
+        "checkpoint": RESULTS2 / EXP_SUBDIR / f"{EXP}_best.pth",
+        "threshold": 0.535,
+        "embedding_dim": 32,
+    },
+}
+
+# Livelli da ispezionare, tag del modello per il confronto tra livelli
+LEVELS = ["stride16", "final"]
+MAIN_LEVEL = "final"
+COMPARE_TAG = "nuovi"
+
+# Coppie dei failure case (erano quelle del run mobilenet: con un altro backbone
+# gli errori possono essere altri, eventualmente sostituiscile).
+PAIRS = {
+    "false_accepts": [
+        ("k03-117_full.png", "r02-065_full.png", "impostor"),
+        ("l01-065_full.png", "r02-065_full.png", "impostor"),
+    ],
+    "false_rejects": [
+        ("g01-004_full.png", "g01-008_full.png", "genuine"),
+        ("h06-079_full.png", "h06-085_full.png", "genuine"),
+    ],
+}
+
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# %% [markdown]
+# ## Livelli da ispezionare per ogni backbone
+#
+# Regola: si aggancia l'OUTPUT dell'intero stage/blocco (dopo BN, attivazione e
+# skip connection), mai un Conv2d interno (che sarebbe pre-BN e pre-skip).
+
+# %%
+# indice (in encoder[0] = `features`) dell'ultimo blocco a stride 16
+_STRIDE16_IDX = {
+    "efficientnet_b0": 5,
+    "efficientnet_b1": 5,
+    "mobilenet_v3_small": 8,
+    "mobilenet_v3_large": 12,
+}
+
+
+def get_cam_layers(model, backbone):
+    """Ritorna {livello: (modulo, etichetta)} per il backbone dato."""
+    body = model.encoder[0]
+    if backbone.startswith("resnet"):
+        _stem, _l1, _l2, l3, l4, _pool = list(body.children())
+        return {
+            "stride16": (l3, "layer3"),
+            "final": (l4, "layer4"),
+        }
+    if backbone in _STRIDE16_IDX:
+        i16 = _STRIDE16_IDX[backbone]
+        last = len(body) - 1
+        return {
+            "stride16": (body[i16], f"features[{i16}]"),
+            "final": (body[last], f"features[{last}]"),
+        }
+    raise ValueError(f"Backbone non supportato in get_cam_layers: {backbone}")
+
+
+def probe_layers(model, layers, size):
+    """Forward finto per verificare canali/risoluzione/stride dei layer scelti."""
+    shapes, handles = {}, []
+    for lvl, (mod, _) in layers.items():
+        handles.append(mod.register_forward_hook(
+            lambda m, i, o, lvl=lvl: shapes.__setitem__(lvl, tuple(o.shape))
+        ))
+    with torch.no_grad():
+        model.encoder(torch.zeros(1, 1, size, size, device=device))
+    for h in handles:
+        h.remove()
+
+    expected = {"stride16": size // 16, "final": size // 32}
+    for lvl, (_, label) in layers.items():
+        c, h, w = shapes[lvl][1:]
+        flag = "OK" if h == expected[lvl] else f"ATTENZIONE: atteso {expected[lvl]}x{expected[lvl]}"
+        print(f"  {lvl:9s} {label:14s} -> {c:4d} canali, {h}x{w}  {flag}")
+
+# %% [markdown]
+# ## Localizza le immagini per nome file
+
+# %%
+index = {}
+for p in IMAGES_ROOT.rglob("*.png"):
+    index.setdefault(p.name, []).append(p)
+
+
+def resolve(name):
+    matches = index.get(name, [])
+    if len(matches) != 1:
+        raise RuntimeError(
+            f"'{name}': trovati {len(matches)} file in {IMAGES_ROOT}: {matches}. "
+            f"Se >1, sostituisci il nome in PAIRS con il path completo."
+        )
+    return matches[0]
+
+
+resolved = {
+    group: [(resolve(a), resolve(b), label) for a, b, label in pairs]
+    for group, pairs in PAIRS.items()
+}
+for group, pairs in resolved.items():
+    for a, b, _ in pairs:
+        print(f"{group}: {a}  |  {b}")
+
+# %% [markdown]
+# ## Caricamento modelli e utilita'
+
+# %%
+transform = get_test_transforms(TARGET_SIZE)
+
+
+def load_tensor(path):
+    img = Image.open(path).convert("L")
+    # requires_grad: il backward funziona anche se i layer a monte del target
+    # sono congelati (altrimenti lo score non avrebbe grad_fn).
+    return transform(img).unsqueeze(0).to(device).requires_grad_(True)
+
+
+def load_gray_uint8(path):
+    # stesso resize (stretch) del transform di test, cosi' la CAM combacia
+    return np.array(Image.open(path).convert("L").resize((TARGET_SIZE, TARGET_SIZE)))
+
+
+def resolve_threshold(t):
+    if isinstance(t, (int, float)):
+        return float(t)
+    return float(pd.read_csv(t)["eer_threshold"].values[0])
+
+
+def load_model(cfg):
+    model = get_model(
+        BACKBONE, model_type=LOSS_TYPE,
+        in_channels=1, freeze_backbone_layers=FREEZE_LAYERS,
+        dropout=DROPOUT, embedding_dim=cfg["embedding_dim"],   # get_model lo mappa su projection_dim per bce
+    )
+    model.load_state_dict(torch.load(cfg["checkpoint"], map_location=device))
+    return model.to(device).eval()
+
+
+@torch.no_grad()
+def decision_score(model, t1, t2):
+    """Score usato per la soglia EER (indipendente da cosa restituisce gradcam.py).
+    bce: probabilita' del classificatore; contrastive/triplet: cosine similarity."""
+    if LOSS_TYPE == "bce":
+        return float(model(t1, t2).squeeze())
+    return float(F.cosine_similarity(model(t1), model(t2)))
+
+
+loaded, cam_layers = {}, {}
+for tag, cfg in MODELS.items():
+    model = load_model(cfg)
+    loaded[tag] = (model, resolve_threshold(cfg["threshold"]))
+    cam_layers[tag] = get_cam_layers(model, BACKBONE)
+    print(f"{tag}: soglia EER = {loaded[tag][1]:.4f}")
+    probe_layers(model, cam_layers[tag], TARGET_SIZE)
+
+# %% [markdown]
+# ## Controllo rapido sulla CAM
+# Se `min < 0` la CAM conserva il segno (versione nuova di gradcam.py).
+# Se `min == 0` stai ancora usando la normalizzazione senza segno.
+
+# %%
+p1, p2, _ = resolved[next(iter(resolved))][0]
+model, _ = loaded[COMPARE_TAG]
+c1, c2, s = compute_pairwise_gradcam(
+    model, LOSS_TYPE, load_tensor(p1), load_tensor(p2), device,
+    target_layer=cam_layers[COMPARE_TAG]["final"][0],
+)
+print(f"cam1 range [{c1.min():.3f}, {c1.max():.3f}]  shape {c1.shape}")
+print(f"cam2 range [{c2.min():.3f}, {c2.max():.3f}]  shape {c2.shape}")
+
+# %% [markdown]
+# ## Griglie Grad-CAM
+# Una sola funzione per tutti i confronti: ogni "colonna" e' una coppia
+# (modello, livello) e occupa due riquadri (img1, img2).
+# Titolo: livello, esito della coppia (score vs soglia, corretto/errore).
+
+# %%
+FRAME_COLORS = {"vecchi": "red", "nuovi": "green"}
+
+
+def plot_grid(group, pairs, columns, title, fname):
+    n = len(pairs)
+    fig, axes = plt.subplots(
+        n, 2 * len(columns),
+        figsize=(4.2 * 2 * len(columns), 4.8 * n), squeeze=False,
+    )
+
+    for i, (p1, p2, label) in enumerate(pairs):
+        t1, t2 = load_tensor(p1), load_tensor(p2)
+        g1, g2 = load_gray_uint8(p1), load_gray_uint8(p2)
+
+        for j, (tag, level) in enumerate(columns):
+            model, thr = loaded[tag]
+            layer, layer_label = cam_layers[tag][level]
+            cam1, cam2, _ = compute_pairwise_gradcam(
+                model, LOSS_TYPE, t1, t2, device, target_layer=layer
+            )
+            score = decision_score(model, t1, t2)
+            ok = (score >= thr) == (label == "genuine")
+            color = FRAME_COLORS.get(tag, "black")
+
+            for k, (g, cam, p) in enumerate([(g1, cam1, p1), (g2, cam2, p2)]):
+                ax = axes[i, 2 * j + k]
+                ax.imshow(cv2.cvtColor(overlay_cam_on_image(g, cam), cv2.COLOR_BGR2RGB))
+                ax.set_xticks([])
+                ax.set_yticks([])
+                for spine in ax.spines.values():
+                    spine.set_visible(True)
+                    spine.set_edgecolor(color)
+                    spine.set_linewidth(5)
+                if k == 0:
+                    head = (f"{tag} | {level} ({layer_label})\n"
+                            f"{label} | score={score:.3f} (thr {thr:.3f}) {'OK' if ok else 'ERRORE'}\n")
+                else:
+                    head = "\n\n"
+                ax.set_title(head + p.name, fontsize=8, color=color)
+
+    fig.suptitle(title, fontsize=12)
+    plt.tight_layout()
+    out = OUTPUT_DIR / fname
+    plt.savefig(out, dpi=150, bbox_inches="tight")
+    plt.show()
+    plt.close(fig)
+    print(f"Salvato: {out}")
+
+# %% [markdown]
+# ### 1) Vecchi vs nuovi, allo stesso livello
+
+# %%
+for level in LEVELS:
+    for group, pairs in resolved.items():
+        plot_grid(
+            group, pairs,
+            columns=[(tag, level) for tag in loaded],
+            title=f"Grad-CAM {group} | {BACKBONE} {LOSS_TYPE} | livello {level} | {' vs '.join(loaded)}",
+            fname=f"gradcam_compare_{group}_{level}.png",
+        )
+
+# %% [markdown]
+# ### 2) Stesso modello, livelli diversi
+# Serve a capire quanto la spiegazione cambia con la risoluzione: se "final" e
+# "stride16" indicano regioni molto diverse, non fidarti di una sola vista.
+
+# %%
+for group, pairs in resolved.items():
+    plot_grid(
+        group, pairs,
+        columns=[(COMPARE_TAG, level) for level in LEVELS],
+        title=f"Grad-CAM per livello | {group} | {BACKBONE} {LOSS_TYPE} | modello {COMPARE_TAG}",
+        fname=f"gradcam_levels_{group}_{COMPARE_TAG}.png",
+    )
+
+# %% [markdown]
+# ## Tabella riassuntiva degli score (senza CAM)
+
+# %%
+rows = []
+for group, pairs in resolved.items():
+    for p1, p2, label in pairs:
+        t1, t2 = load_tensor(p1), load_tensor(p2)
+        for tag, (model, thr) in loaded.items():
+            score = decision_score(model, t1, t2)
+            rows.append({
+                "group": group, "img1": p1.name, "img2": p2.name, "label": label,
+                "model": tag, "score": score, "threshold": thr,
+                "correct": (score >= thr) == (label == "genuine"),
+            })
+
+summary = pd.DataFrame(rows)
+summary.to_csv(OUTPUT_DIR / "gradcam_compare_scores.csv", index=False)
+summary

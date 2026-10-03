@@ -23,51 +23,47 @@ Database file #1: sn-bibliography.bib
 sn-mathphys-num.bst [2024/07/19 v1.1  bibliography style]
 Reallocated wiz_functions (elt_size=4) to 9000 items from 6000.
 Reallocated singl_function (elt_size=4) to 100 items from 50.
-Warning--to sort, need author or key in iam
-Warning--to sort, need author or key in rimes
-Reallocated singl_function (elt_size=4) to 100 items from 50.
-Warning--empty title in iam
 Reallocated singl_function (elt_size=4) to 100 items from 50.
 Reallocated singl_function (elt_size=4) to 100 items from 50.
-You've used 29 entries,
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+You've used 1 entry,
             7485 wiz_defined-function locations,
-            1395 strings with 16284 characters,
-and the built_in function-call counts, 822280 in all, are:
-= -- 158901
-> -- 1068
-< -- 546
-+ -- 103360
-- -- 407
-* -- 14782
-:= -- 139672
-add.period$ -- 60
-call.type$ -- 29
-change.case$ -- 273
-chr.to.int$ -- 1472
-cite$ -- 34
-duplicate$ -- 1425
-empty$ -- 5921
-format.name$ -- 699
-if$ -- 215682
+            1189 strings with 9920 characters,
+and the built_in function-call counts, 3571 in all, are:
+= -- 450
+> -- 24
+< -- 2
++ -- 82
+- -- 11
+* -- 244
+:= -- 725
+add.period$ -- 1
+call.type$ -- 1
+change.case$ -- 5
+chr.to.int$ -- 4
+cite$ -- 1
+duplicate$ -- 35
+empty$ -- 232
+format.name$ -- 28
+if$ -- 766
 int.to.chr$ -- 1
-int.to.str$ -- 55
+int.to.str$ -- 2
 missing$ -- 0
-newline$ -- 483
-num.names$ -- 135
-pop$ -- 688
+newline$ -- 59
+num.names$ -- 5
+pop$ -- 22
 preamble$ -- 1
-purify$ -- 139
+purify$ -- 4
 quote$ -- 0
-skip$ -- 98446
+skip$ -- 233
 stack$ -- 0
-substring$ -- 73720
-swap$ -- 853
-text.length$ -- 513
+substring$ -- 475
+swap$ -- 12
+text.length$ -- 11
 text.prefix$ -- 0
 top$ -- 1
-type$ -- 1252
-warning$ -- 3
-while$ -- 1002
+type$ -- 44
+warning$ -- 0
+while$ -- 26
 width$ -- 0
-write$ -- 657
-(There were 3 warnings)
+write$ -- 64

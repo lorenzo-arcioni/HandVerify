@@ -146,44 +146,26 @@ def create_cross_dataset_dataloaders(
     target_root: str,
     batch_size: int = 16,
     num_workers: int = 4,
-    val_size: float = 0.5,
+    val_size: float = 0.15,          # ora è la frazione di writer SOURCE usata come val
     target_size: int = 448,
     random_state: int = 42,
     max_genuine_pairs: int = None,
     **dataset_kwargs
 ):
     """
-    Split per esperimenti cross-dataset: tutti i writer di train_root vanno
-    in training; i writer di target_root vengono divisi in val (early
-    stopping) e test (held-out, report finale), così il test set del
-    dominio target resta comunque mai visto prima della valutazione finale.
-
-    Args:
-        dataset_class: Dataset class da istanziare
-        train_root: Directory radice del dominio di training (usato per intero)
-        target_root: Directory radice del dominio target, diviso in val/test
-        batch_size: Batch size
-        num_workers: Numero di worker
-        val_size: Frazione dei writer di target_root riservata a val
-                  (il resto, 1 - val_size, va a test)
-        target_size: Dimensione immagine
-        random_state: Seed
-        max_genuine_pairs: Numero massimo di coppie genuine per epoca, applicato
-                          SOLO al train_dataset (vedi create_dataloaders).
-        **dataset_kwargs: Argomenti aggiuntivi per il costruttore del dataset
-
-    Returns:
-        (train_loader, val_loader, test_loader,
-         train_dataset, val_dataset, test_dataset)
+    Cross-dataset stretto: i writer di train_root vengono divisi in
+    train / val (val = writer source held-out, usato per early stopping
+    e model selection). TUTTO target_root va a test, mai visto in
+    training né in model selection.
     """
     if not (0.0 < val_size < 1.0):
         raise ValueError(f"val_size deve essere strettamente tra 0 e 1, ricevuto {val_size}")
 
-    train_dirs = _list_writer_dirs(train_root)
-    target_dirs = _list_writer_dirs(target_root)
+    source_dirs = _list_writer_dirs(train_root)
+    test_dirs = _list_writer_dirs(target_root)      # tutto il target
 
-    val_dirs, test_dirs = train_test_split(
-        target_dirs, test_size=(1.0 - val_size), random_state=random_state
+    train_dirs, val_dirs = train_test_split(
+        source_dirs, test_size=val_size, random_state=random_state
     )
 
     train_dataset = dataset_class(
@@ -203,7 +185,6 @@ def create_cross_dataset_dataloaders(
     test_loader = _make_loader(test_dataset, batch_size, False, num_workers, random_state)
 
     return train_loader, val_loader, test_loader, train_dataset, val_dataset, test_dataset
-
 
 def create_kfold_dataloaders(
     dataset_class,

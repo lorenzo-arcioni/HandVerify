@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2024.8.27)  14 SEP 2026 19:11
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2024.8.27)  29 SEP 2026 15:54
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -717,480 +717,150 @@ LaTeX Font Warning: Font shape `U/rsfs/m/n' in size <4.51686> not available
 
 LaTeX Font Info:    Calculating math sizes for size <10.03749> on input line 86
 .
-(./sections/Introduction.tex
+(./sections/Experimental Setup.tex
 Underfull \vbox (badness 10000) has occurred while \output is active []
 
  [1
 
-{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}]) (./sections/Related Works
-.tex
-Underfull \hbox (badness 1231) in paragraph at lines 34--39
-[]\OT1/cmr/m/n/10 They do not address the \OT1/cmr/m/it/10.03749 open-set ver-i
--fi-ca-tion \OT1/cmr/m/n/10 ques-tion|whether two arbi-trary sam-ples share an
- []
-
-
-Underfull \vbox (badness 10000) has occurred while \output is active []
-
- [2])
-(./sections/Methodology.tex
-<images/siamese-architecture.drawio.png, id=334, 2493.315pt x 782.925pt>
-File: images/siamese-architecture.drawio.png Graphic file (type png)
-<use images/siamese-architecture.drawio.png>
-Package pdftex.def Info: images/siamese-architecture.drawio.png  used on input 
-line 13.
-(pdftex.def)             Requested size: 386.95897pt x 121.50742pt.
-
-Underfull \vbox (badness 10000) has occurred while \output is active []
-
- [3
-pdfTeX warning (ext4): destination with the same identifier (name{figure.1}) ha
-s been already used, duplicate ignored
-<argument> ...shipout:D \box_use:N \l_shipout_box 
-                                                  \__shipout_drop_firstpage_...
-l.29 \item \textbf
-                  {MobileNet family:} MobileNetV3-Small and MobileNetV3-Larg...
-{/usr/share/texmf/fonts/enc/dvips/cm-super/cm-super-ts1.enc} <./images/siamese-
-architecture.drawio.png>]
-Underfull \vbox (badness 10000) has occurred while \output is active []
-
- [4]
-<images/bce-architecture.drawio.png, id=369, 2746.26pt x 754.82pt>
-File: images/bce-architecture.drawio.png Graphic file (type png)
-<use images/bce-architecture.drawio.png>
-Package pdftex.def Info: images/bce-architecture.drawio.png  used on input line
- 180.
-(pdftex.def)             Requested size: 483.69687pt x 132.93626pt.
-<images/contrastive-architecture.drawio.png, id=371, 2842.62pt x 658.46pt>
-File: images/contrastive-architecture.drawio.png Graphic file (type png)
-<use images/contrastive-architecture.drawio.png>
-Package pdftex.def Info: images/contrastive-architecture.drawio.png  used on in
-put line 209.
-(pdftex.def)             Requested size: 483.69687pt x 112.03719pt.
-
-Underfull \vbox (badness 10000) has occurred while \output is active []
-
- [5
-pdfTeX warning (ext4): destination with the same identifier (name{figure.2}) ha
-s been already used, duplicate ignored
-<argument> ...shipout:D \box_use:N \l_shipout_box 
-                                                  \__shipout_drop_firstpage_...
-l.253 \begin{equation}
-                      
-pdfTeX warning (ext4): destination with the same identifier (name{figure.3}) ha
-s been already used, duplicate ignored
-<argument> ...shipout:D \box_use:N \l_shipout_box 
-                                                  \__shipout_drop_firstpage_...
-l.253 \begin{equation}
-                       <./images/bce-architecture.drawio.png> <./images/contras
-tive-architecture.drawio.png>]
-Underfull \vbox (badness 10000) has occurred while \output is active []
-
- [6]
-Package hyperref Info: bookmark level for unknown algorithm defaults to 0 on in
-put line 391.
-
-Underfull \vbox (badness 10000) has occurred while \output is active []
-
- [7]
-
-LaTeX Warning: Command \textdegree invalid in math mode on input line 430.
-
-
-LaTeX Warning: Command \textdegree invalid in math mode on input line 430.
-
-Missing character: There is no ° in font cmr10!
-) (./sections/Experimental Setup.tex
-Underfull \vbox (badness 10000) has occurred while \output is active []
-
- [8]
-LaTeX Font Info:    Calculating math sizes for size <8.03> on input line 45.
+{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}{/usr/share/texmf/fonts/enc/
+dvips/cm-super/cm-super-ts1.enc}]
+LaTeX Font Info:    Calculating math sizes for size <8.03> on input line 44.
 
 
 LaTeX Font Warning: Font shape `U/rsfs/m/n' in size <4.015> not available
-(Font)              size <5> substituted on input line 45.
+(Font)              size <5> substituted on input line 44.
+
+
+LaTeX Warning: Reference `tab:protocol' on page 2 undefined on input line 85.
+
+
+LaTeX Warning: Reference `sec:protocol' on page 2 undefined on input line 85.
 
 
 Underfull \vbox (badness 10000) has occurred while \output is active []
 
- [9
+ [2
 pdfTeX warning (ext4): destination with the same identifier (name{table.1}) has
  been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.93 T
+l.92 T
       his choice is also motivated by the intended real-world application: i...
-]) (./sections/Results.tex
-Underfull \vbox (badness 10000) has occurred while \output is active []
-
- [10
-pdfTeX warning (ext4): destination with the same identifier (name{table.2}) has
- been already used, duplicate ignored
-<argument> ...shipout:D \box_use:N \l_shipout_box 
-                                                  \__shipout_drop_firstpage_...
-l.52 M
-      etrics follow the classical FAR/FRR convention. Classification metrics...
 ]
-<images/same_vs_cross_comparison_aggregated.png, id=459, 1293.633pt x 353.8821p
-t>
-File: images/same_vs_cross_comparison_aggregated.png Graphic file (type png)
-<use images/same_vs_cross_comparison_aggregated.png>
-Package pdftex.def Info: images/same_vs_cross_comparison_aggregated.png  used o
-n input line 134.
-(pdftex.def)             Requested size: 483.69687pt x 132.31667pt.
 
-Underfull \vbox (badness 10000) has occurred while \output is active []
+LaTeX Warning: Reference `sec:methodology' on page 3 undefined on input line 10
+1.
 
- [11
-pdfTeX warning (ext4): destination with the same identifier (name{table.3}) has
- been already used, duplicate ignored
-<argument> ...shipout:D \box_use:N \l_shipout_box 
-                                                  \__shipout_drop_firstpage_...
-l.144 
-      
-pdfTeX warning (ext4): destination with the same identifier (name{table.4}) has
- been already used, duplicate ignored
-<argument> ...shipout:D \box_use:N \l_shipout_box 
-                                                  \__shipout_drop_firstpage_...
-l.144 
-      ]
-Underfull \hbox (badness 1163) in paragraph at lines 179--185
-[]\OT1/cmr/bx/n/10.03749 Contrastive-over-BCE AUC gain\OT1/cmr/m/n/10 , aver-ag
-ed across all four splits per back-bone: MobileNetV3-
- []
-
-<images/metrics_heatmap_aggregated.png, id=473, 1111.7535pt x 353.6412pt>
-File: images/metrics_heatmap_aggregated.png Graphic file (type png)
-<use images/metrics_heatmap_aggregated.png>
-Package pdftex.def Info: images/metrics_heatmap_aggregated.png  used on input l
-ine 188.
-(pdftex.def)             Requested size: 483.69687pt x 153.85965pt.
-<images/radar_backbone_comparison.png, id=475, 765.0984pt x 642.4803pt>
-File: images/radar_backbone_comparison.png Graphic file (type png)
-<use images/radar_backbone_comparison.png>
-Package pdftex.def Info: images/radar_backbone_comparison.png  used on input li
-ne 226.
-(pdftex.def)             Requested size: 362.77264pt x 304.63232pt.
-
-Underfull \vbox (badness 10000) has occurred while \output is active []
-
- [12
-pdfTeX warning (ext4): destination with the same identifier (name{figure.4}) ha
-s been already used, duplicate ignored
-<argument> ...shipout:D \box_use:N \l_shipout_box 
-                                                  \__shipout_drop_firstpage_...
-l.243 
-      
-pdfTeX warning (ext4): destination with the same identifier (name{table.5}) has
- been already used, duplicate ignored
-<argument> ...shipout:D \box_use:N \l_shipout_box 
-                                                  \__shipout_drop_firstpage_...
-l.243 
-       <./images/same_vs_cross_comparison_aggregated.png>]
-Underfull \vbox (badness 10000) has occurred while \output is active []
-
- [13
-pdfTeX warning (ext4): destination with the same identifier (name{figure.5}) ha
-s been already used, duplicate ignored
-<argument> ...shipout:D \box_use:N \l_shipout_box 
-                                                  \__shipout_drop_firstpage_...
-l.243 
-      
-pdfTeX warning (ext4): destination with the same identifier (name{table.6}) has
- been already used, duplicate ignored
-<argument> ...shipout:D \box_use:N \l_shipout_box 
-                                                  \__shipout_drop_firstpage_...
-l.243 
-      
-pdfTeX warning (ext4): destination with the same identifier (name{figure.6}) ha
-s been already used, duplicate ignored
-<argument> ...shipout:D \box_use:N \l_shipout_box 
-                                                  \__shipout_drop_firstpage_...
-l.243 
-       <./images/metrics_heatmap_aggregated.png> <./images/radar_backbone_compa
-rison.png>]
-Underfull \vbox (badness 10000) has occurred while \output is active []
-
- [14
-pdfTeX warning (ext4): destination with the same identifier (name{table.7}) has
- been already used, duplicate ignored
-<argument> ...shipout:D \box_use:N \l_shipout_box 
-                                                  \__shipout_drop_firstpage_...
-l.336 
-      
-pdfTeX warning (ext4): destination with the same identifier (name{table.8}) has
- been already used, duplicate ignored
-<argument> ...shipout:D \box_use:N \l_shipout_box 
-                                                  \__shipout_drop_firstpage_...
-l.336 
-      ]
-<images/roc_curves_resnet18.png, id=512, 1436.7276pt x 879.0441pt>
-File: images/roc_curves_resnet18.png Graphic file (type png)
-<use images/roc_curves_resnet18.png>
-Package pdftex.def Info: images/roc_curves_resnet18.png  used on input line 387
-.
-(pdftex.def)             Requested size: 483.69687pt x 295.93356pt.
-<images/det_curves_resnet18.png, id=515, 1436.4867pt x 875.6715pt>
-File: images/det_curves_resnet18.png Graphic file (type png)
-<use images/det_curves_resnet18.png>
-Package pdftex.def Info: images/det_curves_resnet18.png  used on input line 418
-.
-(pdftex.def)             Requested size: 483.69687pt x 294.85161pt.
-
-Underfull \vbox (badness 10000) has occurred while \output is active []
-
- [15
-pdfTeX warning (ext4): destination with the same identifier (name{table.9}) has
- been already used, duplicate ignored
-<argument> ...shipout:D \box_use:N \l_shipout_box 
-                                                  \__shipout_drop_firstpage_...
-l.451 
-      
-pdfTeX warning (ext4): destination with the same identifier (name{table.10}) ha
-s been already used, duplicate ignored
-<argument> ...shipout:D \box_use:N \l_shipout_box 
-                                                  \__shipout_drop_firstpage_...
-l.451 
-      ]
-Underfull \vbox (badness 10000) has occurred while \output is active []
-
- [16
-pdfTeX warning (ext4): destination with the same identifier (name{figure.7}) ha
-s been already used, duplicate ignored
-<argument> ...shipout:D \box_use:N \l_shipout_box 
-                                                  \__shipout_drop_firstpage_...
-l.451 
-      
-pdfTeX warning (ext4): destination with the same identifier (name{figure.8}) ha
-s been already used, duplicate ignored
-<argument> ...shipout:D \box_use:N \l_shipout_box 
-                                                  \__shipout_drop_firstpage_...
-l.451 
-       <./images/roc_curves_resnet18.png> <./images/det_curves_resnet18.png>]
-<images/score_distributions_resnet18.png, id=531, 1437.9321pt x 879.0441pt>
-File: images/score_distributions_resnet18.png Graphic file (type png)
-<use images/score_distributions_resnet18.png>
-Package pdftex.def Info: images/score_distributions_resnet18.png  used on input
- line 465.
-(pdftex.def)             Requested size: 483.69687pt x 295.69214pt.
-
-Underfull \vbox (badness 10000) has occurred while \output is active []
-
- [17
-pdfTeX warning (ext4): destination with the same identifier (name{figure.9}) ha
-s been already used, duplicate ignored
-<argument> ...shipout:D \box_use:N \l_shipout_box 
-                                                  \__shipout_drop_firstpage_...
-l.510 \item\textbf
-                  {Distribution-level patterns.} Two failure modes are visible 
-<./images/score_distributions_resnet18.png>]
-<images/resnet18_contrastive_rimes_to_iam_false_accepts_grid.png, id=547, 569.4
-876pt x 512.6352pt>
-File: images/resnet18_contrastive_rimes_to_iam_false_accepts_grid.png Graphic f
-ile (type png)
-<use images/resnet18_contrastive_rimes_to_iam_false_accepts_grid.png>
-Package pdftex.def Info: images/resnet18_contrastive_rimes_to_iam_false_accepts
-_grid.png  used on input line 542.
-(pdftex.def)             Requested size: 435.32422pt x 391.87523pt.
-<images/resnet18_contrastive_rimes_to_iam_false_rejects_grid.png, id=548, 569.4
-876pt x 512.6352pt>
-File: images/resnet18_contrastive_rimes_to_iam_false_rejects_grid.png Graphic f
-ile (type png)
-<use images/resnet18_contrastive_rimes_to_iam_false_rejects_grid.png>
-Package pdftex.def Info: images/resnet18_contrastive_rimes_to_iam_false_rejects
-_grid.png  used on input line 552.
-(pdftex.def)             Requested size: 435.32422pt x 391.87523pt.
-
-Underfull \vbox (badness 10000) has occurred while \output is active []
-
- [18
-pdfTeX warning (ext4): destination with the same identifier (name{figure.10}) h
-as been already used, duplicate ignored
-<argument> ...shipout:D \box_use:N \l_shipout_box 
-                                                  \__shipout_drop_firstpage_...
-l.583 
-       <./images/resnet18_contrastive_rimes_to_iam_false_accepts_grid.png>]
-Underfull \vbox (badness 10000) has occurred while \output is active []
-
- [19
-pdfTeX warning (ext4): destination with the same identifier (name{figure.11}) h
-as been already used, duplicate ignored
-<argument> ...shipout:D \box_use:N \l_shipout_box 
-                                                  \__shipout_drop_firstpage_...
-l.607 
-       <./images/resnet18_contrastive_rimes_to_iam_false_rejects_grid.png>]
-Underfull \hbox (badness 2608) in paragraph at lines 608--615
-[]\OT1/cmr/m/it/10.03749 Protocol mis-match. \OT1/cmr/m/n/10 Com-pa-ra-ble Siam
-ese \OT1/cmr/m/it/10.03749 ver-i-fi-ca-tion \OT1/cmr/m/n/10 stud-ies are typ-i-
-cally eval-u-ated on dif-fer-ent
- []
-
-) (./sections/Conclusions.tex
-Underfull \vbox (badness 10000) has occurred while \output is active []
-
- [20
-pdfTeX warning (ext4): destination with the same identifier (name{table.11}) ha
-s been already used, duplicate ignored
-<argument> ...shipout:D \box_use:N \l_shipout_box 
-                                                  \__shipout_drop_firstpage_...
-l.13 \textbf{Statistical robustness.}
-                                      Multi-seed training and bootstrap conf...
-]
-Underfull \vbox (badness 10000) has occurred while \output is active []
-
- [21])
-
-Package hyperref Warning: Difference (3) between bookmark levels is greater 
-(hyperref)                than one, level fixed on input line 98.
-
+)
 
 Package hyperref Warning: Difference (2) between bookmark levels is greater 
-(hyperref)                than one, level fixed on input line 103.
+(hyperref)                than one, level fixed on input line 98.
 
 (./sections/Appendix.tex
 Underfull \vbox (badness 10000) has occurred while \output is active []
 
- [22]
-<images/iam-preprocessing.png, id=622, 623.6901pt x 289.08pt>
+ [3]
+Underfull \vbox (badness 10000) has occurred while \output is active []
+
+ [4]
+<images/iam-preprocessing.png, id=185, 1037.7972pt x 433.62pt>
 File: images/iam-preprocessing.png Graphic file (type png)
 <use images/iam-preprocessing.png>
-Package pdftex.def Info: images/iam-preprocessing.png  used on input line 90.
-(pdftex.def)             Requested size: 435.32422pt x 201.77235pt.
-
-pdfTeX warning (ext4): destination with the same identifier (name{figure.1}) ha
-s been already used, duplicate ignored
-<to be read again> 
-                   \relax 
-l.91 \caption
-             {Preprocessing of an IAM form: the grayscale image (left) is bi...
-
-pdfTeX warning (ext4): destination with the same identifier (name{figure.1}) ha
-s been already used, duplicate ignored
-<to be read again> 
-                   \relax 
-l.91 ..., and resized to 448Ã—448 pixels (right).}
-                                                  
-
-LaTeX Warning: `h' float specifier changed to `ht'.
-
+Package pdftex.def Info: images/iam-preprocessing.png  used on input line 140.
+(pdftex.def)             Requested size: 435.32422pt x 181.88757pt.
 
 Underfull \vbox (badness 10000) has occurred while \output is active []
 
- [23]
-<images/rimes-preprocessing.png, id=636, 1076.823pt x 346.6551pt>
+ [5
+pdfTeX warning (ext4): destination with the same identifier (name{figure.1}) ha
+s been already used, duplicate ignored
+<argument> ...shipout:D \box_use:N \l_shipout_box 
+                                                  \__shipout_drop_firstpage_...
+l.166 \item \textbf
+                   {Splitting:} lines wider than $896$ pixels are split at t...
+ <./images/iam-preprocessing.png>]
+<images/rimes-preprocessing.png, id=200, 1076.823pt x 346.6551pt>
 File: images/rimes-preprocessing.png Graphic file (type png)
 <use images/rimes-preprocessing.png>
-Package pdftex.def Info: images/rimes-preprocessing.png  used on input line 115
+Package pdftex.def Info: images/rimes-preprocessing.png  used on input line 195
 .
 (pdftex.def)             Requested size: 483.69687pt x 155.713pt.
-
-pdfTeX warning (ext4): destination with the same identifier (name{figure.2}) ha
-s been already used, duplicate ignored
-<to be read again> 
-                   \relax 
-l.116 \caption
-              {Preprocessing of RIMES text lines (for a given author). Each ...
-
-pdfTeX warning (ext4): destination with the same identifier (name{figure.2}) ha
-s been already used, duplicate ignored
-<to be read again> 
-                   \relax 
-l.116 ...ght), with unused space padded in white.}
-                                                  
-
-LaTeX Warning: `h' float specifier changed to `ht'.
-
-<images/distribution_images.png, id=639, 1147.6476pt x 425.9112pt>
+<images/distribution_images.png, id=203, 1147.6476pt x 425.9112pt>
 File: images/distribution_images.png Graphic file (type png)
 <use images/distribution_images.png>
-Package pdftex.def Info: images/distribution_images.png  used on input line 126
+Package pdftex.def Info: images/distribution_images.png  used on input line 206
 .
 (pdftex.def)             Requested size: 314.40001pt x 116.68076pt.
-<images/boxplot_comparison.png, id=640, 860.013pt x 570.933pt>
+<images/boxplot_comparison.png, id=204, 860.013pt x 570.933pt>
 File: images/boxplot_comparison.png Graphic file (type png)
 <use images/boxplot_comparison.png>
-Package pdftex.def Info: images/boxplot_comparison.png  used on input line 128.
+Package pdftex.def Info: images/boxplot_comparison.png  used on input line 208.
 
 (pdftex.def)             Requested size: 338.58632pt x 224.77121pt.
 
-pdfTeX warning (ext4): destination with the same identifier (name{figure.3}) ha
-s been already used, duplicate ignored
-<to be read again> 
-                   \relax 
-l.129 \caption
-              {Distribution of images per author for the preprocessed IAM an...
-
-pdfTeX warning (ext4): destination with the same identifier (name{figure.3}) ha
-s been already used, duplicate ignored
-<to be read again> 
-                   \relax 
-l.129 ...iled RIMES distribution (max 10 images).}
-                                                  
 
 LaTeX Warning: `h' float specifier changed to `ht'.
 
 
+LaTeX Warning: Reference `sec:methodology' on page 6 undefined on input line 21
+8.
+
+
 Underfull \vbox (badness 10000) has occurred while \output is active []
 
- [24 <./images/iam-preprocessing.png>]
+ [6
+pdfTeX warning (ext4): destination with the same identifier (name{figure.2}) ha
+s been already used, duplicate ignored
+<argument> ...shipout:D \box_use:N \l_shipout_box 
+                                                  \__shipout_drop_firstpage_...
+l.220 
+       <./images/rimes-preprocessing.png>]
 pdfTeX warning (ext4): destination with the same identifier (name{table.1}) has
  been already used, duplicate ignored
 <to be read again> 
                    \relax 
-l.143 \caption
+l.223 \caption
               {Hyperparameter configuration shared across the 72 model confi...
 
 pdfTeX warning (ext4): destination with the same identifier (name{table.1}) has
  been already used, duplicate ignored
 <to be read again> 
                    \relax 
-l.161 \end{tabular}
+l.241 \end{tabular}
                    
+
+LaTeX Warning: Reference `sec:cross-dataset' on page 7 undefined on input line 
+253.
+
+
 Underfull \vbox (badness 10000) has occurred while \output is active []
 
- [25 <./images/rimes-preprocessing.png> <./images/distribution_images.png> <./i
-mages/boxplot_comparison.png>]
-<images/training_history_resnet18.png, id=667, 1437.2094pt x 879.0441pt>
+ [7
+pdfTeX warning (ext4): destination with the same identifier (name{figure.3}) ha
+s been already used, duplicate ignored
+<argument> ...shipout:D \box_use:N \l_shipout_box 
+                                                  \__shipout_drop_firstpage_...
+l.261 
+       <./images/distribution_images.png> <./images/boxplot_comparison.png>]
+<images/training_history_resnet18.png, id=228, 1437.2094pt x 879.0441pt>
 File: images/training_history_resnet18.png Graphic file (type png)
 <use images/training_history_resnet18.png>
 Package pdftex.def Info: images/training_history_resnet18.png  used on input li
-ne 184.
+ne 264.
 (pdftex.def)             Requested size: 483.69687pt x 295.83968pt.
+)
+Underfull \vbox (badness 10000) has occurred while \output is active []
 
+ [8
 pdfTeX warning (ext4): destination with the same identifier (name{figure.4}) ha
 s been already used, duplicate ignored
-<to be read again> 
-                   \relax 
-l.185   \caption
-                {Training and validation loss curves, ResNet-18, all 12 loss...
-
-pdfTeX warning (ext4): destination with the same identifier (name{figure.4}) ha
-s been already used, duplicate ignored
-<to be read again> 
-                   \relax 
-l.185 ..., all 12 loss$\times$split combinations.}
-                                                  )
+<argument> ...shipout:D \box_use:N \l_shipout_box 
+                                                  \__shipout_drop_firstpage_...
+l.122 \newpage
+               <./images/training_history_resnet18.png>] (./sn-article.bbl)
 Underfull \vbox (badness 10000) has occurred while \output is active []
 
- [26 <./images/training_history_resnet18.png>] (./sn-article.bbl
-Underfull \hbox (badness 10000) in paragraph at lines 49--60
-[]\OT1/cmr/m/n/10 Koch, G., Zemel, R., Salakhut-di-nov, R.: Siamese neu-ral net
--works for one-shot
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 49--60
-\OT1/cmr/m/n/10 image recog-ni-tion. In: ICML Deep Learn-ing Work-shop, vol. 2.
- Lille, France (2015).
- []
-
-
-Underfull \vbox (badness 10000) has occurred while \output is active []
-
- [27])
-Underfull \vbox (badness 10000) has occurred while \output is active []
-
- [28]
+ [9]
 (./sn-article.aux)
  ***********
 LaTeX2e <2023-11-01> patch level 1
@@ -1201,57 +871,49 @@ L3 programming layer <2024-01-22>
 LaTeX Font Warning: Size substitutions with differences
 (Font)              up to 0.985pt have occurred.
 
+
+LaTeX Warning: There were undefined references.
+
 Package rerunfilecheck Info: File `sn-article.out' has not changed.
-(rerunfilecheck)             Checksum: 8AF1543B3E5E89F53745CD601357EB44;11473.
+(rerunfilecheck)             Checksum: AE77B8C1D1F29C79E4E561E2E3013408;5133.
  ) 
 Here is how much of TeX's memory you used:
- 15183 strings out of 476098
- 236060 string characters out of 5793537
- 1941975 words of memory out of 5000000
- 36724 multiletter control sequences out of 15000+600000
- 596175 words of font info for 183 fonts, out of 8000000 for 9000
+ 14725 strings out of 476098
+ 225422 string characters out of 5793537
+ 1938975 words of memory out of 5000000
+ 36418 multiletter control sequences out of 15000+600000
+ 591171 words of font info for 166 fonts, out of 8000000 for 9000
  69 hyphenation exceptions out of 8191
- 90i,13n,93p,1362b,652s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 90i,11n,93p,1307b,700s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbsy10.pfb></u
 sr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmbsy7.pfb></us
 r/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx10.pfb></usr/shar
 e/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx12.pfb></usr/share/texl
 ive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx6.pfb></usr/share/texlive/tex
-mf-dist/fonts/type1/public/amsfonts/cm/cmbx7.pfb></usr/share/texlive/texmf-dist
-/fonts/type1/public/amsfonts/cm/cmbx8.pfb></usr/share/texlive/texmf-dist/fonts/
-type1/public/amsfonts/cm/cmbx9.pfb></usr/share/texlive/texmf-dist/fonts/type1/p
-ublic/amsfonts/cm/cmbxti10.pfb></usr/share/texlive/texmf-dist/fonts/type1/publi
-c/amsfonts/cm/cmex10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsf
-onts/cm/cmmi10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/c
-m/cmmi5.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi6
-.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi7.pfb></
-usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi8.pfb></usr/sha
-re/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi9.pfb></usr/share/texl
-ive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmib10.pfb></usr/share/texlive/t
-exmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/share/texlive/texmf-di
-st/fonts/type1/public/amsfonts/cm/cmr12.pfb></usr/share/texlive/texmf-dist/font
-s/type1/public/amsfonts/cm/cmr17.pfb></usr/share/texlive/texmf-dist/fonts/type1
-/public/amsfonts/cm/cmr5.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/
-amsfonts/cm/cmr6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts
-/cm/cmr7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8
-.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr9.pfb></u
-sr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmss10.pfb></usr/sha
-re/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/tex
-live/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy5.pfb></usr/share/texlive/te
-xmf-dist/fonts/type1/public/amsfonts/cm/cmsy6.pfb></usr/share/texlive/texmf-dis
-t/fonts/type1/public/amsfonts/cm/cmsy7.pfb></usr/share/texlive/texmf-dist/fonts
-/type1/public/amsfonts/cm/cmsy8.pfb></usr/share/texlive/texmf-dist/fonts/type1/
-public/amsfonts/cm/cmsy9.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/
-amsfonts/cm/cmti10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfon
-ts/cm/cmtt10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/
-cmtt8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/ms
-bm10.pfb></usr/share/texmf/fonts/type1/public/cm-super/sfrm0800.pfb></usr/share
-/texmf/fonts/type1/public/cm-super/sfrm1000.pfb></usr/share/texmf/fonts/type1/p
-ublic/cm-super/sfss1000.pfb>
-Output written on sn-article.pdf (28 pages, 7421023 bytes).
+mf-dist/fonts/type1/public/amsfonts/cm/cmbx8.pfb></usr/share/texlive/texmf-dist
+/fonts/type1/public/amsfonts/cm/cmbx9.pfb></usr/share/texlive/texmf-dist/fonts/
+type1/public/amsfonts/cm/cmbxti10.pfb></usr/share/texlive/texmf-dist/fonts/type
+1/public/amsfonts/cm/cmex10.pfb></usr/share/texlive/texmf-dist/fonts/type1/publ
+ic/amsfonts/cm/cmmi10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/ams
+fonts/cm/cmmi7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/c
+m/cmmib10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr
+10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb>
+</usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr17.pfb></usr/s
+hare/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr5.pfb></usr/share/tex
+live/texmf-dist/fonts/type1/public/amsfonts/cm/cmr7.pfb></usr/share/texlive/tex
+mf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/share/texlive/texmf-dist/
+fonts/type1/public/amsfonts/cm/cmr9.pfb></usr/share/texlive/texmf-dist/fonts/ty
+pe1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texmf-dist/fonts/type1/pu
+blic/amsfonts/cm/cmsy7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/am
+sfonts/cm/cmsy8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/
+cm/cmti10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmt
+t10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt8.pfb
+></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb>
+</usr/share/texmf/fonts/type1/public/cm-super/sfrm1000.pfb>
+Output written on sn-article.pdf (9 pages, 2989493 bytes).
 PDF statistics:
- 925 PDF objects out of 1000 (max. 8388607)
- 767 compressed objects within 8 object streams
- 195 named destinations out of 1000 (max. 500000)
- 577 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 369 PDF objects out of 1000 (max. 8388607)
+ 291 compressed objects within 3 object streams
+ 63 named destinations out of 1000 (max. 500000)
+ 250 words of extra memory for PDF output out of 10000 (max. 10000000)
 
