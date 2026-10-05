@@ -11,6 +11,7 @@ from typing import Dict, Optional
 from abc import ABC, abstractmethod
 
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 import pandas as pd
 import numpy as np
@@ -18,6 +19,8 @@ from PIL import Image
 from tqdm import tqdm
 
 from ..evaluation.metrics import compute_metrics, print_results
+
+ACT_CAP = 1e4
 
 
 class BaseTrainer(ABC):
@@ -32,6 +35,7 @@ class BaseTrainer(ABC):
         use_amp: bool = False,                                   # NUOVO
     ):
         self.model = model.to(device)
+        self._install_activation_cap()
         self.model_name = model_name
         self.device = device
         self.results_dir = results_dir
@@ -158,6 +162,14 @@ class BaseTrainer(ABC):
         """Print formatted epoch summary."""
         print(f"\nEpoch {epoch+1}/{epochs} - Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
 
+    def _install_activation_cap(self, cap: float = ACT_CAP):
+        def hook(module, inp, out):
+            if torch.is_tensor(out):
+                return out.clamp(-cap, cap)   # clamp trasforma anche +-inf in +-cap
+        for m in self.model.modules():
+            if isinstance(m, (nn.Conv2d, nn.Linear, nn.BatchNorm1d, nn.BatchNorm2d)):
+                m.register_forward_hook(hook)
+
     def train(
         self,
         train_loader,
@@ -200,6 +212,13 @@ class BaseTrainer(ABC):
 
             # Validate loss only
             val_loss = self.validate_loss(val_loader)
+
+            # Giusto per sicurezza
+            if not np.isfinite(val_loss):
+                print("  ⚠ val_loss non finita: epoca ignorata per scheduler e patience")
+                if hasattr(train_dataset, 'on_epoch_end'):
+                    train_dataset.on_epoch_end(epoch)
+                continue
 
             # Update scheduler (if exists)
             if hasattr(self, 'scheduler'):

@@ -72,81 +72,16 @@ class ContrastiveTrainer(BaseTrainer):
         return train_loss / len(train_loader)
 
     @torch.no_grad()
-    def validate_loss(self, val_loader: DataLoader) -> float:
-        """Calculate Contrastive validation loss."""
+    def validate_loss(self, val_loader):
         self.model.eval()
         val_loss = 0.0
-
-        # ===== DIAGNOSTICA NaN (da rimuovere) =====
-        # Il val_loader ha shuffle=False e il dataset non viene ricampionato,
-        # quindi l'indice del batch identifica in modo univoco le coppie.
-        bs = val_loader.batch_size
-        samples = val_loader.dataset.samples
-        # ==========================================
-
-        for bi, (img1, img2, labels) in enumerate(tqdm(val_loader, desc="Validation")):
+        for img1, img2, labels in tqdm(val_loader, desc="Validation"):
             img1, img2, labels = img1.to(self.device), img2.to(self.device), labels.float().to(self.device)
-
             with torch.autocast(device_type=self.device.type, enabled=self.use_amp):
                 emb1 = self.model(img1)
                 emb2 = self.model(img2)
             loss = self.criterion(emb1.float(), emb2.float(), labels)
-
-            # ===== DIAGNOSTICA NaN (da rimuovere) =====
-            if not torch.isfinite(loss):
-                # ricalcolo in fp32 (fuori da autocast) per confronto
-                e1, e2 = self.model(img1), self.model(img2)
-                loss32 = self.criterion(e1, e2, labels).item()
-                print(f"\n[NaN] batch {bi} | loss fp16={loss.item()} | loss fp32={loss32:.4f}")
-
-                for k in range(img1.size(0)):
-                    f1 = torch.isfinite(emb1[k]).all().item()
-                    f2 = torch.isfinite(emb2[k]).all().item()
-                    if not (f1 and f2):   # stampa solo le coppie colpevoli
-                        p1, p2, lab = samples[bi * bs + k]
-                        print(f"   COPPIA CATTIVA label={lab}")
-                        print(f"     img1 (emb finito={f1}, min={img1[k].min():.3f}, max={img1[k].max():.3f}, std={img1[k].std():.3f}): {p1}")
-                        print(f"     img2 (emb finito={f2}, min={img2[k].min():.3f}, max={img2[k].max():.3f}, std={img2[k].std():.3f}): {p2}")
-                # ===== DIAGNOSTICA NaN: layer di origine dell'inf =====
-                bad_x = None
-                for k in range(img1.size(0)):
-                    if not torch.isfinite(emb1[k]).all():
-                        bad_x = img1[k:k+1]; break
-                    if not torch.isfinite(emb2[k]).all():
-                        bad_x = img2[k:k+1]; break
-
-                if bad_x is not None:
-                    order, fp32_max, first = [], {}, {}
-
-                    def run(amp, store):
-                        hs = []
-                        for name, m in self.model.named_modules():
-                            if len(list(m.children())) == 0:
-                                def hook(m, i, o, name=name):
-                                    if torch.is_tensor(o):
-                                        store.setdefault(name, (o.float().abs().max().item(),
-                                                                 not torch.isfinite(o).all().item()))
-                                        if name not in order: order.append(name)
-                                hs.append(m.register_forward_hook(hook))
-                        with torch.autocast(device_type=self.device.type, enabled=amp,
-                                            dtype=torch.float16):
-                            self.model(bad_x)
-                        for h in hs: h.remove()
-
-                    run(False, fp32_max)   # fp32: valori veri
-                    run(True, first)       # fp16: dove nasce l'inf
-                    culprit = next((n for n in order if n in first and first[n][1]), None)
-                    print(f"   >>> PRIMO LAYER NON FINITO (fp16): {culprit}")
-                    if culprit:
-                        print(f"   >>> max|act| di quel layer in fp32: {fp32_max[culprit][0]:.1f}")
-                    top = sorted(fp32_max.items(), key=lambda kv: -kv[1][0])[:5]
-                    print("   >>> top-5 max|act| fp32:", [(n, round(v[0], 1)) for n, v in top])
-                # =======================================================
-            
-            # ==========================================
-
             val_loss += loss.item()
-
         return val_loss / len(val_loader)
 
     def _get_embeddings(self, img1, img2):
