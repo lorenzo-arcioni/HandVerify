@@ -77,13 +77,38 @@ class ContrastiveTrainer(BaseTrainer):
         self.model.eval()
         val_loss = 0.0
 
-        for img1, img2, labels in tqdm(val_loader, desc="Validation"):
+        # ===== DIAGNOSTICA NaN (da rimuovere) =====
+        # Il val_loader ha shuffle=False e il dataset non viene ricampionato,
+        # quindi l'indice del batch identifica in modo univoco le coppie.
+        bs = val_loader.batch_size
+        samples = val_loader.dataset.samples
+        # ==========================================
+
+        for bi, (img1, img2, labels) in enumerate(tqdm(val_loader, desc="Validation")):
             img1, img2, labels = img1.to(self.device), img2.to(self.device), labels.float().to(self.device)
 
             with torch.autocast(device_type=self.device.type, enabled=self.use_amp):
                 emb1 = self.model(img1)
                 emb2 = self.model(img2)
             loss = self.criterion(emb1.float(), emb2.float(), labels)
+
+            # ===== DIAGNOSTICA NaN (da rimuovere) =====
+            if not torch.isfinite(loss):
+                # ricalcolo in fp32 (fuori da autocast) per confronto
+                e1, e2 = self.model(img1), self.model(img2)
+                loss32 = self.criterion(e1, e2, labels).item()
+                print(f"\n[NaN] batch {bi} | loss fp16={loss.item()} | loss fp32={loss32:.4f}")
+
+                for k in range(img1.size(0)):
+                    f1 = torch.isfinite(emb1[k]).all().item()
+                    f2 = torch.isfinite(emb2[k]).all().item()
+                    if not (f1 and f2):   # stampa solo le coppie colpevoli
+                        p1, p2, lab = samples[bi * bs + k]
+                        print(f"   COPPIA CATTIVA label={lab}")
+                        print(f"     img1 (emb finito={f1}, min={img1[k].min():.3f}, max={img1[k].max():.3f}, std={img1[k].std():.3f}): {p1}")
+                        print(f"     img2 (emb finito={f2}, min={img2[k].min():.3f}, max={img2[k].max():.3f}, std={img2[k].std():.3f}): {p2}")
+            # ==========================================
+
             val_loss += loss.item()
 
         return val_loss / len(val_loader)
