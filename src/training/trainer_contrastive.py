@@ -107,6 +107,42 @@ class ContrastiveTrainer(BaseTrainer):
                         print(f"   COPPIA CATTIVA label={lab}")
                         print(f"     img1 (emb finito={f1}, min={img1[k].min():.3f}, max={img1[k].max():.3f}, std={img1[k].std():.3f}): {p1}")
                         print(f"     img2 (emb finito={f2}, min={img2[k].min():.3f}, max={img2[k].max():.3f}, std={img2[k].std():.3f}): {p2}")
+                # ===== DIAGNOSTICA NaN: layer di origine dell'inf =====
+                bad_x = None
+                for k in range(img1.size(0)):
+                    if not torch.isfinite(emb1[k]).all():
+                        bad_x = img1[k:k+1]; break
+                    if not torch.isfinite(emb2[k]).all():
+                        bad_x = img2[k:k+1]; break
+
+                if bad_x is not None:
+                    order, fp32_max, first = [], {}, {}
+
+                    def run(amp, store):
+                        hs = []
+                        for name, m in self.model.named_modules():
+                            if len(list(m.children())) == 0:
+                                def hook(m, i, o, name=name):
+                                    if torch.is_tensor(o):
+                                        store.setdefault(name, (o.float().abs().max().item(),
+                                                                 not torch.isfinite(o).all().item()))
+                                        if name not in order: order.append(name)
+                                hs.append(m.register_forward_hook(hook))
+                        with torch.autocast(device_type=self.device.type, enabled=amp,
+                                            dtype=torch.float16):
+                            self.model(bad_x)
+                        for h in hs: h.remove()
+
+                    run(False, fp32_max)   # fp32: valori veri
+                    run(True, first)       # fp16: dove nasce l'inf
+                    culprit = next((n for n in order if n in first and first[n][1]), None)
+                    print(f"   >>> PRIMO LAYER NON FINITO (fp16): {culprit}")
+                    if culprit:
+                        print(f"   >>> max|act| di quel layer in fp32: {fp32_max[culprit][0]:.1f}")
+                    top = sorted(fp32_max.items(), key=lambda kv: -kv[1][0])[:5]
+                    print("   >>> top-5 max|act| fp32:", [(n, round(v[0], 1)) for n, v in top])
+                # =======================================================
+            
             # ==========================================
 
             val_loss += loss.item()
